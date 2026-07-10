@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AttentionFi — Pre-Launch Checklist</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap');
+  :root {
+    --black: #0A0A0A; --white: #F5F4F0; --signal: #00FF85; --noise: #FF3B5C;
+    --pulse: #5B8FFF; --dim: #1C1C1C; --mid: #2E2E2E; --muted: #6B6B6B; --border: rgba(255,255,255,0.08);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: var(--black); color: var(--white); font-family: 'Space Grotesk', sans-serif; font-size: 15px; line-height: 1.6; }
+  .container { max-width: 860px; margin: 0 auto; padding: 48px 32px 80px; }
+  .page-header { margin-bottom: 40px; }
+  .eyebrow { font-family: 'Space Mono', monospace; font-size: 10px; letter-spacing: 0.15em; color: var(--signal); text-transform: uppercase; margin-bottom: 12px; }
+  h1 { font-size: 32px; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 8px; }
+  .subtitle { font-size: 14px; color: var(--muted); max-width: 560px; line-height: 1.7; }
+  .progress-wrap { margin: 24px 0 40px; }
+  .progress-bar-bg { background: var(--dim); border-radius: 2px; height: 4px; }
+  .progress-bar { height: 4px; background: var(--signal); border-radius: 2px; transition: width 0.4s; width: 0%; }
+  .progress-label { font-family: 'Space Mono', monospace; font-size: 11px; color: var(--muted); margin-top: 8px; }
+  .section { margin-bottom: 36px; }
+  .section-header { display: flex; align-items: center; gap: 10px; padding-bottom: 10px; border-bottom: 1px solid var(--border); margin-bottom: 4px; }
+  .section-icon { font-size: 15px; color: var(--signal); }
+  .section-title { font-size: 13px; font-weight: 600; letter-spacing: 0.03em; color: var(--white); }
+  .section-count { margin-left: auto; font-family: 'Space Mono', monospace; font-size: 10px; color: var(--muted); }
+  .item { display: grid; grid-template-columns: 22px 1fr auto; gap: 12px; padding: 14px 0; border-bottom: 1px solid var(--border); align-items: start; cursor: pointer; transition: background 0.15s; }
+  .item:last-child { border-bottom: none; }
+  .item:hover { background: rgba(255,255,255,0.03); margin: 0 -12px; padding: 14px 12px; border-radius: 2px; border-bottom: none; }
+  .check { width: 18px; height: 18px; border-radius: 3px; border: 1.5px solid var(--mid); flex-shrink: 0; margin-top: 2px; display: flex; align-items: center; justify-content: center; transition: all 0.15s; }
+  .item.done .check { background: var(--signal); border-color: var(--signal); }
+  .item.done .check::after { content: ''; display: block; width: 10px; height: 6px; border-left: 2px solid #000; border-bottom: 2px solid #000; transform: rotate(-45deg) translate(1px, -1px); }
+  .item.done .item-title { color: var(--muted); text-decoration: line-through; text-decoration-color: var(--muted); }
+  .item-body { display: flex; flex-direction: column; gap: 4px; }
+  .item-title { font-size: 14px; color: var(--white); font-weight: 500; line-height: 1.4; }
+  .item-note { font-size: 12px; color: var(--muted); line-height: 1.6; }
+  .badge { font-family: 'Space Mono', monospace; font-size: 9px; padding: 3px 7px; border-radius: 2px; white-space: nowrap; font-weight: 700; letter-spacing: 0.08em; align-self: flex-start; margin-top: 3px; }
+  .badge-crit { background: rgba(255,59,92,0.15); color: var(--noise); }
+  .badge-high { background: rgba(255,184,0,0.15); color: #FFB800; }
+  .badge-med  { background: rgba(91,143,255,0.15); color: var(--pulse); }
+  .badge-low  { background: rgba(0,255,133,0.1); color: var(--signal); }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="page-header">
+    <div class="eyebrow">AttentionFi — Pre-Build</div>
+    <h1>Pre-launch checklist</h1>
+    <p class="subtitle">Everything that could kill this if you don't address it before writing code. Tick items off as you go.</p>
+  </div>
+  <div class="progress-wrap">
+    <div class="progress-bar-bg"><div class="progress-bar" id="progress"></div></div>
+    <div class="progress-label" id="progress-label">0 / 0 complete</div>
+  </div>
+  <div id="checklist"></div>
+</div>
+<script>
+const SECTIONS = [
+  {
+    icon: "⚖", title: "Legal & naming — do before writing any code",
+    items: [
+      { badge: "crit", title: "Don't call tokens 'shares', 'equity', or 'stock'", note: "friend.tech's first mistake. The Howey test triggers on profit expectation + the name. Call them 'signals', 'pulses', or 'attention tokens'. Rename everything in your UI now, before a single user sees it." },
+      { badge: "crit", title: "Frame as prediction market, not investment", note: "Kaito × Polymarket survived X's API crackdown because they price attention as output — traders bet on mindshare, not buy stake in a person. Every line of copy must reflect this framing." },
+      { badge: "high", title: "Get legal opinion before creator fee sharing goes live", note: "Routing 0.5% perpetually to an identified individual's wallet is closer to a revenue share agreement than a token burn. That changes the analysis. Keep Phase 1 fee-free and defer creator fees to Phase 2 after review." },
+      { badge: "high", title: "Geo-block UK from day one", note: "Pump.fun was placed on the FCA warning list and had to emergency geo-block the UK in Dec 2024. Do it proactively. Also consider US geo-block for beta until you have legal clarity on your jurisdiction." },
+      { badge: "med", title: "Add visible 'not investment advice' disclaimer on every token page", note: "This doesn't immunize you but it matters for Howey's 'reasonable expectation of profits' prong. If your UI never promises returns, it's harder to argue users were misled. Place it above the fold, not buried in ToS." }
+    ]
+  },
+  {
+    icon: "🪪", title: "Identity & reputation — the hardest product problem",
+    items: [
+      { badge: "crit", title: "Verified-only launch, not permissionless", note: "Pump went permissionless immediately. AttentionFi's existential risk is tokens for real people who publicly disavow them. Phase 1: 20 invited KOLs only, all verified via SAS. Phase 2: permissionless with clear 'unverified narrative token' labelling." },
+      { badge: "high", title: "Build the 'claim your token' flow before any launch", note: "If a token exists for @someone and they didn't create it, they need to: (a) verify ownership via Solana Attestation Service, (b) start earning the creator fee, (c) flag it as fraudulent. This must exist on day 1, not as a later patch." },
+      { badge: "high", title: "Make verification status visually unmistakable on every token card", note: "Verified (attested wallet, green signal) vs Narrative token (no identity claim) must be instantly distinct and impossible to spoof. This is your primary trust signal — don't hide it in fine print." },
+      { badge: "med", title: "Define what happens when the underlying account disappears", note: "KOL dies, goes private, or gets banned from X. What happens to the token and liquidity? Define a freeze-or-burn mechanism in your smart contract before you have to answer it in a crisis." }
+    ]
+  },
+  {
+    icon: "⚙", title: "Smart contract architecture — before writing Anchor code",
+    items: [
+      { badge: "crit", title: "Separate the oracle from the bonding curve — modular from day 1", note: "The mindshare seed price comes from Kaito/Switchboard. The curve is your Anchor program. Keep them modular so the oracle can be swapped without redeploying the curve. Kaito will change their API. Plan for it." },
+      { badge: "crit", title: "Build a multisig emergency pause from day 1", note: "Pump's May 2024 exploit came from a former employee with migration access. Your pause instruction must require a 2/3 or 3/5 multisig — not a single admin key. Build it before you have funds to lose." },
+      { badge: "high", title: "Graduate to your own AMM pool, not Raydium", note: "Pump's second biggest move was building PumpSwap to stop paying Raydium rent. Plan your AMM architecture before Phase 1 so graduation flows to a pool you control. Don't build a dependency on a third party for your critical flow." },
+      { badge: "high", title: "Enforce one verified token per handle on-chain", note: "The program must reject launch_token if a verified SAS attestation already exists for that X handle. Otherwise you get competing legitimate-looking tokens for the same person, which destroys market credibility." },
+      { badge: "med", title: "Add slippage guards to buy/sell instructions", note: "max_sol_cost on buy, min_sol_output on sell. Your Aegis batch settlement experience applies — same MEV-protection pattern, different context. Pair with Jito bundle priority in the frontend for Phase 2." },
+      { badge: "med", title: "Set graduation threshold in SOL, not USD", note: "Pump uses $69K which shifts with SOL price. Either use a SOL-denominated threshold (more predictable on-chain) or anchor to a Pyth SOL/USD oracle. Decide before you hardcode a number." }
+    ]
+  },
+  {
+    icon: "📡", title: "Oracle & data — your moat, and your attack surface",
+    items: [
+      { badge: "high", title: "Define 'mindshare' in a published, auditable formula", note: "Kaito's score is a black box. You need a published formula traders can verify: e.g. '7-day rolling engagement from smart followers, normalized against total crypto Twitter volume'. If traders can't audit what they're betting on, they won't trust it." },
+      { badge: "high", title: "Use a 24h TWAP on oracle price updates, not spot", note: "If mindshare updates instantly when someone goes viral, it's gameable — buy just before a big post drops. A 24-hour time-weighted average prevents this. Same principle as your Aegis oracle design — apply it here." },
+      { badge: "high", title: "Negotiate a data partnership with Kaito before building production oracle", note: "Kaito's public leaderboard is enough for Phase 0. For production you need a data agreement. The pitch: AttentionFi is a live distribution channel for Kaito data — they have incentive to partner. Do this before you're dependent on unofficial scraping." },
+      { badge: "med", title: "Build Farcaster data layer separately — different identity model", note: "Neynar (acquired Farcaster Jan 2026) is the canonical API. Use @neynar/nodejs-sdk. Farcaster FIDs are on-chain on OP Mainnet — you can verify identity without SAS. Score model will differ from X because Farcaster has different signal density." }
+    ]
+  },
+  {
+    icon: "🎯", title: "Product & retention — the friend.tech autopsies",
+    items: [
+      { badge: "crit", title: "Build Phase 0 dashboard before any smart contract", note: "The feed IS the product. Build a read-only dashboard with static Kaito data, no contracts. Post it on X: 'What if @vitalik had a tradeable mindshare token?' Collect 500 waitlist wallets before writing a single Anchor instruction." },
+      { badge: "crit", title: "Curated first cohort — never permissionless on day 1", note: "friend.tech's viral moment was immediately followed by pure speculation. Your first 20 tokens need to be invited KOLs who understand the product and have skin in the game (future creator fees). Control the narrative before the chaos arrives." },
+      { badge: "high", title: "Build a creator dashboard — earnings, holders, volume", note: "friend.tech gave creators zero visibility into their token's performance. A creator dashboard (token price, 24h volume, accrued fees, holder count, mindshare trend) is the retention mechanism for your supply side. Without it, KOLs disengage." },
+      { badge: "high", title: "Make graduation a loud event, not a silent migration", note: "When a token hits threshold, send push notifications to all holders, give the creator a shareable 'graduated' post template, put it on a leaderboard. This is your primary viral loop. Pump's graduation is silent — make yours a moment." },
+      { badge: "med", title: "No private chat rooms as core utility", note: "friend.tech's utility was private chat access. When novelty wore off, there was nothing holding price. Your tokens represent attention and credibility — not access. Chat can be an add-on in Phase 3, never the core value proposition." }
+    ]
+  },
+  {
+    icon: "🔒", title: "Security — learned from Pump's incidents",
+    items: [
+      { badge: "crit", title: "Multisig on all migration and graduation flows", note: "Pump's May 2024 exploit was a former employee who retained admin access to liquidity migration. Never give any single key migration rights. 3/5 multisig minimum for any instruction that moves graduation liquidity." },
+      { badge: "high", title: "Audit the bonding curve math before mainnet", note: "The quadratic curve has edge cases — what happens if one wallet buys 90%+ of supply in a single tx? Does the virtual liquidity seed create an exploitable arbitrage? Get a review from a Solana-native auditor before real funds are at risk." },
+      { badge: "med", title: "Rate-limit token launches per wallet", note: "Without limits, bots will launch hundreds of fake narrative tokens to pollute the feed. Max 3 launches per wallet per 24 hours for Phase 1. Rate limits can be relaxed based on wallet reputation score in later phases." }
+    ]
+  }
+];
+
+const state = JSON.parse(localStorage.getItem('att_checklist_v2') || '{}');
+
+function save() { localStorage.setItem('att_checklist_v2', JSON.stringify(state)); }
+
+function updateProgress() {
+  let total = 0, done = 0;
+  SECTIONS.forEach((sec, si) => sec.items.forEach((_, ii) => { total++; if (state[`${si}-${ii}`]) done++; }));
+  const pct = total ? Math.round((done / total) * 100) : 0;
+  document.getElementById('progress').style.width = pct + '%';
+  document.getElementById('progress-label').textContent = `${done} / ${total} complete — ${pct}%`;
+}
+
+function renderAll() {
+  const container = document.getElementById('checklist');
+  container.innerHTML = '';
+  SECTIONS.forEach((sec, si) => {
+    const done = sec.items.filter((_, ii) => state[`${si}-${ii}`]).length;
+    const secEl = document.createElement('div');
+    secEl.className = 'section';
+    const hdr = document.createElement('div');
+    hdr.className = 'section-header';
+    hdr.innerHTML = `<span class="section-icon">${sec.icon}</span><span class="section-title">${sec.title}</span><span class="section-count">${done}/${sec.items.length}</span>`;
+    secEl.appendChild(hdr);
+    sec.items.forEach((item, ii) => {
+      const key = `${si}-${ii}`;
+      const isDone = !!state[key];
+      const el = document.createElement('div');
+      el.className = `item${isDone ? ' done' : ''}`;
+      const badgeLabels = { crit: 'CRITICAL', high: 'HIGH', med: 'MEDIUM', low: 'LOW' };
+      el.innerHTML = `
+        <div class="check"></div>
+        <div class="item-body">
+          <div class="item-title">${item.title}</div>
+          <div class="item-note">${item.note}</div>
+        </div>
+        <span class="badge badge-${item.badge}">${badgeLabels[item.badge]}</span>
+      `;
+      el.addEventListener('click', () => {
+        state[key] = !state[key];
+        save();
+        el.classList.toggle('done');
+        updateProgress();
+        hdr.querySelector('.section-count').textContent = `${sec.items.filter((_, i) => state[`${si}-${i}`]).length}/${sec.items.length}`;
+      });
+      secEl.appendChild(el);
+    });
+    container.appendChild(secEl);
+  });
+  updateProgress();
+}
+
+renderAll();
+</script>
+</body>
+</html>

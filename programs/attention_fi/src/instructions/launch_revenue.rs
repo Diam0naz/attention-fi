@@ -1,0 +1,108 @@
+use anchor_lang::prelude::*;
+use anchor_spl::associated_token::AssociatedToken;
+use anchor_spl::token::spl_token::instruction::AuthorityType;
+use anchor_spl::token::{self, Mint, MintTo, SetAuthority, Token, TokenAccount};
+
+use crate::constants::{GLOBAL_SEED, REVENUE_SEED};
+use crate::error::AttentionError;
+use crate::state::{Global, MindshareTier, RevenueShare};
+
+#[derive(Accounts)]
+pub struct LaunchRevenue<'info> {
+    #[account(mut)]
+    pub creator: Signer<'info>,
+
+    #[account(mut, seeds = [GLOBAL_SEED], bump = global.bump)]
+    pub global: Account<'info, Global>,
+
+    #[account(
+        init,
+        payer = creator,
+        mint::decimals = global.token_decimals,
+        mint::authority = revenue,
+    )]
+    pub mint: Account<'info, Mint>,
+
+    #[account(
+        init,
+        payer = creator,
+        space = 8 + RevenueShare::INIT_SPACE,
+        seeds = [REVENUE_SEED, mint.key().as_ref()],
+        bump,
+    )]
+    pub revenue: Account<'info, RevenueShare>,
+
+    #[account(
+        init,
+        payer = creator,
+        associated_token::mint = mint,
+        associated_token::authority = revenue,
+    )]
+    pub vault: Account<'info, TokenAccount>,
+
+    pub system_program: Program<'info, System>,
+    pub token_program: Program<'info, Token>,
+    pub associated_token_program: Program<'info, AssociatedToken>,
+    pub rent: Sysvar<'info, Rent>,
+}
+
+pub fn launch_revenue_handler(
+    ctx: Context<LaunchRevenue>,
+    tier: MindshareTier,
+    share_price: u64,
+) -> Result<()> {
+    require!(share_price > 0, AttentionError::InvalidAuctionParams);
+
+    let global = &ctx.accounts.global;
+    let total_supply = global.token_total_supply;
+
+    let mint_key = ctx.accounts.mint.key();
+    let bump = ctx.bumps.revenue;
+    let signer_seeds: &[&[&[u8]]] = &[&[REVENUE_SEED, mint_key.as_ref(), &[bump]]];
+
+    token::mint_to(
+        CpiContext::new_with_signer(
+            ctx.accounts.token_program.to_account_info(),
+            MintTo {
+                mint: ctx.accounts.mint.to_account_info(),
+                to: ctx.accounts.vault.to_account_info(),
+                authority: ctx.accounts.revenue.to_account_info(),
+            },
+            signer_seeds,
+        ),
+        total_supply,
+    )?;
+
+    token::set_authority(
+        CpiContext::new_with_signer(
+            ctx.accounts.token_program.to_account_info(),
+            SetAuthority {
+                current_authority: ctx.accounts.revenue.to_account_info(),
+                account_or_mint: ctx.accounts.mint.to_account_info(),
+            },
+            signer_seeds,
+        ),
+        AuthorityType::MintTokens,
+        None,
+    )?;
+
+    let revenue = &mut ctx.accounts.revenue;
+    revenue.mint = mint_key;
+    revenue.creator = ctx.accounts.creator.key();
+    revenue.share_price = share_price;
+    revenue.token_total_supply = total_supply;
+    revenue.shares_sold = 0;
+    revenue.total_staked = 0;
+    revenue.acc_revenue_per_share = 0;
+    revenue.revenue_reserves = 0;
+    revenue.tier = tier.as_u8();
+    revenue.bump = bump;
+
+    let global = &mut ctx.accounts.global;
+    global.tokens_launched = global
+        .tokens_launched
+        .checked_add(1)
+        .ok_or(AttentionError::MathOverflow)?;
+
+    Ok(())
+}

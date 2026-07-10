@@ -1,0 +1,44 @@
+pub mod bid;
+pub mod buy;
+pub mod buy_conviction;
+pub mod buy_nft;
+pub mod buy_revenue;
+pub mod claim_revenue;
+pub mod deposit_revenue;
+pub mod initialize;
+pub mod launch_conviction;
+pub mod launch_revenue;
+pub mod launch_token;
+pub mod level_up;
+pub mod mint_genesis;
+pub mod mint_perk;
+pub mod sell;
+pub mod sell_conviction;
+pub mod settle_auction;
+pub mod start_auction;
+pub mod start_nft_auction;
+pub mod verify_handle;
+
+// Glob re-export so the `#[derive(Accounts)]`-generated client/CPI helper modules
+// (e.g. `__client_accounts_*`) are reachable at the crate root, as Anchor's
+// `#[program]` macro requires. Handlers are uniquely named to avoid glob clashes.
+pub use bid::*;
+pub use buy::*;
+pub use buy_conviction::*;
+pub use buy_nft::*;
+pub use buy_revenue::*;
+pub use claim_revenue::*;
+pub use deposit_revenue::*;
+pub use initialize::*;
+pub use launch_conviction::*;
+pub use launch_revenue::*;
+pub use launch_token::*;
+pub use level_up::*;
+pub use mint_genesis::*;
+pub use mint_perk::*;
+pub use sell::*;
+pub use sell_conviction::*;
+pub use settle_auction::*;
+pub use start_auction::*;
+pub use start_nft_auction::*;
+pub use verify_handle::*;

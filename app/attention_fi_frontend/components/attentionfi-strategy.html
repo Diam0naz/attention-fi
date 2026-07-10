@@ -1,0 +1,1205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AttentionFi — Pump.fun for X</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap');
+
+  :root {
+    --black: #0A0A0A;
+    --white: #F5F4F0;
+    --signal: #00FF85;
+    --noise: #FF3B5C;
+    --pulse: #5B8FFF;
+    --dim: #1C1C1C;
+    --mid: #2E2E2E;
+    --muted: #6B6B6B;
+    --border: rgba(255,255,255,0.08);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--black);
+    color: var(--white);
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 16px;
+    line-height: 1.6;
+    overflow-x: hidden;
+  }
+
+  /* TICKER TAPE */
+  .ticker {
+    background: var(--signal);
+    color: var(--black);
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    padding: 7px 0;
+    overflow: hidden;
+    white-space: nowrap;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .ticker-inner {
+    display: inline-block;
+    animation: ticker 28s linear infinite;
+  }
+  @keyframes ticker {
+    0% { transform: translateX(0); }
+    100% { transform: translateX(-50%); }
+  }
+
+  /* NAV */
+  nav {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 40px;
+    border-bottom: 1px solid var(--border);
+  }
+  .logo {
+    font-family: 'Space Mono', monospace;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    color: var(--signal);
+  }
+  .nav-links {
+    display: flex;
+    gap: 28px;
+    list-style: none;
+  }
+  .nav-links a {
+    color: var(--muted);
+    text-decoration: none;
+    font-size: 13px;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+    transition: color 0.2s;
+    cursor: pointer;
+  }
+  .nav-links a:hover, .nav-links a.active { color: var(--white); }
+
+  /* SECTIONS */
+  section { display: none; padding: 60px 40px; max-width: 960px; margin: 0 auto; }
+  section.active { display: block; }
+
+  /* HERO */
+  .hero-eyebrow {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.15em;
+    color: var(--signal);
+    text-transform: uppercase;
+    margin-bottom: 24px;
+  }
+  .hero-title {
+    font-size: clamp(42px, 6vw, 72px);
+    font-weight: 700;
+    line-height: 1.05;
+    letter-spacing: -0.03em;
+    margin-bottom: 24px;
+  }
+  .hero-title .accent { color: var(--signal); }
+  .hero-sub {
+    font-size: 18px;
+    font-weight: 400;
+    color: #A0A0A0;
+    max-width: 560px;
+    line-height: 1.7;
+    margin-bottom: 48px;
+  }
+
+  /* SIGNAL BOARD — the signature element */
+  .signal-board {
+    background: var(--dim);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    padding: 0;
+    margin-bottom: 48px;
+    overflow: hidden;
+  }
+  .signal-board-header {
+    background: var(--mid);
+    padding: 12px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--border);
+  }
+  .signal-board-header span {
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    color: var(--muted);
+    text-transform: uppercase;
+  }
+  .live-dot {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    color: var(--signal);
+    letter-spacing: 0.1em;
+  }
+  .live-dot::before {
+    content: '';
+    width: 6px; height: 6px;
+    background: var(--signal);
+    border-radius: 50%;
+    animation: pulse-dot 1.4s ease infinite;
+  }
+  @keyframes pulse-dot {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+  .signal-rows { padding: 4px 0; }
+  .signal-row {
+    display: grid;
+    grid-template-columns: 36px 1fr 80px 80px 60px;
+    padding: 12px 20px;
+    border-bottom: 1px solid var(--border);
+    align-items: center;
+    font-size: 13px;
+    transition: background 0.15s;
+    cursor: pointer;
+  }
+  .signal-row:hover { background: rgba(255,255,255,0.03); }
+  .signal-row:last-child { border-bottom: none; }
+  .rank {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+  }
+  .handle {
+    font-weight: 600;
+    font-size: 14px;
+  }
+  .handle .tag {
+    color: var(--muted);
+    font-weight: 400;
+    font-size: 12px;
+    margin-left: 6px;
+  }
+  .mindshare {
+    font-family: 'Space Mono', monospace;
+    font-size: 12px;
+    text-align: right;
+  }
+  .mcap {
+    font-family: 'Space Mono', monospace;
+    font-size: 12px;
+    text-align: right;
+    color: var(--muted);
+  }
+  .delta {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    text-align: right;
+    font-weight: 700;
+  }
+  .delta.up { color: var(--signal); }
+  .delta.down { color: var(--noise); }
+
+  /* CARDS */
+  .card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 16px;
+    margin: 32px 0;
+  }
+  .card {
+    background: var(--dim);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    padding: 28px;
+  }
+  .card-label {
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-bottom: 12px;
+  }
+  .card-value {
+    font-size: 32px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    margin-bottom: 6px;
+  }
+  .card-value .unit { font-size: 16px; color: var(--muted); font-weight: 400; }
+  .card-note {
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.5;
+  }
+
+  /* PROSE */
+  h2 {
+    font-size: 28px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    margin-bottom: 16px;
+    margin-top: 48px;
+  }
+  h2:first-child { margin-top: 0; }
+  h3 {
+    font-size: 17px;
+    font-weight: 600;
+    margin-bottom: 10px;
+    margin-top: 32px;
+  }
+  p {
+    color: #B0B0B0;
+    font-size: 15px;
+    line-height: 1.75;
+    margin-bottom: 16px;
+    max-width: 680px;
+  }
+  p strong { color: var(--white); font-weight: 600; }
+
+  /* COMPARISON TABLE */
+  .compare-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 24px 0;
+    font-size: 13px;
+  }
+  .compare-table th {
+    text-align: left;
+    padding: 12px 16px;
+    background: var(--mid);
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+    text-transform: uppercase;
+    border-bottom: 1px solid var(--border);
+  }
+  .compare-table td {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+    color: #B0B0B0;
+  }
+  .compare-table td:first-child { color: var(--white); font-weight: 500; }
+  .compare-table tr:last-child td { border-bottom: none; }
+  .compare-table .yes { color: var(--signal); font-family: 'Space Mono', monospace; font-size: 12px; }
+  .compare-table .no { color: var(--noise); font-family: 'Space Mono', monospace; font-size: 12px; }
+  .compare-table .partial { color: #FFB800; font-family: 'Space Mono', monospace; font-size: 12px; }
+
+  /* MECHANISM SELECTOR */
+  .mech-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin: 24px 0;
+  }
+  .mech-card {
+    background: var(--dim);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    padding: 24px;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+  }
+  .mech-card:hover { border-color: rgba(255,255,255,0.2); }
+  .mech-card.selected {
+    border-color: var(--signal);
+    background: rgba(0,255,133,0.04);
+  }
+  .mech-card-title {
+    font-weight: 700;
+    font-size: 15px;
+    margin-bottom: 6px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .mech-card-title .badge {
+    font-family: 'Space Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    padding: 3px 7px;
+    border-radius: 2px;
+    text-transform: uppercase;
+  }
+  .badge-good { background: rgba(0,255,133,0.15); color: var(--signal); }
+  .badge-warn { background: rgba(255,184,0,0.15); color: #FFB800; }
+  .mech-desc { font-size: 13px; color: var(--muted); line-height: 1.6; margin-bottom: 12px; }
+  .mech-best { font-size: 11px; color: var(--pulse); font-family: 'Space Mono', monospace; }
+
+  /* CURVE VIZ */
+  .curve-viz {
+    background: var(--dim);
+    border: 1px solid var(--border);
+    padding: 24px;
+    margin: 24px 0;
+    border-radius: 2px;
+  }
+  .curve-viz canvas { width: 100%; height: 200px; display: block; }
+
+  /* ROADMAP */
+  .roadmap {
+    margin: 32px 0;
+    position: relative;
+  }
+  .roadmap-phase {
+    display: grid;
+    grid-template-columns: 120px 1fr;
+    gap: 24px;
+    margin-bottom: 0;
+    position: relative;
+  }
+  .roadmap-phase::before {
+    content: '';
+    position: absolute;
+    left: 56px;
+    top: 40px;
+    bottom: -1px;
+    width: 1px;
+    background: var(--border);
+  }
+  .roadmap-phase:last-child::before { display: none; }
+  .phase-marker {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding-top: 4px;
+  }
+  .phase-dot {
+    width: 12px; height: 12px;
+    border-radius: 50%;
+    background: var(--mid);
+    border: 2px solid var(--muted);
+    margin-bottom: 8px;
+    flex-shrink: 0;
+  }
+  .phase-dot.active {
+    background: var(--signal);
+    border-color: var(--signal);
+    box-shadow: 0 0 12px rgba(0,255,133,0.4);
+  }
+  .phase-label {
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 0.08em;
+    text-align: center;
+    line-height: 1.4;
+  }
+  .phase-content {
+    padding: 0 0 40px 0;
+  }
+  .phase-title {
+    font-weight: 700;
+    font-size: 16px;
+    margin-bottom: 6px;
+  }
+  .phase-duration {
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    color: var(--signal);
+    letter-spacing: 0.1em;
+    margin-bottom: 12px;
+  }
+  .phase-items {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .phase-items li {
+    font-size: 13px;
+    color: #A0A0A0;
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+  }
+  .phase-items li::before {
+    content: '—';
+    color: var(--muted);
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+
+  /* RISK TABLE */
+  .risk-row {
+    display: grid;
+    grid-template-columns: 1fr 80px 80px;
+    padding: 14px 0;
+    border-bottom: 1px solid var(--border);
+    align-items: center;
+    gap: 16px;
+  }
+  .risk-row:last-child { border-bottom: none; }
+  .risk-name { font-size: 14px; font-weight: 500; }
+  .risk-note { font-size: 12px; color: var(--muted); margin-top: 3px; }
+  .severity {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    font-weight: 700;
+    text-align: center;
+    padding: 4px 8px;
+    border-radius: 2px;
+  }
+  .sev-high { background: rgba(255,59,92,0.15); color: var(--noise); }
+  .sev-med { background: rgba(255,184,0,0.15); color: #FFB800; }
+  .sev-low { background: rgba(0,255,133,0.1); color: var(--signal); }
+  .mitigation {
+    font-size: 12px;
+    color: var(--muted);
+    text-align: right;
+  }
+
+  /* MOAT SECTION */
+  .moat-items {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    margin: 24px 0;
+  }
+  .moat-item {
+    display: grid;
+    grid-template-columns: 48px 1fr;
+    gap: 16px;
+    padding: 20px 0;
+    border-bottom: 1px solid var(--border);
+    align-items: start;
+  }
+  .moat-item:last-child { border-bottom: none; }
+  .moat-num {
+    font-family: 'Space Mono', monospace;
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--signal);
+    line-height: 1;
+    padding-top: 2px;
+  }
+  .moat-title { font-weight: 600; font-size: 15px; margin-bottom: 6px; }
+  .moat-body { font-size: 13px; color: #909090; line-height: 1.6; }
+
+  /* SCROLL indicator */
+  .scroll-hint {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 0.1em;
+    margin-bottom: 48px;
+  }
+
+  /* FOOTER */
+  footer {
+    border-top: 1px solid var(--border);
+    padding: 24px 40px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    max-width: 100%;
+  }
+  footer span {
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 0.08em;
+  }
+
+  /* TAG */
+  .tag-inline {
+    display: inline-block;
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    padding: 3px 8px;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    letter-spacing: 0.08em;
+    margin: 2px;
+    border-radius: 2px;
+  }
+
+  @media (max-width: 600px) {
+    nav { padding: 16px 20px; }
+    .nav-links { gap: 16px; }
+    section { padding: 40px 20px; }
+    .mech-grid { grid-template-columns: 1fr; }
+    .roadmap-phase { grid-template-columns: 80px 1fr; }
+    .signal-row { grid-template-columns: 28px 1fr 70px 50px; }
+    .mcap { display: none; }
+    footer { padding: 20px; flex-direction: column; gap: 8px; }
+    .hero-title { font-size: 36px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- TICKER -->
+<div class="ticker">
+  <span class="ticker-inner">
+    &nbsp;&nbsp;&nbsp;ATTENTIONFI — PUMP.FUN FOR X &nbsp;///&nbsp; MINDSHARE IS THE ASSET &nbsp;///&nbsp; BONDING CURVES MEET SOCIAL GRAPHS &nbsp;///&nbsp; KAITO YAP SCORE → ON-CHAIN PRICE &nbsp;///&nbsp; VERTICAL CURATION &nbsp;///&nbsp; FAIR LAUNCH FOR KOL TOKENS &nbsp;///&nbsp; CREATOR FEE SHARING &nbsp;///&nbsp; DUTCH AUCTION FOR NARRATIVES &nbsp;///&nbsp; GRADUATION TO AMM &nbsp;///&nbsp; ATTENTIONFI — PUMP.FUN FOR X &nbsp;///&nbsp; MINDSHARE IS THE ASSET &nbsp;///&nbsp; BONDING CURVES MEET SOCIAL GRAPHS &nbsp;///&nbsp; KAITO YAP SCORE → ON-CHAIN PRICE &nbsp;///&nbsp; VERTICAL CURATION &nbsp;///&nbsp; FAIR LAUNCH FOR KOL TOKENS &nbsp;///&nbsp; CREATOR FEE SHARING &nbsp;///&nbsp; DUTCH AUCTION FOR NARRATIVES &nbsp;///&nbsp; GRADUATION TO AMM &nbsp;///&nbsp;
+  </span>
+</div>
+
+<!-- NAV -->
+<nav>
+  <div class="logo">ATTENTIONFI</div>
+  <ul class="nav-links">
+    <li><a href="#" class="active" onclick="showSection('thesis', this)">Thesis</a></li>
+    <li><a href="#" onclick="showSection('mechanism', this)">Mechanism</a></li>
+    <li><a href="#" onclick="showSection('moat', this)">Moat</a></li>
+    <li><a href="#" onclick="showSection('roadmap', this)">Roadmap</a></li>
+    <li><a href="#" onclick="showSection('risks', this)">Risks</a></li>
+  </ul>
+</nav>
+
+<!-- THESIS -->
+<section id="thesis" class="active">
+  <div class="hero-eyebrow">product thesis</div>
+  <h1 class="hero-title">
+    Pump.fun got one thing<br>
+    right. <span class="accent">The feed.</span>
+  </h1>
+  <p class="hero-sub">
+    Attention is the scarcest resource on the internet. Pump tokenised it for random images. 
+    We tokenise it where it actually concentrates — the X social graph.
+  </p>
+
+  <!-- MOCK LIVE FEED -->
+  <div class="signal-board">
+    <div class="signal-board-header">
+      <span>Live Mindshare Feed</span>
+      <span class="live-dot">LIVE</span>
+    </div>
+    <div class="signal-board-header" style="background:transparent; padding: 8px 20px;">
+      <span style="font-size:10px;">HANDLE</span>
+      <span></span>
+      <span style="font-size:10px;">MINDSHARE</span>
+      <span style="font-size:10px;">MKTCAP</span>
+      <span style="font-size:10px;">24H</span>
+    </div>
+    <div class="signal-rows">
+      <div class="signal-row">
+        <span class="rank">01</span>
+        <span class="handle">@solana_kol <span class="tag">DeFi</span></span>
+        <span class="mindshare" style="color:var(--signal)">3.24%</span>
+        <span class="mcap">$182K</span>
+        <span class="delta up">+41%</span>
+      </div>
+      <div class="signal-row">
+        <span class="rank">02</span>
+        <span class="handle">@ai_narrative <span class="tag">AI/Tech</span></span>
+        <span class="mindshare" style="color:var(--signal)">2.87%</span>
+        <span class="mcap">$94K</span>
+        <span class="delta up">+18%</span>
+      </div>
+      <div class="signal-row">
+        <span class="rank">03</span>
+        <span class="handle">@rwa_summer <span class="tag">Narrative</span></span>
+        <span class="mindshare" style="color:#FFB800">1.41%</span>
+        <span class="mcap">$61K</span>
+        <span class="delta down">−7%</span>
+      </div>
+      <div class="signal-row">
+        <span class="rank">04</span>
+        <span class="handle">@zk_builder <span class="tag">ZK/Infra</span></span>
+        <span class="mindshare" style="color:#FFB800">0.98%</span>
+        <span class="mcap">$43K</span>
+        <span class="delta up">+5%</span>
+      </div>
+      <div class="signal-row">
+        <span class="rank">05</span>
+        <span class="handle">@base_degen <span class="tag">Base</span></span>
+        <span class="mindshare" style="color:var(--muted)">0.32%</span>
+        <span class="mcap">$12K</span>
+        <span class="delta down">−22%</span>
+      </div>
+    </div>
+  </div>
+
+  <p>The feed above is the product. Every row is a tradeable attention asset — a token seeded by real on-chain social data, priced by a bonding curve, and tradeable the instant you connect your wallet.</p>
+
+  <h2>Why Pump works — and where it breaks</h2>
+  <p>Pump.fun's genius was collapsing three primitives into one flow: <strong>create → trade → speculate</strong>. The bonding curve removed the need for liquidity providers. The live feed created a social game. Zero friction meant zero excuses not to launch.</p>
+  <p>But Pump's underlying asset is <strong>nothing</strong> — a JPEG and a name. The price signal has no anchor outside the curve itself. That's fine for pure speculation. It's the wrong tool for anything else: creator economies, reputation markets, project launches, or narrative bets.</p>
+  <p>The X social graph has a <strong>real underlying signal</strong>: mindshare. It's measurable (Kaito indexes 200M+ crypto posts daily), it changes in real time, and it's genuinely predictive of market moves. That's a completely different asset class.</p>
+
+  <div class="card-grid">
+    <div class="card">
+      <div class="card-label">Pump.fun revenue peak</div>
+      <div class="card-value">$138<span class="unit">M/mo</span></div>
+      <div class="card-note">From a single mechanism on a single chain. The template works.</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Pump tokens that fail</div>
+      <div class="card-value">98.5<span class="unit">%</span></div>
+      <div class="card-note">No underlying signal = no floor. AttentionFi tokens have a real anchor.</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Kaito posts indexed daily</div>
+      <div class="card-value">200<span class="unit">M+</span></div>
+      <div class="card-note">The data layer exists. It just hasn't been tokenised at the account level yet.</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Kaito + Polymarket markets</div>
+      <div class="card-value">$1.3<span class="unit">M vol</span></div>
+      <div class="card-note">Two pilot attention markets already drew $1.3M. Demand is real.</div>
+    </div>
+  </div>
+
+  <h2>The core insight</h2>
+  <p>Pump's game mechanic is <strong>early buyer wins</strong> because supply is scarce along the curve. That maps to token scarcity.</p>
+  <p>The X graph's natural scarcity is different: <strong>mindshare is zero-sum within any given timeframe</strong>. When @solana_kol's share of crypto Twitter conversation goes up, @base_degen's goes down. That dynamic is the curve. You're not betting on a JPEG — you're betting on relative attention velocity.</p>
+  <p>That's a more interesting trade. And a much more defensible product.</p>
+</section>
+
+<!-- MECHANISM -->
+<section id="mechanism">
+  <div class="hero-eyebrow">mechanism design</div>
+  <h1 class="hero-title">The <span class="accent">right curve</span><br>for the right asset</h1>
+  <p class="hero-sub">Pump uses one mechanism for everything. That's wrong. AttentionFi picks the mechanism to fit the underlying social primitive.</p>
+
+  <h2>The four launch types</h2>
+  <p>Click any mechanism to explore how it works:</p>
+
+  <div class="mech-grid">
+    <div class="mech-card selected" onclick="selectMech(this, 'bonding')">
+      <div class="mech-card-title">Bonding Curve <span class="badge badge-good">DEFAULT</span></div>
+      <div class="mech-desc">Price rises continuously with buys. The Pump model — but seeded by real mindshare data instead of zero.</div>
+      <div class="mech-best">BEST FOR → KOL reputation tokens</div>
+    </div>
+    <div class="mech-card" onclick="selectMech(this, 'dutch')">
+      <div class="mech-card-title">Dutch Auction <span class="badge badge-good">FAIR</span></div>
+      <div class="mech-desc">Price starts high, drops over time until the full allocation sells. Eliminates front-running and bot advantages.</div>
+      <div class="mech-best">BEST FOR → Narrative / project launches</div>
+    </div>
+    <div class="mech-card" onclick="selectMech(this, 'conviction')">
+      <div class="mech-card-title">Conviction Curve <span class="badge badge-warn">SLOW</span></div>
+      <div class="mech-desc">Slower price acceleration with mandatory time-locks. Built for community tokens where loyalty matters more than exit speed.</div>
+      <div class="mech-best">BEST FOR → Niche verticals (music, gaming)</div>
+    </div>
+    <div class="mech-card" onclick="selectMech(this, 'revenue')">
+      <div class="mech-card-title">Revenue Share <span class="badge badge-good">NEW</span></div>
+      <div class="mech-desc">Token = claim on a percentage of the subject's future protocol fees. Price is a DCF on projected attention revenue.</div>
+      <div class="mech-best">BEST FOR → Creator economy tokens</div>
+    </div>
+  </div>
+
+  <div class="curve-viz">
+    <div class="signal-board-header" style="margin: -24px -24px 20px -24px; border-radius: 0;">
+      <span id="curve-label" style="font-size:10px; letter-spacing:0.1em; color: var(--muted);">BONDING CURVE — P = k × Q²</span>
+      <span class="live-dot">INTERACTIVE</span>
+    </div>
+    <canvas id="curveCanvas" height="200"></canvas>
+    <p id="curve-desc" style="margin-top:16px; font-size:13px; color:var(--muted); max-width:100%;">
+      Early buyers pay lowest price. Each subsequent buy increases the price along the quadratic curve. Once the $69K graduation threshold is hit, the token migrates to a native AMM pool. AttentionFi seeds the initial price from the subject's Kaito mindshare score — so a top-100 KOL token doesn't start at zero.
+    </p>
+  </div>
+
+  <h2>How mindshare seeds the price</h2>
+  <p>This is the key difference from Pump. When a new token launches on AttentionFi, the bonding curve doesn't start at zero. It starts at a price proportional to the subject's existing mindshare rank:</p>
+  
+  <table class="compare-table">
+    <thead>
+      <tr>
+        <th>Mindshare Tier</th>
+        <th>Example</th>
+        <th>Seed Market Cap</th>
+        <th>Mechanism</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Top 10</td>
+        <td>@vitalik, major KOL</td>
+        <td>~$15,000</td>
+        <td>Bonding curve</td>
+      </tr>
+      <tr>
+        <td>Top 100</td>
+        <td>Established crypto voice</td>
+        <td>~$4,000</td>
+        <td>Bonding curve</td>
+      </tr>
+      <tr>
+        <td>Emerging (top 1K)</td>
+        <td>Rising builder / analyst</td>
+        <td>~$800</td>
+        <td>Bonding curve</td>
+      </tr>
+      <tr>
+        <td>Narrative token</td>
+        <td>"AI agents", "RWA summer"</td>
+        <td>~$2,000</td>
+        <td>Dutch auction</td>
+      </tr>
+      <tr>
+        <td>New entrant</td>
+        <td>Unknown account</td>
+        <td>~$69</td>
+        <td>Pure bonding curve</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>The graduation path</h2>
+  <p>Like Pump, tokens that reach a threshold graduate to open market trading — but in AttentionFi, graduation unlocks something Pump doesn't have: <strong>the subject themselves earns from it</strong>.</p>
+
+  <div class="card-grid">
+    <div class="card">
+      <div class="card-label">Creator fee at graduation</div>
+      <div class="card-value">0.5<span class="unit">%</span></div>
+      <div class="card-note">Of all post-graduation trading volume, forever. Claimable by the X account owner once they verify.</div>
+    </div>
+    <div class="card">
+      <div class="card-label">LP fee</div>
+      <div class="card-value">1.0<span class="unit">%</span></div>
+      <div class="card-note">Distributed to graduation-phase liquidity providers locked for 30 days.</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Protocol fee</div>
+      <div class="card-value">0.5<span class="unit">%</span></div>
+      <div class="card-note">AttentionFi treasury. Used to fund oracle and data infrastructure.</div>
+    </div>
+  </div>
+
+  <h2>Pump vs AttentionFi — mechanism comparison</h2>
+  <table class="compare-table">
+    <thead>
+      <tr><th>Feature</th><th>Pump.fun</th><th>AttentionFi</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Underlying asset</td><td>Nothing (meme)</td><td>X mindshare score</td></tr>
+      <tr><td>Price seed</td><td>Zero / virtual start</td><td>Mindshare-proportional</td></tr>
+      <tr><td>Mechanisms</td><td>One (bonding curve)</td><td>Four (picker at launch)</td></tr>
+      <tr><td>Creator earnings</td><td class="partial">PARTIAL — 50% swap fees post-May 2025</td><td class="yes">YES — 0.5% perpetual + verify to claim</td></tr>
+      <tr><td>Curation layer</td><td class="no">NONE — pure chaos feed</td><td class="yes">YES — vertical tabs by topic</td></tr>
+      <tr><td>Identity binding</td><td class="no">NO — anonymous wallet</td><td class="yes">YES — X handle attestation on-chain</td></tr>
+      <tr><td>Price anchor</td><td class="no">NO — pure speculation</td><td class="yes">YES — mindshare oracle</td></tr>
+      <tr><td>Graduation target</td><td>Raydium / PumpSwap</td><td>Native AMM (PumpSwap-style)</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- MOAT -->
+<section id="moat">
+  <div class="hero-eyebrow">competitive moat</div>
+  <h1 class="hero-title">Why this is <span class="accent">hard to copy</span></h1>
+  <p class="hero-sub">Pump was forked 40+ times. Most forks died because the moat wasn't the contract — it was the feed liquidity and network effects. AttentionFi has three structural moats Pump never had.</p>
+
+  <div class="moat-items">
+    <div class="moat-item">
+      <div class="moat-num">01</div>
+      <div>
+        <div class="moat-title">The social graph is the liquidity</div>
+        <div class="moat-body">On Pump, liquidity comes from anonymous speculators. On AttentionFi, the subject of each token — the KOL or narrative — is an organic distribution channel for their own token. When @solana_kol tweets about their token, they're doing your marketing. That's a flywheel Pump structurally cannot create because its tokens have no natural owner with a distribution network.</div>
+      </div>
+    </div>
+    <div class="moat-item">
+      <div class="moat-num">02</div>
+      <div>
+        <div class="moat-title">Creator verification = identity lock-in</div>
+        <div class="moat-body">Once a KOL verifies their X handle on-chain and claims their creator fee address, that attestation lives on Solana permanently. Anyone who launches a competing "fake" token for the same handle gets flagged. The original, verified token has a legitimacy moat — forks can't replicate the on-chain identity binding.</div>
+      </div>
+    </div>
+    <div class="moat-item">
+      <div class="moat-num">03</div>
+      <div>
+        <div class="moat-title">Data layer compounds over time</div>
+        <div class="moat-body">Price history correlated against mindshare events (threads going viral, podcast appearances, project launches) becomes a proprietary dataset. Over time, the oracle gets better at predicting mindshare velocity — and that's an edge no fork can replicate without the history. It's the Bloomberg Terminal moat, built on-chain.</div>
+      </div>
+    </div>
+    <div class="moat-item">
+      <div class="moat-num">04</div>
+      <div>
+        <div class="moat-title">Vertical curation creates separate flywheel per niche</div>
+        <div class="moat-body">A music vertical, a DeFi vertical, and a ZK vertical each have different user bases, different KOLs, and different discovery behaviors. Pump is one horizontal product fighting for the same generic feed. AttentionFi can run multiple mini-economies under one roof, each with its own community, without them cannibalising each other.</div>
+      </div>
+    </div>
+  </div>
+
+  <h2>Who's in the market already</h2>
+  <table class="compare-table">
+    <thead>
+      <tr><th>Project</th><th>What they do</th><th>Gap</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Kaito AI</td>
+        <td>Indexes mindshare, runs attention markets with Polymarket</td>
+        <td>No launchpad. No individual account tokenisation. Institutional product.</td>
+      </tr>
+      <tr>
+        <td>friend.tech</td>
+        <td>X-linked social tokens (Base)</td>
+        <td>Linear bonding curve only. No mindshare oracle. No vertical curation. Dead.</td>
+      </tr>
+      <tr>
+        <td>Pump.fun</td>
+        <td>Memecoin launchpad (Solana)</td>
+        <td>No social signal. No identity. No creator economy. No curation.</td>
+      </tr>
+      <tr>
+        <td>Stars Arena</td>
+        <td>friend.tech clone (Avalanche)</td>
+        <td>Hacked, abandoned.</td>
+      </tr>
+      <tr>
+        <td>Noise (Kaito partner)</td>
+        <td>Making mindshare tradeable</td>
+        <td>Early stage. No bonding curve mechanism. Not a launchpad.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p>The gap is clear: <strong>nobody has combined a mindshare oracle + bonding curve launchpad + vertical curation + creator fee sharing</strong> in a single product. Kaito has the data layer but not the launchpad. Pump has the launchpad but none of the social layer. friend.tech had the social graph but none of the intelligence or mechanism flexibility — and no curation.</p>
+
+  <h2>The key lesson from friend.tech's death</h2>
+  <p>friend.tech died for three reasons: no underlying signal (just follower count), no curation (same chaos problem as Pump), and the creator had no ongoing reason to care about their token after launch. AttentionFi solves all three: mindshare oracle provides the signal, vertical tabs provide curation, and perpetual creator fees give the subject skin in the game forever.</p>
+</section>
+
+<!-- ROADMAP -->
+<section id="roadmap">
+  <div class="hero-eyebrow">build roadmap</div>
+  <h1 class="hero-title">Ship in<br><span class="accent">four phases</span></h1>
+  <p class="hero-sub">Each phase is independently valuable. Phase 0 costs nothing to build and gives you a waitlist before writing a single line of smart contract code.</p>
+
+  <div class="roadmap">
+    <div class="roadmap-phase">
+      <div class="phase-marker">
+        <div class="phase-dot active"></div>
+        <div class="phase-label">PHASE 0</div>
+      </div>
+      <div class="phase-content">
+        <div class="phase-title">Validate — read-only dashboard</div>
+        <div class="phase-duration">2 WEEKS / NO SMART CONTRACTS</div>
+        <ul class="phase-items">
+          <li>Pull top 100 Kaito mindshare scores via API</li>
+          <li>Show hypothetical token prices if bonding curves existed (static calculation)</li>
+          <li>Build the live feed UI — this IS your product demo</li>
+          <li>Post it on X. "What if @vitalik had a tradeable mindshare token?" is a viral hook</li>
+          <li>Collect waitlist emails / wallets from inbound</li>
+          <li>Goal: 500+ waitlist signups before writing an Anchor program</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="roadmap-phase">
+      <div class="phase-marker">
+        <div class="phase-dot"></div>
+        <div class="phase-label">PHASE 1</div>
+      </div>
+      <div class="phase-content">
+        <div class="phase-title">MVP — bonding curve launchpad</div>
+        <div class="phase-duration">4–6 WEEKS / SOLANA + ANCHOR</div>
+        <ul class="phase-items">
+          <li><strong>Anchor program:</strong> launch_token (mint + curve account + metadata), buy, sell with quadratic pricing</li>
+          <li>Mindshare-seeded virtual start price from Kaito oracle (off-chain first, then on-chain Switchboard feed)</li>
+          <li>X handle binding: wallet signs message → Solana Attestation Service (SAS) stores attestation</li>
+          <li>Live feed frontend — real-time token updates via WebSocket (Helius geyser)</li>
+          <li>Graduation trigger → deploy to native AMM pool at $69K mktcap</li>
+          <li>Stack: Anchor 0.32.1 (your current setup), React/Tailwind, Helius RPC, Switchboard oracles</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="roadmap-phase">
+      <div class="phase-marker">
+        <div class="phase-dot"></div>
+        <div class="phase-label">PHASE 2</div>
+      </div>
+      <div class="phase-content">
+        <div class="phase-title">Mechanism picker + creator economy</div>
+        <div class="phase-duration">3–4 WEEKS</div>
+        <ul class="phase-items">
+          <li>Add Dutch auction as second launch type (separate instruction set)</li>
+          <li>Creator fee distribution: post-graduation, 0.5% routed to verified creator wallet</li>
+          <li>Vertical curation tabs: DeFi, AI/Tech, ZK, Gaming, Music</li>
+          <li>Conviction curve: time-weighted bonding with 7-day minimum hold</li>
+          <li>Token discovery via vertical feed — your equivalent of Pump's live feed with categories</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="roadmap-phase">
+      <div class="phase-marker">
+        <div class="phase-dot"></div>
+        <div class="phase-label">PHASE 3</div>
+      </div>
+      <div class="phase-content">
+        <div class="phase-title">Live mindshare oracle + Arc expansion</div>
+        <div class="phase-duration">ONGOING</div>
+        <ul class="phase-items">
+          <li>On-chain mindshare oracle — price rebalances daily based on Kaito score changes</li>
+          <li>Price decay mechanism: if mindshare falls 30%+ in a week, curve shifts downward</li>
+          <li>Arcium MXE integration: private mindshare aggregation (no gaming the oracle)</li>
+          <li>Port to Arc L1 — your NGN/USDC infrastructure maps directly to narrative tokens for EM currencies</li>
+          <li>Revenue-share curve as fourth mechanism type</li>
+          <li>Mobile-first PWA for the feed</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <h2>Tech stack decision</h2>
+  <div class="card-grid">
+    <div class="card">
+      <div class="card-label">Smart Contracts</div>
+      <div class="card-value" style="font-size:20px; margin-bottom:8px;">Anchor / Rust</div>
+      <div class="card-note">Your existing Aegis stack. launch_token + buy + sell is ~60% of what you've already built in Aegis. Reuse the vault pattern.</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Oracle</div>
+      <div class="card-value" style="font-size:20px; margin-bottom:8px;">Switchboard</div>
+      <div class="card-note">Kaito API → Switchboard oracle → on-chain price feed. Phase 1 can use a trusted off-chain keeper; harden in Phase 3.</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Identity</div>
+      <div class="card-value" style="font-size:20px; margin-bottom:8px;">SAS</div>
+      <div class="card-note">Solana Attestation Service. You already researched this for Proof of Humanity. X handle ↔ wallet binding.</div>
+    </div>
+    <div class="card">
+      <div class="card-label">RPC / Streaming</div>
+      <div class="card-value" style="font-size:20px; margin-bottom:8px;">Helius</div>
+      <div class="card-note">Already in your Aegis setup. Geyser enhanced websockets for the live feed. Webhooks for graduation events.</div>
+    </div>
+  </div>
+</section>
+
+<!-- RISKS -->
+<section id="risks">
+  <div class="hero-eyebrow">risk analysis</div>
+  <h1 class="hero-title">What can<br><span class="accent">kill this</span></h1>
+  <p class="hero-sub">Kaito's Yaps program was killed by X's API crackdown. friend.tech died from zero retention. These aren't warnings to avoid the space — they're lessons to build around.</p>
+
+  <h2>Structural risks</h2>
+
+  <div class="risk-row">
+    <div>
+      <div class="risk-name">X API dependency</div>
+      <div class="risk-note">Kaito's entire Yap-to-Earn was killed when X restricted API access for reward-farming behavior in January 2026.</div>
+    </div>
+    <div class="severity sev-high">HIGH</div>
+    <div class="mitigation">Kaito Markets survived because they price attention as output (prediction markets) not input (paying to post). Design AttentionFi the same way: we're trading on mindshare data, not paying users to post. X tolerates data consumption, not reward-farming.</div>
+  </div>
+
+  <div class="risk-row">
+    <div>
+      <div class="risk-name">Oracle manipulation</div>
+      <div class="risk-note">If the mindshare score seeds price, someone will try to game the score — coordinated mentions, bot followers — to pump their own token.</div>
+    </div>
+    <div class="severity sev-high">HIGH</div>
+    <div class="mitigation">Kaito's Smart Follower weighting (quality of who engages, not quantity) is manipulation-resistant by design. Use Arcium MXE in Phase 3 for private aggregation — score inputs can't be observed, so they can't be targeted.</div>
+  </div>
+
+  <div class="risk-row">
+    <div>
+      <div class="risk-name">KOL disavows their token</div>
+      <div class="risk-note">@solana_kol tweets "I didn't launch this, don't buy it" — instant rug without the creator ever touching the contract.</div>
+    </div>
+    <div class="severity sev-high">HIGH</div>
+    <div class="mitigation">Only verified tokens (X handle attested on-chain via SAS) display with the subject's identity. Unverified tokens launch as "narrative tokens" for their topic, not their identity. Subjects can also flag/claim a token retroactively.</div>
+  </div>
+
+  <div class="risk-row">
+    <div>
+      <div class="risk-name">Securities regulation</div>
+      <div class="risk-note">Pump.fun is facing a class action for operating as an unregistered securities exchange. Tokens tied to real people's reputation are higher risk.</div>
+    </div>
+    <div class="severity sev-high">HIGH</div>
+    <div class="mitigation">Launch on a jurisdiction-flexible chain (Arc L1 is worth exploring here). Consider framing tokens as prediction market instruments (like Kaito × Polymarket) rather than securities. Get legal opinion before Phase 2 goes live with creator fee sharing.</div>
+  </div>
+
+  <div class="risk-row">
+    <div>
+      <div class="risk-name">Retention / friend.tech cold start</div>
+      <div class="risk-note">friend.tech had $50M TVL in week 1 and was dead in 3 months. Virality without retention is fatal.</div>
+    </div>
+    <div class="severity sev-med">MED</div>
+    <div class="mitigation">Creator fees are the retention mechanic Pump and friend.tech never had. A KOL earning 0.5% forever has a permanent reason to send their 50K followers to AttentionFi. That's different from Pump (anonymous) and friend.tech (one-time viral moment).</div>
+  </div>
+
+  <div class="risk-row">
+    <div>
+      <div class="risk-name">Mindshare data cost</div>
+      <div class="risk-note">Kaito Pro API access is institutional-tier pricing. Data costs could compress margins at small scale.</div>
+    </div>
+    <div class="severity sev-med">MED</div>
+    <div class="mitigation">Phase 0–1 can use Kaito's public leaderboard (no API needed — scrape or use free tier). Negotiate a data partnership in exchange for Kaito being the official oracle. They get distribution, you get data.</div>
+  </div>
+
+  <div class="risk-row">
+    <div>
+      <div class="risk-name">Solana MEV / sandwich attacks</div>
+      <div class="risk-note">Bonding curves on Solana are predictable targets for sandwich bots, as Pump discovered.</div>
+    </div>
+    <div class="severity sev-low">LOW</div>
+    <div class="mitigation">Slippage guards in the buy/sell instruction. Jito bundle prioritisation in the frontend. You already have experience with this from Aegis's batch settlement design.</div>
+  </div>
+
+  <h2>The biggest non-obvious risk</h2>
+  <p>The real risk isn't technical or regulatory — it's <strong>that the first viral moment is negative</strong>. If the first token that goes to $1M market cap is for a KOL who publicly disavows it, or it gets used to coordinate a harassment campaign against someone, the reputational damage could be terminal.</p>
+  <p>Mitigation: <strong>curated launch list for Phase 1</strong>. Don't go fully permissionless on day one. Invite 20 mid-tier KOLs who have incentive to participate (they earn fees), verify their handles, and let them seed the first tokens. Control the narrative of what AttentionFi is before the chaos arrives.</p>
+
+  <h2>Final verdict</h2>
+  <p>The X API risk is the most structurally important one — and Kaito × Polymarket already proved the design pattern that survives it. <strong>Price attention as output, not input.</strong> You're building a market for attention data, not paying people to generate it. That distinction is what separates a product X will tolerate from one they'll kill.</p>
+
+  <div class="card-grid">
+    <div class="card" style="border-color: rgba(0,255,133,0.2);">
+      <div class="card-label" style="color:var(--signal)">what to build first</div>
+      <div class="card-value" style="font-size:18px; line-height:1.3; margin-bottom:8px;">Phase 0 dashboard</div>
+      <div class="card-note">Costs zero, proves the concept, builds the waitlist, and validates the feed as a product before a single line of smart contract code is written.</div>
+    </div>
+    <div class="card" style="border-color: rgba(91,143,255,0.2);">
+      <div class="card-label" style="color:var(--pulse)">existing leverage</div>
+      <div class="card-value" style="font-size:18px; line-height:1.3; margin-bottom:8px;">Aegis + SAS research</div>
+      <div class="card-note">Your vault pattern, Helius setup, and PoH/SAS research give you a massive head start. The bonding curve program is ~40% done if you strip Aegis to its core.</div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <span>ATTENTIONFI — STRATEGY BRIEF — JOSH 2026</span>
+  <span>BUILT ON: SOLANA / ANCHOR / KAITO / SAS</span>
+</footer>
+
+<script>
+  function showSection(id, el) {
+    document.querySelectorAll('section').forEach(s => s.classList.remove('active'));
+    document.querySelectorAll('.nav-links a').forEach(a => a.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+    el.classList.add('active');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    return false;
+  }
+
+  // CURVE CANVAS
+  const mechData = {
+    bonding: {
+      label: 'BONDING CURVE — P = k × Q²  (quadratic, continuous)',
+      desc: 'Early buyers pay lowest price. Each subsequent buy increases the price along the quadratic curve. Once the $69K graduation threshold is hit, the token migrates to a native AMM pool. AttentionFi seeds the initial price from the subject\'s Kaito mindshare score — so a top-100 KOL token doesn\'t start at zero.',
+      fn: x => 0.05 + 0.95 * Math.pow(x, 2),
+      color: '#00FF85'
+    },
+    dutch: {
+      label: 'DUTCH AUCTION — price descends until allocation fills',
+      desc: 'Price starts at ceiling, drops over time. The auction ends when all tokens are sold. Removes front-running advantage: a bot that buys at t=0 pays the highest price, not the lowest. Fair discovery for narrative launches where early insiders would otherwise dominate.',
+      fn: x => 1 - 0.7 * x,
+      color: '#5B8FFF'
+    },
+    conviction: {
+      label: 'CONVICTION CURVE — slow rise + mandatory time-lock',
+      desc: 'Price increases slowly at first, then accelerates only after 7 days of holding. Sellers before the lock-up lose a percentage to LP rewards. Designed for community tokens in niche verticals (music, gaming) where long-term participation matters more than quick exits.',
+      fn: x => 0.05 + 0.95 * Math.pow(x, 3),
+      color: '#FFB800'
+    },
+    revenue: {
+      label: 'REVENUE SHARE — token = claim on future fee flow',
+      desc: 'Token price is a DCF on projected attention revenue. As the creator\'s trading volume grows post-graduation, the revenue share per token increases, driving price up. This is the creator economy model: you\'re not speculating on attention, you\'re owning a piece of the creator\'s monetisation.',
+      fn: x => 0.02 + 0.7 * x + 0.28 * Math.pow(x, 1.5),
+      color: '#FF3B5C'
+    }
+  };
+
+  function drawCurve(type) {
+    const canvas = document.getElementById('curveCanvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width = canvas.offsetWidth * window.devicePixelRatio || 800;
+    canvas.height = 200 * window.devicePixelRatio || 200;
+    ctx.scale(window.devicePixelRatio || 1, window.devicePixelRatio || 1);
+    const W = canvas.offsetWidth || 800;
+    const H = 200;
+    ctx.clearRect(0, 0, W, H);
+
+    const { fn, color } = mechData[type];
+    const pts = [];
+    for (let i = 0; i <= 100; i++) {
+      const x = i / 100;
+      const y = fn(x);
+      pts.push({ x: x * W * 0.85 + W * 0.08, y: H - 24 - y * (H - 48) });
+    }
+
+    // Grid lines
+    ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= 4; i++) {
+      const y = 24 + (H - 48) * i / 4;
+      ctx.beginPath(); ctx.moveTo(W * 0.06, y); ctx.lineTo(W * 0.94, y); ctx.stroke();
+    }
+
+    // Graduation line
+    const gradX = W * 0.08 + W * 0.85 * 0.72;
+    ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath(); ctx.moveTo(gradX, 24); ctx.lineTo(gradX, H - 24); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = 'rgba(255,255,255,0.3)';
+    ctx.font = '10px Space Mono, monospace';
+    ctx.fillText('GRADUATION', gradX + 6, 36);
+
+    // Curve fill
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x, H - 24);
+    pts.forEach(p => ctx.lineTo(p.x, p.y));
+    ctx.lineTo(pts[pts.length - 1].x, H - 24);
+    ctx.closePath();
+    ctx.fillStyle = color + '12';
+    ctx.fill();
+
+    // Curve line
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x, pts[0].y);
+    pts.forEach(p => ctx.lineTo(p.x, p.y));
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+
+    // Axes labels
+    ctx.fillStyle = 'rgba(255,255,255,0.25)';
+    ctx.font = '10px Space Mono, monospace';
+    ctx.fillText('PRICE', 4, 30);
+    ctx.fillText('SUPPLY →', W - 70, H - 6);
+  }
+
+  function selectMech(el, type) {
+    document.querySelectorAll('.mech-card').forEach(c => c.classList.remove('selected'));
+    el.classList.add('selected');
+    document.getElementById('curve-label').textContent = mechData[type].label;
+    document.getElementById('curve-desc').textContent = mechData[type].desc;
+    drawCurve(type);
+  }
+
+  // Simulate live price updates in the feed
+  function randomDelta() {
+    const deltas = document.querySelectorAll('.delta');
+    deltas.forEach(d => {
+      const up = Math.random() > 0.4;
+      const pct = (Math.random() * 15 + 1).toFixed(0);
+      d.textContent = (up ? '+' : '−') + pct + '%';
+      d.className = 'delta ' + (up ? 'up' : 'down');
+    });
+  }
+
+  window.addEventListener('load', () => {
+    drawCurve('bonding');
+    setInterval(randomDelta, 3000);
+  });
+
+  window.addEventListener('resize', () => {
+    const activeMech = document.querySelector('.mech-card.selected');
+    if (!activeMech) return;
+    const types = ['bonding', 'dutch', 'conviction', 'revenue'];
+    const idx = Array.from(document.querySelectorAll('.mech-card')).indexOf(activeMech);
+    if (idx >= 0) drawCurve(types[idx]);
+  });
+</script>
+</body>
+</html>

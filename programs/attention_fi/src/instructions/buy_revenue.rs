@@ -1,0 +1,111 @@
+use anchor_lang::prelude::*;
+use anchor_lang::system_program;
+
+use crate::auction::auction_quote;
+use crate::constants::{GLOBAL_SEED, REVENUE_SEED, REVSTAKE_SEED};
+use crate::error::AttentionError;
+use crate::revenue::{accrued, pending};
+use crate::state::{Global, RevenueShare, RevenueStake};
+
+#[derive(Accounts)]
+pub struct BuyRevenue<'info> {
+    #[account(mut)]
+    pub buyer: Signer<'info>,
+
+    #[account(seeds = [GLOBAL_SEED], bump = global.bump)]
+    pub global: Account<'info, Global>,
+
+    /// CHECK: must equal the treasury recorded in Global. Receives the share
+    /// purchase payment + fee (creator-raise routing is a later refinement).
+    #[account(mut, address = global.treasury)]
+    pub treasury: UncheckedAccount<'info>,
+
+    #[account(
+        mut,
+        seeds = [REVENUE_SEED, mint.key().as_ref()],
+        bump = revenue.bump,
+        has_one = mint,
+    )]
+    pub revenue: Account<'info, RevenueShare>,
+
+    /// CHECK: only used to derive the pool/stake PDAs and stamp the position.
+    pub mint: UncheckedAccount<'info>,
+
+    #[account(
+        init_if_needed,
+        payer = buyer,
+        space = 8 + RevenueStake::INIT_SPACE,
+        seeds = [REVSTAKE_SEED, mint.key().as_ref(), buyer.key().as_ref()],
+        bump,
+    )]
+    pub position: Account<'info, RevenueStake>,
+
+    pub system_program: Program<'info, System>,
+}
+
+pub fn buy_revenue_handler(ctx: Context<BuyRevenue>, amount: u64) -> Result<()> {
+    require!(amount > 0, AttentionError::ZeroAmount);
+
+    let global = &ctx.accounts.global;
+    let revenue = &ctx.accounts.revenue;
+    let remaining = revenue
+        .token_total_supply
+        .checked_sub(revenue.shares_sold)
+        .ok_or(AttentionError::MathOverflow)?;
+    require!(amount <= remaining, AttentionError::InsufficientShares);
+
+    let quote = auction_quote(
+        revenue.share_price,
+        amount,
+        global.token_decimals,
+        global.fee_bps,
+    )?;
+    let total_due = quote
+        .cost
+        .checked_add(quote.fee)
+        .ok_or(AttentionError::MathOverflow)?;
+
+    // Buyer -> treasury (payment + fee).
+    system_program::transfer(
+        CpiContext::new(
+            ctx.accounts.system_program.to_account_info(),
+            system_program::Transfer {
+                from: ctx.accounts.buyer.to_account_info(),
+                to: ctx.accounts.treasury.to_account_info(),
+            },
+        ),
+        total_due,
+    )?;
+
+    let acc = revenue.acc_revenue_per_share;
+
+    // Settle any pending revenue into `unclaimed` before changing the stake.
+    let position = &mut ctx.accounts.position;
+    if position.staked_amount > 0 {
+        let owed = pending(position.staked_amount, acc, position.reward_debt)?;
+        position.unclaimed = position
+            .unclaimed
+            .checked_add(owed)
+            .ok_or(AttentionError::MathOverflow)?;
+    }
+    position.owner = ctx.accounts.buyer.key();
+    position.mint = ctx.accounts.mint.key();
+    position.staked_amount = position
+        .staked_amount
+        .checked_add(amount)
+        .ok_or(AttentionError::MathOverflow)?;
+    position.reward_debt = accrued(position.staked_amount, acc)?;
+    position.bump = ctx.bumps.position;
+
+    let revenue = &mut ctx.accounts.revenue;
+    revenue.shares_sold = revenue
+        .shares_sold
+        .checked_add(amount)
+        .ok_or(AttentionError::MathOverflow)?;
+    revenue.total_staked = revenue
+        .total_staked
+        .checked_add(amount)
+        .ok_or(AttentionError::MathOverflow)?;
+
+    Ok(())
+}

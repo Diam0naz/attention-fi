@@ -1,0 +1,37 @@
+use anchor_lang::prelude::*;
+
+#[error_code]
+pub enum AttentionError {
+    #[msg("Arithmetic overflow")]
+    MathOverflow,
+    #[msg("Slippage tolerance exceeded")]
+    SlippageExceeded,
+    #[msg("Bonding curve has already graduated")]
+    CurveComplete,
+    #[msg("Amount must be greater than zero")]
+    ZeroAmount,
+    #[msg("Insufficient reserves in the bonding curve")]
+    InsufficientReserves,
+    #[msg("Invalid auction parameters")]
+    InvalidAuctionParams,
+    #[msg("Auction has already ended")]
+    AuctionEnded,
+    #[msg("Auction has not ended yet")]
+    AuctionNotEnded,
+    #[msg("Auction allocation is sold out")]
+    SoldOut,
+    #[msg("Current price exceeds the bidder's maximum")]
+    PriceAboveMax,
+    #[msg("Position holds fewer tokens than requested")]
+    InsufficientPosition,
+    #[msg("No shares staked to receive the deposit")]
+    NoStakers,
+    #[msg("Not enough shares remain for sale")]
+    InsufficientShares,
+    #[msg("Caller is not authorized")]
+    Unauthorized,
+    #[msg("Handle is empty or too long")]
+    InvalidHandle,
+    #[msg("Perk is already at max level")]
+    MaxLevelReached,
+}
