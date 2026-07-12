@@ -1,10 +1,12 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token::{self, Mint, Token, TokenAccount, Transfer};
 
-use crate::constants::{CURVE_SEED, GLOBAL_SEED};
-use crate::curve::sell_quote;
+use crate::constants::{CURVE_SEED, GLOBAL_SEED, PERK_SEED};
+use crate::curve::{sell_quote, split_creator_fee};
 use crate::error::AttentionError;
-use crate::state::{BondingCurve, Global};
+use crate::events::TradeEvent;
+use crate::nft::discounted_fee_bps;
+use crate::state::{BondingCurve, Global, PerkNft};
 
 #[derive(Accounts)]
 pub struct Sell<'info> {
@@ -34,6 +36,14 @@ pub struct Sell<'info> {
     #[account(mut, associated_token::mint = mint, associated_token::authority = seller)]
     pub seller_token_account: Account<'info, TokenAccount>,
 
+    /// Optional perk NFT owned by the seller; grants a trading-fee discount.
+    #[account(
+        seeds = [PERK_SEED, perk.asset.as_ref()],
+        bump = perk.bump,
+        constraint = perk.owner == seller.key() @ AttentionError::Unauthorized,
+    )]
+    pub perk: Option<Account<'info, PerkNft>>,
+
     pub token_program: Program<'info, Token>,
 }
 
@@ -43,11 +53,15 @@ pub fn sell_handler(ctx: Context<Sell>, token_amount: u64, min_sol_out: u64) -> 
 
     let global = &ctx.accounts.global;
     let curve = &ctx.accounts.curve;
+    let fee_bps = match &ctx.accounts.perk {
+        Some(perk) => discounted_fee_bps(global.fee_bps, perk.discount_bps),
+        None => global.fee_bps,
+    };
     let quote = sell_quote(
         curve.virtual_sol_reserves,
         curve.virtual_token_reserves,
         token_amount,
-        global.fee_bps,
+        fee_bps,
     )?;
     require!(
         quote.sol_out >= min_sol_out,
@@ -71,27 +85,36 @@ pub fn sell_handler(ctx: Context<Sell>, token_amount: u64, min_sol_out: u64) -> 
         token_amount,
     )?;
 
-    // Curve -> seller (net) and curve -> treasury (fee). The curve PDA is
+    // Split the fee: creator cut stays accrued in the curve, protocol cut to treasury.
+    let (creator_cut, treasury_cut) = split_creator_fee(quote.fee, global.creator_fee_share_bps)?;
+    let curve_debit = quote
+        .sol_from_curve
+        .checked_sub(creator_cut)
+        .ok_or(AttentionError::MathOverflow)?;
+
+    // Curve -> seller (net) and curve -> treasury (protocol cut). The curve PDA is
     // program-owned, so lamports are moved directly rather than via a system CPI.
     **ctx
         .accounts
         .curve
         .to_account_info()
-        .try_borrow_mut_lamports()? -= quote.sol_from_curve;
+        .try_borrow_mut_lamports()? -= curve_debit;
     **ctx
         .accounts
         .seller
         .to_account_info()
         .try_borrow_mut_lamports()? += quote.sol_out;
-    if quote.fee > 0 {
+    if treasury_cut > 0 {
         **ctx
             .accounts
             .treasury
             .to_account_info()
-            .try_borrow_mut_lamports()? += quote.fee;
+            .try_borrow_mut_lamports()? += treasury_cut;
     }
 
-    // Update reserves.
+    // Update reserves and emit.
+    let seller_key = ctx.accounts.seller.key();
+    let now = Clock::get()?.unix_timestamp;
     let curve = &mut ctx.accounts.curve;
     curve.virtual_token_reserves = curve
         .virtual_token_reserves
@@ -109,6 +132,23 @@ pub fn sell_handler(ctx: Context<Sell>, token_amount: u64, min_sol_out: u64) -> 
         .real_sol_reserves
         .checked_sub(quote.sol_from_curve)
         .ok_or(AttentionError::MathOverflow)?;
+    curve.creator_fees = curve
+        .creator_fees
+        .checked_add(creator_cut)
+        .ok_or(AttentionError::MathOverflow)?;
+
+    emit!(TradeEvent {
+        mint: curve.mint,
+        user: seller_key,
+        is_buy: false,
+        sol_amount: quote.sol_out,
+        token_amount,
+        fee: quote.fee,
+        virtual_sol_reserves: curve.virtual_sol_reserves,
+        virtual_token_reserves: curve.virtual_token_reserves,
+        real_sol_reserves: curve.real_sol_reserves,
+        timestamp: now,
+    });
 
     Ok(())
 }

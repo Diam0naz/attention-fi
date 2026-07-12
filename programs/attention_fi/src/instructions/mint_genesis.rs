@@ -2,9 +2,10 @@ use anchor_lang::prelude::*;
 use mpl_core::instructions::CreateV2CpiBuilder;
 use mpl_core::types::{Attribute, Attributes, DataState, Plugin, PluginAuthorityPair};
 
-use crate::constants::{GENESIS_SEED, GLOBAL_SEED};
+use crate::constants::{GENESIS_SEED, GENPOOL_SEED, GLOBAL_SEED};
 use crate::error::AttentionError;
-use crate::state::{GenesisNft, Global};
+use crate::revenue::accrued;
+use crate::state::{GenesisNft, GenesisPool, Global};
 
 #[derive(Accounts)]
 pub struct MintGenesis<'info> {
@@ -29,6 +30,15 @@ pub struct MintGenesis<'info> {
         bump,
     )]
     pub genesis: Account<'info, GenesisNft>,
+
+    #[account(
+        init_if_needed,
+        payer = authority,
+        space = 8 + GenesisPool::INIT_SPACE,
+        seeds = [GENPOOL_SEED, subject_mint.key().as_ref()],
+        bump,
+    )]
+    pub pool: Account<'info, GenesisPool>,
 
     /// The new Core asset (client-generated keypair, signs its creation).
     #[account(mut)]
@@ -81,12 +91,25 @@ pub fn mint_genesis_handler(ctx: Context<MintGenesis>, share_bps: u16, uri: Stri
         .plugins(plugins)
         .invoke()?;
 
+    // Snapshot the accumulator so this NFT never claims fees deposited before it.
+    let acc = ctx.accounts.pool.acc_per_share;
+
     let genesis = &mut ctx.accounts.genesis;
     genesis.asset = ctx.accounts.asset.key();
     genesis.owner = ctx.accounts.recipient.key();
     genesis.subject_mint = subject_mint;
     genesis.share_bps = share_bps;
+    genesis.reward_debt = accrued(u64::from(share_bps), acc)?;
+    genesis.unclaimed = 0;
     genesis.bump = ctx.bumps.genesis;
+
+    let pool = &mut ctx.accounts.pool;
+    pool.subject_mint = subject_mint;
+    pool.total_share_bps = pool
+        .total_share_bps
+        .checked_add(u64::from(share_bps))
+        .ok_or(AttentionError::MathOverflow)?;
+    pool.bump = ctx.bumps.pool;
 
     Ok(())
 }

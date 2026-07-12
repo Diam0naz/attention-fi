@@ -6,7 +6,7 @@ resolution = true
 skip-lint = false
 
 [programs.localnet]
-attention_fi = "73g1KYNus6MQqtHiu21cjdEUh3MrydfoWAw2G7dMoUWe"
+attention_fi = "8fQW2JbfNytdjJ7LR8dvKWMUtpeQPRqxAa3JZvBLsVVc"
 
 [registry]
 url = "https://api.apr.dev"

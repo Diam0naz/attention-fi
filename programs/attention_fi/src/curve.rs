@@ -109,9 +109,25 @@ pub fn sell_quote(
     })
 }
 
+/// Split a collected trading `fee` into `(creator, treasury)` portions, where
+/// `creator_share_bps` is the creator's share of the fee. Rounds the creator
+/// cut down so the treasury is never shorted.
+pub fn split_creator_fee(fee: u64, creator_share_bps: u16) -> Result<(u64, u64)> {
+    let creator = mul_div(
+        u128::from(fee),
+        u128::from(creator_share_bps),
+        BPS_DENOMINATOR,
+    )?;
+    let creator = u64::try_from(creator).map_err(|_| AttentionError::MathOverflow)?;
+    let treasury = fee
+        .checked_sub(creator)
+        .ok_or(AttentionError::MathOverflow)?;
+    Ok((creator, treasury))
+}
+
 /// Integer ceiling division: `ceil(a / b)`. Used so constant-product rounding
 /// always favours the curve over the trader.
-fn ceil_div(a: u128, b: u128) -> Result<u128> {
+pub(crate) fn ceil_div(a: u128, b: u128) -> Result<u128> {
     if b == 0 {
         return Err(AttentionError::MathOverflow.into());
     }
@@ -119,7 +135,7 @@ fn ceil_div(a: u128, b: u128) -> Result<u128> {
     Ok(numerator / b)
 }
 
-fn mul_div(a: u128, b: u128, denominator: u128) -> Result<u128> {
+pub(crate) fn mul_div(a: u128, b: u128, denominator: u128) -> Result<u128> {
     a.checked_mul(b)
         .and_then(|product| product.checked_div(denominator))
         .ok_or(AttentionError::MathOverflow.into())
@@ -202,6 +218,15 @@ mod tests {
         let sell = sell_quote(V_SOL, V_TOKEN, 1_000_000_000_000, 100).unwrap();
         assert_eq!(sell.sol_out + sell.fee, sell.sol_from_curve);
         assert_eq!(sell.fee, sell.sol_from_curve / 100);
+    }
+
+    #[test]
+    fn creator_fee_splits_and_rounds_toward_treasury() {
+        assert_eq!(split_creator_fee(1_000, 5_000).unwrap(), (500, 500));
+        assert_eq!(split_creator_fee(1_000, 0).unwrap(), (0, 1_000));
+        assert_eq!(split_creator_fee(1_000, 10_000).unwrap(), (1_000, 0));
+        // Odd fee: creator cut floors, treasury keeps the remainder.
+        assert_eq!(split_creator_fee(999, 5_000).unwrap(), (499, 500));
     }
 
     #[test]

@@ -12,6 +12,8 @@ pub struct Global {
     pub treasury: Pubkey,
     /// Curve trading fee in basis points.
     pub fee_bps: u16,
+    /// Creator's share of each trading fee, in bps of the fee.
+    pub creator_fee_share_bps: u16,
     /// Real SOL raised at which a curve graduates.
     pub graduation_sol: u64,
     /// Default virtual token reserves seeded into new curves.
@@ -41,6 +43,8 @@ pub struct BondingCurve {
     pub real_token_reserves: u64,
     /// Total supply minted for this token.
     pub token_total_supply: u64,
+    /// Creator fees accrued (lamports held in this account, claimable once verified).
+    pub creator_fees: u64,
     /// Mindshare tier this curve was seeded at.
     pub tier: u8,
     /// True once the curve has hit the graduation threshold.
@@ -200,6 +204,25 @@ pub struct GenesisNft {
     pub subject_mint: Pubkey,
     /// Fraction of the token's fee stream, in basis points.
     pub share_bps: u16,
+    /// Accumulator snapshot (`accrued(share_bps, acc)`) at last settle.
+    pub reward_debt: u128,
+    /// Settled-but-unclaimed fees.
+    pub unclaimed: u64,
+    pub bump: u8,
+}
+
+/// Per-token pool of genesis fees, split pro-rata across that token's genesis
+/// NFTs by `share_bps`. One PDA per subject mint.
+#[account]
+#[derive(InitSpace)]
+pub struct GenesisPool {
+    pub subject_mint: Pubkey,
+    /// Sum of `share_bps` across the token's minted genesis NFTs.
+    pub total_share_bps: u64,
+    /// Cumulative fee per share-bps, scaled by `revenue::ACC_SCALE`.
+    pub acc_per_share: u128,
+    /// Lamports of deposited fees still available to claim.
+    pub reserves: u64,
     pub bump: u8,
 }
 
@@ -220,6 +243,19 @@ pub struct NftAuction {
     pub start_time: i64,
     pub duration: i64,
     pub complete: bool,
+    pub bump: u8,
+}
+
+/// Native constant-product AMM pool created when a bonding curve graduates.
+/// Holds the migrated real SOL + remaining tokens; trades `x*y=k`. One PDA per mint.
+#[account]
+#[derive(InitSpace)]
+pub struct AmmPool {
+    pub mint: Pubkey,
+    /// Real SOL in the pool (lamports held in this account, above rent).
+    pub sol_reserves: u64,
+    /// Tokens in the pool vault.
+    pub token_reserves: u64,
     pub bump: u8,
 }
 

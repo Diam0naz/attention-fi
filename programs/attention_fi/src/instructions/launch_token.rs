@@ -5,6 +5,7 @@ use anchor_spl::token::{self, Mint, MintTo, SetAuthority, Token, TokenAccount};
 
 use crate::constants::{CURVE_SEED, GLOBAL_SEED};
 use crate::error::AttentionError;
+use crate::events::{LaunchEvent, MECH_BONDING};
 use crate::state::{BondingCurve, Global, MindshareTier};
 
 #[derive(Accounts)]
@@ -93,9 +94,20 @@ pub fn launch_token_handler(ctx: Context<LaunchToken>, tier: MindshareTier) -> R
     curve.real_sol_reserves = 0;
     curve.real_token_reserves = total_supply;
     curve.token_total_supply = total_supply;
+    curve.creator_fees = 0;
     curve.tier = tier.as_u8();
     curve.complete = false;
     curve.bump = bump;
+
+    emit!(LaunchEvent {
+        mint: mint_key,
+        creator: ctx.accounts.creator.key(),
+        mechanism: MECH_BONDING,
+        tier: tier.as_u8(),
+        virtual_sol_reserves: tier.seed_virtual_sol(),
+        virtual_token_reserves,
+        timestamp: Clock::get()?.unix_timestamp,
+    });
 
     let global = &mut ctx.accounts.global;
     global.tokens_launched = global

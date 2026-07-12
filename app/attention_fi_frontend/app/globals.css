@@ -10,6 +10,10 @@
   --font-sans: var(--font-sans);
   --font-mono: var(--font-geist-mono);
   --font-heading: var(--font-heading);
+  /* AttentionFi brand accents (from components/attentionfi-strategy.html) */
+  --color-signal: var(--signal);
+  --color-noise: var(--noise);
+  --color-pulse: var(--pulse);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -49,6 +53,14 @@
 }
 
 :root {
+  /* Zero-network font stacks — use the real brand faces if installed locally,
+     otherwise fall back cleanly. No build-time fetch (keeps `next dev` offline-safe). */
+  --font-sans: "Space Grotesk", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-geist-mono: "Space Mono", ui-monospace, "SFMono-Regular", "Roboto Mono", monospace;
+  /* AttentionFi brand accents — constant across light/dark */
+  --signal: #00ff85;
+  --noise: #ff3b5c;
+  --pulse: #5b8fff;
   --background: oklch(1 0 0);
   --foreground: oklch(0.147 0.004 49.3);
   --card: oklch(1 0 0);
@@ -127,4 +139,58 @@
   html {
     @apply font-sans;
   }
+}
+
+/* AttentionFi signal-board motion (from the strategy brief). */
+@keyframes af-ticker {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+.af-ticker-track {
+  display: inline-flex;
+  white-space: nowrap;
+  animation: af-ticker 28s linear infinite;
+}
+@keyframes af-pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+.af-pulse-dot { animation: af-pulse-dot 1.4s ease infinite; }
+
+/* react-bits-style effects */
+@keyframes af-gradient {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+@keyframes af-shimmer {
+  0% { background-position: 120% 0; }
+  100% { background-position: -20% 0; }
+}
+@keyframes af-spin { to { transform: rotate(360deg); } }
+@keyframes af-spin-rev { to { transform: rotate(-360deg); } }
+
+.af-gradient-text {
+  background: linear-gradient(90deg, var(--signal), #7cffc4, var(--pulse), var(--signal));
+  background-size: 300% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: af-gradient 6s ease infinite;
+}
+.af-shiny-text {
+  background: linear-gradient(90deg, #6b6b6b 30%, #f5f4f0 50%, #6b6b6b 70%);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: af-shimmer 4s linear infinite;
+}
+.af-orbit { animation: af-spin 42s linear infinite; transform-box: fill-box; transform-origin: center; }
+.af-orbit-rev { animation: af-spin-rev 64s linear infinite; transform-box: fill-box; transform-origin: center; }
+.af-orbit-fast { animation: af-spin 26s linear infinite; transform-box: fill-box; transform-origin: center; }
+
+@media (prefers-reduced-motion: reduce) {
+  .af-gradient-text, .af-shiny-text, .af-pulse-dot, .af-ticker-track,
+  .af-orbit, .af-orbit-rev, .af-orbit-fast { animation: none; }
+  .af-shiny-text { color: #f5f4f0; }
 }

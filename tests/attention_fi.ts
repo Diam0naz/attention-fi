@@ -2,6 +2,7 @@ import * as anchor from "@anchor-lang/core";
 import { Program } from "@anchor-lang/core";
 import { AttentionFi } from "../target/types/attention_fi";
 import { assert } from "chai";
+import * as fs from "fs";
 
 const { PublicKey, Keypair, SystemProgram, SYSVAR_RENT_PUBKEY, LAMPORTS_PER_SOL } =
   anchor.web3;
@@ -120,6 +121,7 @@ describe("attention_fi bonding curve", () => {
         mint: mintKp.publicKey,
         vault,
         buyerTokenAccount: buyerAta,
+        perk: null,
         systemProgram: SystemProgram.programId,
         tokenProgram: TOKEN_PROGRAM_ID,
         associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
@@ -133,12 +135,14 @@ describe("attention_fi bonding curve", () => {
     // 2 SOL in, 1% fee => 1.98 SOL into the curve reserves.
     assert.strictEqual(curve.realSolReserves.toString(), "1980000000");
     assert.strictEqual(curve.complete, false, "well below graduation threshold");
+    // 1% fee = 0.02 SOL, split 50/50: 0.01 accrues to the creator on the curve.
+    assert.strictEqual(curve.creatorFees.toString(), "10000000", "creator cut accrued");
 
     const treasuryAfter = await provider.connection.getBalance(treasury);
     assert.strictEqual(
       treasuryAfter - treasuryBefore,
-      0.02 * LAMPORTS_PER_SOL,
-      "1% of 2 SOL routed to treasury"
+      0.01 * LAMPORTS_PER_SOL,
+      "protocol cut = half the 1% fee on 2 SOL"
     );
   });
 
@@ -157,6 +161,7 @@ describe("attention_fi bonding curve", () => {
         mint: mintKp.publicKey,
         vault,
         sellerTokenAccount: buyerAta,
+        perk: null,
         tokenProgram: TOKEN_PROGRAM_ID,
       })
       .rpc();
@@ -614,7 +619,7 @@ describe("attention_fi revenue share", () => {
   });
 });
 
-describe("attention_fi verification NFT", () => {
+describe("attention_fi verification NFT (SAS-gated)", () => {
   anchor.setProvider(anchor.AnchorProvider.env());
   const provider = anchor.getProvider() as anchor.AnchorProvider;
   const program = anchor.workspace.attentionFi as Program<AttentionFi>;
@@ -625,7 +630,27 @@ describe("attention_fi verification NFT", () => {
     program.programId
   );
 
+  // Preloaded attestation accounts (see tests/fixtures/sas.json, written by the
+  // test harness before the validator starts).
+  const fixtures = JSON.parse(
+    fs.readFileSync("tests/fixtures/sas.json", "utf-8")
+  );
+  const subject = new PublicKey(fixtures.subject);
+  const subject2 = new PublicKey(fixtures.subject2);
+  const attValid = new PublicKey(fixtures.attValid);
+  const attInvalid = new PublicKey(fixtures.attInvalid);
+  const handle: string = fixtures.handle;
+
+  function verifyPda(s: PublicKey): PublicKey {
+    return PublicKey.findProgramAddressSync(
+      [Buffer.from("verify"), s.toBuffer()],
+      program.programId
+    )[0];
+  }
+
   before(async () => {
+    // The attestation's signer is the wallet (id.json), so global.authority
+    // must be the wallet for the signer check to pass.
     const global = await program.account.global.fetchNullable(globalPda);
     if (!global) {
       await program.methods
@@ -640,22 +665,16 @@ describe("attention_fi verification NFT", () => {
     }
   });
 
-  it("mints a soulbound verification credential bound to a wallet", async () => {
-    const subject = Keypair.generate().publicKey;
+  it("mints a soulbound credential from a valid SAS attestation", async () => {
     const asset = Keypair.generate();
-    const handle = "vitalik";
-    const [verificationPda] = PublicKey.findProgramAddressSync(
-      [Buffer.from("verify"), subject.toBuffer()],
-      program.programId
-    );
-
     await program.methods
       .verifyHandle(handle, "https://attention.fi/v/vitalik.json")
       .accountsStrict({
-        authority: wallet, // == global.authority (the keeper)
+        payer: wallet,
         global: globalPda,
         subject,
-        verification: verificationPda,
+        attestation: attValid,
+        verification: verifyPda(subject),
         asset: asset.publicKey,
         mplCoreProgram: MPL_CORE_PROGRAM_ID,
         systemProgram: SystemProgram.programId,
@@ -663,57 +682,41 @@ describe("attention_fi verification NFT", () => {
       .signers([asset])
       .rpc();
 
-    // On-chain binding recorded.
-    const v = await program.account.verification.fetch(verificationPda);
+    const v = await program.account.verification.fetch(verifyPda(subject));
     assert.strictEqual(v.handle, handle);
     assert.strictEqual(v.subject.toBase58(), subject.toBase58());
     assert.strictEqual(v.asset.toBase58(), asset.publicKey.toBase58());
 
-    // A real Metaplex Core asset was created (owned by the Core program).
     const assetAccount = await provider.connection.getAccountInfo(asset.publicKey);
-    assert.isNotNull(assetAccount, "core asset account exists");
     assert.strictEqual(
       assetAccount!.owner.toBase58(),
       MPL_CORE_PROGRAM_ID.toBase58(),
       "asset owned by MPL Core"
     );
-    assert.isTrue(assetAccount!.data.length > 0, "asset has state");
   });
 
-  it("rejects verification from a non-authority keeper", async () => {
-    const imposter = Keypair.generate();
-    const sig = await provider.connection.requestAirdrop(
-      imposter.publicKey,
-      LAMPORTS_PER_SOL
-    );
-    await provider.connection.confirmTransaction(sig, "confirmed");
-
-    const subject = Keypair.generate().publicKey;
+  it("rejects an attestation signed by a non-issuer", async () => {
     const asset = Keypair.generate();
-    const [verificationPda] = PublicKey.findProgramAddressSync(
-      [Buffer.from("verify"), subject.toBuffer()],
-      program.programId
-    );
-
     let threw = false;
     try {
       await program.methods
-        .verifyHandle("imposter", "https://x/y.json")
+        .verifyHandle(handle, "https://x/y.json")
         .accountsStrict({
-          authority: imposter.publicKey,
+          payer: wallet,
           global: globalPda,
-          subject,
-          verification: verificationPda,
+          subject: subject2,
+          attestation: attInvalid,
+          verification: verifyPda(subject2),
           asset: asset.publicKey,
           mplCoreProgram: MPL_CORE_PROGRAM_ID,
           systemProgram: SystemProgram.programId,
         })
-        .signers([imposter, asset])
+        .signers([asset])
         .rpc();
     } catch (err) {
       threw = true;
     }
-    assert.isTrue(threw, "only the protocol authority may attest handles");
+    assert.isTrue(threw, "attestation not signed by the protocol issuer is rejected");
   });
 });
 
@@ -804,6 +807,10 @@ describe("attention_fi perk & genesis NFTs", () => {
       [Buffer.from("genesis"), asset.publicKey.toBuffer()],
       program.programId
     );
+    const [poolPda] = PublicKey.findProgramAddressSync(
+      [Buffer.from("genpool"), subjectMint.toBuffer()],
+      program.programId
+    );
 
     await program.methods
       .mintGenesis(500, "https://attention.fi/genesis.json")
@@ -813,6 +820,7 @@ describe("attention_fi perk & genesis NFTs", () => {
         recipient,
         subjectMint,
         genesis: genesisPda,
+        pool: poolPda,
         asset: asset.publicKey,
         mplCoreProgram: MPL_CORE_PROGRAM_ID,
         systemProgram: SystemProgram.programId,
@@ -827,6 +835,85 @@ describe("attention_fi perk & genesis NFTs", () => {
 
     const acc = await provider.connection.getAccountInfo(asset.publicKey);
     assert.strictEqual(acc!.owner.toBase58(), MPL_CORE_PROGRAM_ID.toBase58());
+  });
+
+  it("routes a token's fees to two genesis holders pro-rata (3:1)", async () => {
+    const subjectMint = Keypair.generate().publicKey;
+    const [poolPda] = PublicKey.findProgramAddressSync(
+      [Buffer.from("genpool"), subjectMint.toBuffer()],
+      program.programId
+    );
+
+    // holder1: 750 bps, holder2: 250 bps (3:1).
+    const holder1 = wallet;
+    const holder2 = Keypair.generate();
+    const sig = await provider.connection.requestAirdrop(holder2.publicKey, LAMPORTS_PER_SOL);
+    await provider.connection.confirmTransaction(sig, "confirmed");
+
+    async function mint(recipient: PublicKey, shareBps: number): Promise<PublicKey> {
+      const asset = Keypair.generate();
+      const [genesisPda] = PublicKey.findProgramAddressSync(
+        [Buffer.from("genesis"), asset.publicKey.toBuffer()],
+        program.programId
+      );
+      await program.methods
+        .mintGenesis(shareBps, "https://attention.fi/g.json")
+        .accountsStrict({
+          authority: wallet,
+          global: globalPda,
+          recipient,
+          subjectMint,
+          genesis: genesisPda,
+          pool: poolPda,
+          asset: asset.publicKey,
+          mplCoreProgram: MPL_CORE_PROGRAM_ID,
+          systemProgram: SystemProgram.programId,
+        })
+        .signers([asset])
+        .rpc();
+      return genesisPda;
+    }
+
+    const g1 = await mint(holder1, 750);
+    const g2 = await mint(holder2.publicKey, 250);
+
+    // Deposit 1 SOL of fees for this token.
+    const deposit = LAMPORTS_PER_SOL;
+    await program.methods
+      .depositGenesisFee(new anchor.BN(deposit))
+      .accountsStrict({
+        depositor: wallet,
+        pool: poolPda,
+        subjectMint,
+        systemProgram: SystemProgram.programId,
+      })
+      .rpc();
+
+    // holder2 claims its 1/4.
+    const reservesBefore = (await program.account.genesisPool.fetch(poolPda)).reserves;
+    await program.methods
+      .claimGenesisFee()
+      .accountsStrict({
+        holder: holder2.publicKey,
+        pool: poolPda,
+        genesis: g2,
+        owner: holder2.publicKey,
+      })
+      .signers([holder2])
+      .rpc();
+    const reservesAfter = (await program.account.genesisPool.fetch(poolPda)).reserves;
+
+    const claimed =
+      BigInt(reservesBefore.toString()) - BigInt(reservesAfter.toString());
+    assert.strictEqual(claimed, BigInt(deposit) / 4n, "holder2 gets 250/1000 = 1/4");
+
+    // holder1's outstanding share is the other 3/4.
+    const g1acc = await program.account.genesisNft.fetch(g1);
+    const pool = await program.account.genesisPool.fetch(poolPda);
+    const acc = BigInt(pool.accPerShare.toString());
+    const SCALE = BigInt("1000000000000");
+    const p1 = (750n * acc) / SCALE - BigInt(g1acc.rewardDebt.toString());
+    assert.strictEqual(p1, (BigInt(deposit) * 3n) / 4n, "holder1 owed 3/4");
   });
 });
 
@@ -920,5 +1007,115 @@ describe("attention_fi NFT-as-asset auction", () => {
     );
     const auction = await program.account.nftAuction.fetch(auctionPda);
     assert.strictEqual(auction.complete, true);
+  });
+});
+
+describe("attention_fi perk fee discount", () => {
+  anchor.setProvider(anchor.AnchorProvider.env());
+  const provider = anchor.getProvider() as anchor.AnchorProvider;
+  const program = anchor.workspace.attentionFi as Program<AttentionFi>;
+  const wallet = provider.wallet.publicKey;
+
+  const [globalPda] = PublicKey.findProgramAddressSync(
+    [Buffer.from("global")],
+    program.programId
+  );
+  const [perkAuthority] = PublicKey.findProgramAddressSync(
+    [Buffer.from("perkauth")],
+    program.programId
+  );
+
+  let treasury: PublicKey;
+  const perkAsset = Keypair.generate();
+  const [perkPda] = PublicKey.findProgramAddressSync(
+    [Buffer.from("perk"), perkAsset.publicKey.toBuffer()],
+    program.programId
+  );
+  const mintKp = Keypair.generate();
+  const [curvePda] = PublicKey.findProgramAddressSync(
+    [Buffer.from("curve"), mintKp.publicKey.toBuffer()],
+    program.programId
+  );
+  const vault = ata(curvePda, mintKp.publicKey);
+  const buyerAta = ata(wallet, mintKp.publicKey);
+
+  before(async () => {
+    let global = await program.account.global.fetchNullable(globalPda);
+    if (!global) {
+      await program.methods
+        .initialize()
+        .accountsStrict({
+          authority: wallet,
+          global: globalPda,
+          treasury: Keypair.generate().publicKey,
+          systemProgram: SystemProgram.programId,
+        })
+        .rpc();
+      global = await program.account.global.fetch(globalPda);
+    }
+    treasury = global.treasury;
+
+    // Mint a level-1 perk (1% discount) to the buyer.
+    await program.methods
+      .mintPerk("https://attention.fi/perk.json")
+      .accountsStrict({
+        authority: wallet,
+        global: globalPda,
+        recipient: wallet,
+        perkAuthority,
+        perk: perkPda,
+        asset: perkAsset.publicKey,
+        mplCoreProgram: MPL_CORE_PROGRAM_ID,
+        systemProgram: SystemProgram.programId,
+      })
+      .signers([perkAsset])
+      .rpc();
+
+    // Launch a bonding token to trade on.
+    await program.methods
+      .launchToken({ emerging: {} })
+      .accountsStrict({
+        creator: wallet,
+        global: globalPda,
+        mint: mintKp.publicKey,
+        curve: curvePda,
+        vault,
+        systemProgram: SystemProgram.programId,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+        rent: SYSVAR_RENT_PUBKEY,
+      })
+      .signers([mintKp])
+      .rpc();
+  });
+
+  async function buy(perk: PublicKey | null): Promise<number> {
+    const before = await provider.connection.getBalance(treasury);
+    await program.methods
+      .buy(new anchor.BN(LAMPORTS_PER_SOL), new anchor.BN(0))
+      .accountsStrict({
+        buyer: wallet,
+        global: globalPda,
+        treasury,
+        curve: curvePda,
+        mint: mintKp.publicKey,
+        vault,
+        buyerTokenAccount: buyerAta,
+        perk,
+        systemProgram: SystemProgram.programId,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+      })
+      .rpc();
+    return (await provider.connection.getBalance(treasury)) - before;
+  }
+
+  it("waives the fee for a perk holder (1% discount vs 1% base fee)", async () => {
+    const feeNoPerk = await buy(null);
+    const feeWithPerk = await buy(perkPda);
+
+    // 1% fee on 1 SOL = 0.01, of which the protocol keeps half (creator gets the rest).
+    assert.strictEqual(feeNoPerk, 0.005 * LAMPORTS_PER_SOL, "protocol half of the 1% fee");
+    assert.strictEqual(feeWithPerk, 0, "level-1 perk waives the 1% fee");
   });
 });

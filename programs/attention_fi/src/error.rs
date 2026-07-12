@@ -34,4 +34,18 @@ pub enum AttentionError {
     InvalidHandle,
     #[msg("Perk is already at max level")]
     MaxLevelReached,
+    #[msg("Attestation account is invalid or malformed")]
+    InvalidAttestation,
+    #[msg("Attestation has expired")]
+    AttestationExpired,
+    #[msg("Treasury must be a System-owned account")]
+    InvalidTreasury,
+    #[msg("Invalid or unparseable Switchboard feed")]
+    InvalidFeed,
+    #[msg("Switchboard feed is stale or has too few samples")]
+    StaleFeed,
+    #[msg("No creator fees available to claim")]
+    NoCreatorFees,
+    #[msg("Curve has not reached the graduation threshold")]
+    NotReadyToGraduate,
 }

@@ -14,6 +14,12 @@ pub fn perk_discount_bps(level: u8) -> u16 {
     u16::from(capped) * DISCOUNT_PER_LEVEL_BPS
 }
 
+/// Effective trading fee (bps) after applying a perk holder's discount. Floors
+/// at zero so a discount can never invert the fee.
+pub fn discounted_fee_bps(base_fee_bps: u16, discount_bps: u16) -> u16 {
+    base_fee_bps.saturating_sub(discount_bps)
+}
+
 /// Build the on-chain Attributes for a perk NFT at a given level.
 pub fn perk_attributes(level: u8) -> Attributes {
     Attributes {
@@ -37,6 +43,17 @@ pub fn perk_attributes(level: u8) -> Attributes {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn discount_reduces_fee_and_floors_at_zero() {
+        assert_eq!(discounted_fee_bps(100, 30), 70);
+        assert_eq!(discounted_fee_bps(100, 100), 0);
+        assert_eq!(
+            discounted_fee_bps(100, 250),
+            0,
+            "discount cannot invert the fee"
+        );
+    }
 
     #[test]
     fn discount_scales_with_level_and_caps() {

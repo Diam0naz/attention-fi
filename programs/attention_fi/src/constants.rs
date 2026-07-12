@@ -3,6 +3,7 @@ use anchor_lang::prelude::*;
 // ---- PDA seeds ----
 pub const GLOBAL_SEED: &[u8] = b"global";
 pub const CURVE_SEED: &[u8] = b"curve";
+pub const AMM_SEED: &[u8] = b"amm";
 pub const AUCTION_SEED: &[u8] = b"auction";
 pub const CONVICTION_SEED: &[u8] = b"conviction";
 pub const POSITION_SEED: &[u8] = b"position";
@@ -12,6 +13,7 @@ pub const VERIFY_SEED: &[u8] = b"verify";
 pub const PERK_SEED: &[u8] = b"perk";
 pub const PERK_AUTH_SEED: &[u8] = b"perkauth";
 pub const GENESIS_SEED: &[u8] = b"genesis";
+pub const GENPOOL_SEED: &[u8] = b"genpool";
 pub const NFTAUCTION_SEED: &[u8] = b"nftauction";
 
 // ---- Perk NFTs ----
@@ -37,6 +39,9 @@ pub const DEFAULT_VIRTUAL_TOKEN_RESERVES: u64 = 1_073_000_000 * 1_000_000;
 // ---- Economics ----
 /// Trading fee on the curve, in basis points (1% = 100).
 pub const DEFAULT_FEE_BPS: u16 = 100;
+/// Share of each trading fee routed to the (verified) creator, in bps of the fee.
+/// 5000 = 50% of a 1% fee => 0.5% to creator, 0.5% to protocol (per the brief).
+pub const DEFAULT_CREATOR_FEE_SHARE_BPS: u16 = 5000;
 /// Graduation trigger: real SOL raised into the curve (85 SOL).
 pub const DEFAULT_GRADUATION_SOL: u64 = 85 * 1_000_000_000;
 
@@ -45,6 +50,12 @@ pub const DEFAULT_GRADUATION_SOL: u64 = 85 * 1_000_000_000;
 pub const DEFAULT_LOCK_PERIOD: i64 = 7 * 24 * 60 * 60;
 /// Default early-exit penalty for selling a still-locked position (10%).
 pub const DEFAULT_EARLY_EXIT_PENALTY_BPS: u16 = 1_000;
+
+// ---- Switchboard mindshare oracle ----
+/// Max age (slots) of a feed sample accepted when seeding a launch (~100s).
+pub const FEED_MAX_STALENESS: u64 = 250;
+/// Minimum oracle samples required for a usable feed value.
+pub const FEED_MIN_SAMPLES: u32 = 1;
 
 // ---- Mindshare tier seeds ----
 // Starting `virtual_sol_reserves` per tier (lamports). With a fixed virtual
