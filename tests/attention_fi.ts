@@ -1119,3 +1119,288 @@ describe("attention_fi perk fee discount", () => {
     assert.strictEqual(feeWithPerk, 0, "level-1 perk waives the 1% fee");
   });
 });
+
+describe("attention_fi AMM graduation", () => {
+  anchor.setProvider(anchor.AnchorProvider.env());
+  const provider = anchor.getProvider() as anchor.AnchorProvider;
+  const program = anchor.workspace.attentionFi as Program<AttentionFi>;
+  const wallet = provider.wallet.publicKey;
+
+  const [globalPda] = PublicKey.findProgramAddressSync(
+    [Buffer.from("global")],
+    program.programId
+  );
+  let treasury: PublicKey;
+
+  const mintKp = Keypair.generate();
+  const [curvePda] = PublicKey.findProgramAddressSync(
+    [Buffer.from("curve"), mintKp.publicKey.toBuffer()],
+    program.programId
+  );
+  const [poolPda] = PublicKey.findProgramAddressSync(
+    [Buffer.from("amm"), mintKp.publicKey.toBuffer()],
+    program.programId
+  );
+  const curveVault = ata(curvePda, mintKp.publicKey);
+  const poolVault = ata(poolPda, mintKp.publicKey);
+  const walletAta = ata(wallet, mintKp.publicKey);
+
+  async function tokenAmount(account: PublicKey): Promise<bigint> {
+    return BigInt((await provider.connection.getTokenAccountBalance(account)).value.amount);
+  }
+
+  before(async () => {
+    let global = await program.account.global.fetchNullable(globalPda);
+    if (!global) {
+      await program.methods
+        .initialize()
+        .accountsStrict({
+          authority: wallet,
+          global: globalPda,
+          treasury: Keypair.generate().publicKey,
+          systemProgram: SystemProgram.programId,
+        })
+        .rpc();
+      global = await program.account.global.fetch(globalPda);
+    }
+    treasury = global.treasury;
+  });
+
+  it("graduates a completed curve into a native AMM pool", async () => {
+    // Top10 tier so a 90-SOL buy leaves healthy reserves for the pool.
+    await program.methods
+      .launchToken({ top10: {} })
+      .accountsStrict({
+        creator: wallet,
+        global: globalPda,
+        mint: mintKp.publicKey,
+        curve: curvePda,
+        vault: curveVault,
+        systemProgram: SystemProgram.programId,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+        rent: SYSVAR_RENT_PUBKEY,
+      })
+      .signers([mintKp])
+      .rpc();
+
+    // One 90-SOL buy crosses the 85-SOL graduation threshold.
+    await program.methods
+      .buy(new anchor.BN(90 * LAMPORTS_PER_SOL), new anchor.BN(0))
+      .accountsStrict({
+        buyer: wallet,
+        global: globalPda,
+        treasury,
+        curve: curvePda,
+        mint: mintKp.publicKey,
+        vault: curveVault,
+        buyerTokenAccount: walletAta,
+        perk: null,
+        systemProgram: SystemProgram.programId,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+      })
+      .rpc();
+
+    const curve = await program.account.bondingCurve.fetch(curvePda);
+    assert.strictEqual(curve.complete, true, "curve graduated");
+    const solRes = curve.realSolReserves.toString();
+    const tokRes = curve.realTokenReserves.toString();
+
+    await program.methods
+      .graduate()
+      .accountsStrict({
+        payer: wallet,
+        global: globalPda,
+        curve: curvePda,
+        mint: mintKp.publicKey,
+        curveVault,
+        pool: poolPda,
+        poolVault,
+        systemProgram: SystemProgram.programId,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+        rent: SYSVAR_RENT_PUBKEY,
+      })
+      .rpc();
+
+    const pool = await program.account.ammPool.fetch(poolPda);
+    assert.strictEqual(pool.solReserves.toString(), solRes, "SOL migrated to pool");
+    assert.strictEqual(pool.tokenReserves.toString(), tokRes, "tokens migrated to pool");
+    assert.strictEqual((await tokenAmount(poolVault)).toString(), tokRes, "pool vault funded");
+
+    const curveAfter = await program.account.bondingCurve.fetch(curvePda);
+    assert.strictEqual(curveAfter.realSolReserves.toString(), "0", "curve SOL drained");
+    assert.strictEqual(curveAfter.realTokenReserves.toString(), "0", "curve tokens drained");
+  });
+
+  it("swaps on the graduated pool (buy then sell)", async () => {
+    const before = await program.account.ammPool.fetch(poolPda);
+
+    // Buy: 1 SOL -> tokens.
+    await program.methods
+      .swap(new anchor.BN(LAMPORTS_PER_SOL), new anchor.BN(0), true)
+      .accountsStrict({
+        trader: wallet,
+        global: globalPda,
+        pool: poolPda,
+        mint: mintKp.publicKey,
+        poolVault,
+        traderTokenAccount: walletAta,
+        systemProgram: SystemProgram.programId,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+      })
+      .rpc();
+
+    const afterBuy = await program.account.ammPool.fetch(poolPda);
+    assert.strictEqual(
+      afterBuy.solReserves.sub(before.solReserves).toString(),
+      LAMPORTS_PER_SOL.toString(),
+      "pool gained 1 SOL"
+    );
+    assert.isTrue(afterBuy.tokenReserves.lt(before.tokenReserves), "pool released tokens");
+
+    // Sell: return some tokens -> SOL.
+    const held = await tokenAmount(walletAta);
+    await program.methods
+      .swap(new anchor.BN((held / 4n).toString()), new anchor.BN(0), false)
+      .accountsStrict({
+        trader: wallet,
+        global: globalPda,
+        pool: poolPda,
+        mint: mintKp.publicKey,
+        poolVault,
+        traderTokenAccount: walletAta,
+        systemProgram: SystemProgram.programId,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+      })
+      .rpc();
+
+    const afterSell = await program.account.ammPool.fetch(poolPda);
+    assert.isTrue(afterSell.tokenReserves.gt(afterBuy.tokenReserves), "pool took tokens back");
+    assert.isTrue(afterSell.solReserves.lt(afterBuy.solReserves), "pool paid out SOL");
+  });
+});
+
+describe("attention_fi creator fees (SAS-gated claim)", () => {
+  anchor.setProvider(anchor.AnchorProvider.env());
+  const provider = anchor.getProvider() as anchor.AnchorProvider;
+  const program = anchor.workspace.attentionFi as Program<AttentionFi>;
+  const wallet = provider.wallet.publicKey;
+
+  const fx = JSON.parse(fs.readFileSync("tests/fixtures/sas.json", "utf8"));
+  const attWallet = new PublicKey(fx.attWallet);
+
+  const [globalPda] = PublicKey.findProgramAddressSync(
+    [Buffer.from("global")],
+    program.programId
+  );
+  const [verifyPda] = PublicKey.findProgramAddressSync(
+    [Buffer.from("verify"), wallet.toBuffer()],
+    program.programId
+  );
+  let treasury: PublicKey;
+
+  const mintKp = Keypair.generate();
+  const [curvePda] = PublicKey.findProgramAddressSync(
+    [Buffer.from("curve"), mintKp.publicKey.toBuffer()],
+    program.programId
+  );
+  const vault = ata(curvePda, mintKp.publicKey);
+  const walletAta = ata(wallet, mintKp.publicKey);
+
+  before(async () => {
+    let global = await program.account.global.fetchNullable(globalPda);
+    if (!global) {
+      await program.methods
+        .initialize()
+        .accountsStrict({
+          authority: wallet,
+          global: globalPda,
+          treasury: Keypair.generate().publicKey,
+          systemProgram: SystemProgram.programId,
+        })
+        .rpc();
+      global = await program.account.global.fetch(globalPda);
+    }
+    treasury = global.treasury;
+
+    // Verify the wallet's handle (once) so it can claim creator fees.
+    const existing = await program.account.verification.fetchNullable(verifyPda);
+    if (!existing) {
+      const asset = Keypair.generate();
+      await program.methods
+        .verifyHandle(fx.handle, "https://attention.fi/v.json")
+        .accountsStrict({
+          payer: wallet,
+          global: globalPda,
+          subject: wallet,
+          attestation: attWallet,
+          verification: verifyPda,
+          asset: asset.publicKey,
+          mplCoreProgram: MPL_CORE_PROGRAM_ID,
+          systemProgram: SystemProgram.programId,
+        })
+        .signers([asset])
+        .rpc();
+    }
+  });
+
+  it("accrues creator fees and pays them to the verified creator", async () => {
+    // Launch a token whose creator is the (verified) wallet.
+    await program.methods
+      .launchToken({ emerging: {} })
+      .accountsStrict({
+        creator: wallet,
+        global: globalPda,
+        mint: mintKp.publicKey,
+        curve: curvePda,
+        vault,
+        systemProgram: SystemProgram.programId,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+        rent: SYSVAR_RENT_PUBKEY,
+      })
+      .signers([mintKp])
+      .rpc();
+
+    // Buy 4 SOL: 1% fee = 0.04, split 50/50 => 0.02 SOL accrues to the creator.
+    await program.methods
+      .buy(new anchor.BN(4 * LAMPORTS_PER_SOL), new anchor.BN(0))
+      .accountsStrict({
+        buyer: wallet,
+        global: globalPda,
+        treasury,
+        curve: curvePda,
+        mint: mintKp.publicKey,
+        vault,
+        buyerTokenAccount: walletAta,
+        perk: null,
+        systemProgram: SystemProgram.programId,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+      })
+      .rpc();
+
+    const curve = await program.account.bondingCurve.fetch(curvePda);
+    assert.strictEqual(curve.creatorFees.toString(), "20000000", "0.02 SOL accrued");
+
+    const before = await provider.connection.getBalance(wallet);
+    await program.methods
+      .claimCreatorFee()
+      .accountsStrict({
+        creator: wallet,
+        mint: mintKp.publicKey,
+        curve: curvePda,
+        verification: verifyPda,
+      })
+      .rpc();
+    const after = await provider.connection.getBalance(wallet);
+
+    const claimed = await program.account.bondingCurve.fetch(curvePda);
+    assert.strictEqual(claimed.creatorFees.toString(), "0", "creator fees drained on claim");
+    assert.isTrue(after > before, "verified creator received the fees (net of gas)");
+  });
+});
