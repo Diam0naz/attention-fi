@@ -1,0 +1,58 @@
+################################################################
+# Index AttentionFi's on-chain events as subgraphs.
+# These power the live mindshare feed (launches, trades, graduations).
+################################################################
+
+action "attention_fi_launches" "svm::deploy_subgraph" {
+    program_id = action.deploy_attention_fi.program_id
+    program_idl = action.deploy_attention_fi.program_idl
+    block_height = 0
+    event {
+        name = "LaunchEvent"
+    }
+}
+
+action "attention_fi_trades" "svm::deploy_subgraph" {
+    program_id = action.deploy_attention_fi.program_id
+    program_idl = action.deploy_attention_fi.program_idl
+    block_height = 0
+    event {
+        name = "TradeEvent"
+    }
+}
+
+action "attention_fi_graduations" "svm::deploy_subgraph" {
+    program_id = action.deploy_attention_fi.program_id
+    program_idl = action.deploy_attention_fi.program_idl
+    block_height = 0
+    event {
+        name = "GraduateEvent"
+    }
+}
+
+action "attention_fi_pools_created" "svm::deploy_subgraph" {
+    program_id = action.deploy_attention_fi.program_id
+    program_idl = action.deploy_attention_fi.program_idl
+    block_height = 0
+    event {
+        name = "PoolCreatedEvent"
+    }
+}
+
+action "attention_fi_amm_swaps" "svm::deploy_subgraph" {
+    program_id = action.deploy_attention_fi.program_id
+    program_idl = action.deploy_attention_fi.program_idl
+    block_height = 0
+    event {
+        name = "AmmSwapEvent"
+    }
+}
+
+action "attention_fi_creator_claims" "svm::deploy_subgraph" {
+    program_id = action.deploy_attention_fi.program_id
+    program_idl = action.deploy_attention_fi.program_idl
+    block_height = 0
+    event {
+        name = "CreatorClaimEvent"
+    }
+}

@@ -1,0 +1,9 @@
+# Mainnet: never use on-disk keys. Use a hardware/web wallet or a Squads multisig.
+
+# signer "payer" "svm::web_wallet" {
+#     address = "YOUR_WEB_WALLET_PUBLIC_KEY"
+# }
+
+# signer "authority" "svm::squads" {
+#     address = "YOUR_SQUAD_PUBLIC_KEY"
+# }

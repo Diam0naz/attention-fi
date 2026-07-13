@@ -1,0 +1,15 @@
+################################################################
+# AttentionFi deployment — Crypto Infrastructure as Code (txtx)
+################################################################
+
+addon "svm" {
+    rpc_api_url = input.rpc_api_url
+    network_id = input.network_id
+}
+
+action "deploy_attention_fi" "svm::deploy_program" {
+    description = "Deploy the AttentionFi Anchor program"
+    program = svm::get_program_from_anchor_project("attention_fi")
+    authority = signer.authority
+    payer = signer.payer
+}

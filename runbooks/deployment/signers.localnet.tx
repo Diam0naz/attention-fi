@@ -1,0 +1,9 @@
+# Local validator: sign with the keypairs referenced by the environment.
+
+signer "payer" "svm::secret_key" {
+    keypair_json = input.payer_keypair_json
+}
+
+signer "authority" "svm::secret_key" {
+    keypair_json = input.authority_keypair_json
+}
