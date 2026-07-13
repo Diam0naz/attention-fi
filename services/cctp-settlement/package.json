@@ -1,0 +1,21 @@
+{
+  "name": "attention-fi-cctp-settlement",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Keeper service: bridge AttentionFi USDC from Solana to Circle's Arc L1 via CCTP.",
+  "scripts": {
+    "settle": "tsx src/settle.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@wormhole-foundation/sdk": "^1.0.0",
+    "@wormhole-foundation/sdk-solana-cctp": "^1.0.0",
+    "@wormhole-foundation/sdk-evm-cctp": "^1.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3"
+  }
+}
