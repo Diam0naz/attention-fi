@@ -73,6 +73,46 @@ export const MOCK_TOKENS: Token[] = [
   { rank: 12, handle: "synth_wave", name: "Synth Wave", vertical: "Music", mindshare: 0.27, marketCap: 9_400, delta24h: 7, tier: "New", verified: false, spark: [0.21, 0.22, 0.23, 0.24, 0.25, 0.26, 0.27, 0.27] },
 ];
 
+/** Detail view for a single token (the trading terminal). Mock for Phase 0. */
+export interface TokenDetail extends Token {
+  symbol: string;
+  rank: number;
+  raisedUsd: number;
+  targetUsd: number;
+  balanceSol: number;
+  holders: number;
+  liquidityUsd: number;
+  virtualSol: number;
+  creatorFeeBps: number;
+  /** Candlestick heights (0-100) with direction, oldest → newest. */
+  candles: { h: number; up: boolean }[];
+}
+
+const CANDLES: { h: number; up: boolean }[] = [
+  { h: 38, up: true }, { h: 44, up: true }, { h: 40, up: false }, { h: 52, up: true },
+  { h: 58, up: true }, { h: 55, up: false }, { h: 64, up: true }, { h: 70, up: true },
+  { h: 66, up: false }, { h: 78, up: true }, { h: 82, up: true }, { h: 88, up: true },
+];
+
+/** Build a detail view from a feed token (synthesises the extra terminal fields). */
+export function getTokenDetail(handle: string): TokenDetail | null {
+  const token = MOCK_TOKENS.find((t) => t.handle === handle);
+  if (!token) return null;
+  return {
+    ...token,
+    symbol: handle.slice(0, 4).toUpperCase(),
+    rank: token.rank,
+    raisedUsd: Math.round(token.marketCap * 0.35),
+    targetUsd: 69_000,
+    balanceSol: 12.4,
+    holders: 120 + token.rank * 46,
+    liquidityUsd: Math.round(token.marketCap * 0.5),
+    virtualSol: 30,
+    creatorFeeBps: 50,
+    candles: CANDLES,
+  };
+}
+
 /** Small deterministic-ish nudge for the "live" feel (client-side only). */
 export function jitter(token: Token): Token {
   const drift = (Math.random() - 0.5) * 0.06;
