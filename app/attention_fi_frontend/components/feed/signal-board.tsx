@@ -75,13 +75,13 @@ export function SignalBoard() {
           </span>
         </div>
 
-        <div className="grid grid-cols-[28px_1fr_72px_72px_56px_64px] items-center gap-2 border-b border-white/[0.06] px-5 py-2 font-mono text-[9px] uppercase tracking-wider text-[#6B6B6B]">
+        <div className="grid grid-cols-[24px_1fr_64px_48px] items-center gap-2 border-b border-white/[0.06] px-4 py-2 font-mono text-[9px] uppercase tracking-wider text-[#6B6B6B] sm:grid-cols-[28px_1fr_72px_72px_56px_64px] sm:px-5">
           <span>#</span>
           <span>Handle</span>
           <span className="text-right">Share</span>
-          <span className="text-right">Mkt Cap</span>
+          <span className="hidden text-right sm:block">Mkt Cap</span>
           <span className="text-right">24h</span>
-          <span className="text-right">Trend</span>
+          <span className="hidden text-right sm:block">Trend</span>
         </div>
 
         {rows.map((t) => {
@@ -89,7 +89,7 @@ export function SignalBoard() {
           return (
             <div
               key={t.handle}
-              className="grid grid-cols-[28px_1fr_72px_72px_56px_64px] items-center gap-2 border-b border-white/[0.06] px-5 py-3 text-[13px] transition-colors last:border-b-0 hover:bg-white/[0.03]"
+              className="grid grid-cols-[24px_1fr_64px_48px] items-center gap-2 border-b border-white/[0.06] px-4 py-3 text-[13px] transition-colors last:border-b-0 hover:bg-white/[0.03] sm:grid-cols-[28px_1fr_72px_72px_56px_64px] sm:px-5"
             >
               <span className="font-mono text-[11px] text-[#6B6B6B]">
                 {String(t.rank).padStart(2, "0")}
@@ -111,7 +111,9 @@ export function SignalBoard() {
               </div>
 
               <span className="text-right font-mono text-[12px]">{t.mindshare.toFixed(2)}%</span>
-              <span className="text-right font-mono text-[12px] text-[#6B6B6B]">{usd(t.marketCap)}</span>
+              <span className="hidden text-right font-mono text-[12px] text-[#6B6B6B] sm:block">
+                {usd(t.marketCap)}
+              </span>
               <span
                 className={cn(
                   "text-right font-mono text-[11px] font-bold",
@@ -121,7 +123,7 @@ export function SignalBoard() {
                 {up ? "+" : ""}
                 {t.delta24h.toFixed(0)}%
               </span>
-              <div className="flex justify-end">
+              <div className="hidden justify-end sm:flex">
                 <Sparkline points={t.spark} up={up} />
               </div>
             </div>

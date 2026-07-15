@@ -80,7 +80,7 @@ export function WaitlistPanel({
   return (
     <div>
       {/* rank + points */}
-      <div className="flex items-end justify-between">
+      <div className="flex items-end justify-between pr-8">
         <div>
           <div className="font-mono text-[10px] uppercase tracking-[0.12em] text-[#6B6B6B]">
             Your position

@@ -54,13 +54,13 @@ export function WaitlistButton() {
           onClick={() => setOpen(false)}
         >
           <div
-            className="relative my-auto w-full max-w-md rounded-md border border-white/10 bg-[#0f1620] p-6 shadow-2xl"
+            className="relative my-auto w-full max-w-md rounded-md border border-white/10 bg-[#0f1620] p-6 pt-7 shadow-2xl sm:p-7"
             onClick={(e) => e.stopPropagation()}
           >
             <button
               aria-label="Close"
               onClick={() => setOpen(false)}
-              className="absolute right-4 top-4 text-[#6B6B6B] transition-colors hover:text-[#F5F4F0]"
+              className="absolute right-3 top-3 rounded-md p-1.5 text-[#6B6B6B] transition-colors hover:bg-white/10 hover:text-[#F5F4F0]"
             >
               <X className="h-4 w-4" />
             </button>

@@ -42,7 +42,7 @@ export function WaitlistForm({ onJoined }: { onJoined: (s: WaitlistStatus) => vo
 
   return (
     <form onSubmit={submit}>
-      <h2 className="text-[20px] font-bold tracking-[-0.02em]">
+      <h2 className="pr-8 text-[20px] font-bold tracking-[-0.02em]">
         Trade attention before it&apos;s tradeable.
       </h2>
       <p className="mt-2 text-[13px] leading-relaxed text-[#9aa4af]">
