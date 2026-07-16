@@ -8,6 +8,7 @@ import { VerifyHandleFlow } from "@/components/onboarding/verify-handle-flow";
 import { WalletConnectModal } from "@/components/wallet/wallet-connect-modal";
 import { useWallet } from "@/components/wallet/wallet-provider";
 import { TxStatus, type TxState } from "@/components/wallet/tx-status";
+import { Threads } from "@/components/reactbits/threads";
 
 type MechId = "bonding" | "dutch" | "conviction" | "revenue";
 
@@ -59,7 +60,11 @@ export function LaunchFlow() {
   }
 
   return (
-    <div className="mx-auto min-h-screen max-w-lg px-5 py-6">
+    <>
+      <div className="pointer-events-none fixed inset-0 -z-10 opacity-40 [mask-image:radial-gradient(ellipse_at_center,#000_20%,transparent_75%)]">
+        <Threads count={7} />
+      </div>
+      <div className="relative mx-auto min-h-screen max-w-lg px-5 py-6">
       {/* header + progress */}
       <div className="flex items-center gap-2">
         <Link href="/" className="text-[#6B6B6B] hover:text-[#F5F4F0]">
@@ -276,6 +281,7 @@ export function LaunchFlow() {
       )}
 
       <WalletConnectModal open={walletOpen} onClose={() => setWalletOpen(false)} />
-    </div>
+      </div>
+    </>
   );
 }
