@@ -158,6 +158,34 @@
 }
 .af-pulse-dot { animation: af-pulse-dot 1.4s ease infinite; }
 
+/* AttentionFi logo — radar bullseye that pulses outward. */
+@keyframes af-logo-ping {
+  0%   { transform: scale(0.4); opacity: 0.7; }
+  70%  { opacity: 0; }
+  100% { transform: scale(1.9); opacity: 0; }
+}
+.af-logo-ping {
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  border: 1px solid var(--signal);
+  opacity: 0;
+  transform-origin: center;
+  animation: af-logo-ping 2.4s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+@keyframes af-logo-core {
+  0%, 100% { opacity: 0.8; filter: drop-shadow(0 0 1px var(--signal)); }
+  50%      { opacity: 1; filter: drop-shadow(0 0 4px var(--signal)); }
+}
+.af-logo-core {
+  transform-origin: center;
+  animation: af-logo-core 2.4s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .af-logo-ping { animation: none; }
+  .af-logo-core { animation: none; opacity: 1; }
+}
+
 /* react-bits-style effects */
 @keyframes af-gradient {
   0%, 100% { background-position: 0% 50%; }

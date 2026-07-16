@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Search } from "lucide-react";
+import { Logo } from "@/components/brand/logo";
 import { WaitlistButton } from "@/components/waitlist/waitlist-button";
 import Strands from "@/components/reactbits/strands";
 import { MagicCircle } from "@/components/reactbits/magic-circle";
@@ -25,9 +26,9 @@ export function Hero() {
       {/* Tighter, full-bleed divider with a constrained inner row (phase0 style). */}
       <nav className="border-b border-white/[0.08]">
         <div className="mx-auto flex max-w-5xl items-center gap-4 px-5 py-3">
-          <span className="font-mono text-[12px] font-bold tracking-[0.14em] text-signal">
-            ATTENTIONFI
-          </span>
+          <a href="#feed" aria-label="AttentionFi home">
+            <Logo />
+          </a>
           <span className="rounded-sm border border-white/10 px-1.5 py-0.5 font-mono text-[9px] tracking-[0.1em] text-[#6B6B6B]">
             PHASE 0 · PREVIEW
           </span>
