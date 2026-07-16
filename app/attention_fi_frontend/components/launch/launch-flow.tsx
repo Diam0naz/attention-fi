@@ -31,7 +31,8 @@ export function LaunchFlow() {
   const [step, setStep] = useState(0); // 0..3
   const [mech, setMech] = useState<MechId>("bonding");
   const [handle, setHandle] = useState("");
-  const [verifyStep, setVerifyStep] = useState<1 | 2 | 3>(1);
+  // Wallet is connected (1); start on "awaiting signature" (2) so the SIGN button shows.
+  const [verifyStep, setVerifyStep] = useState<2 | 3>(2);
   const [tx, setTx] = useState<TxState | null>(null);
 
   const mindshare = 0.98; // mock: fetched from Kaito for the handle
@@ -115,13 +116,7 @@ export function LaunchFlow() {
             handle={handle || "handle"}
             walletAddress="8XZQ…eJ96"
             step={verifyStep}
-            onSign={() => {
-              setVerifyStep(2);
-              setTimeout(() => {
-                setVerifyStep(3);
-                setStep(2);
-              }, 1400);
-            }}
+            onSign={() => setVerifyStep(3)}
           />
         )}
 
@@ -189,8 +184,8 @@ export function LaunchFlow() {
         )}
       </div>
 
-      {/* nav */}
-      {step < 3 && !(step === 1) && (
+      {/* nav — Back on any step past the first; CONTINUE except while awaiting the signature */}
+      {step < 3 && (
         <div className="sticky bottom-0 mt-6 border-t border-white/[0.08] bg-[#0A0A0A] py-4">
           <div className="flex gap-2">
             {step > 0 && (
@@ -201,13 +196,15 @@ export function LaunchFlow() {
                 Back
               </button>
             )}
-            <button
-              onClick={next}
-              disabled={!canContinue}
-              className="flex-1 rounded-sm bg-signal py-3 font-mono text-[12px] font-bold text-[#0A0A0A] disabled:opacity-40"
-            >
-              CONTINUE
-            </button>
+            {!(step === 1 && verifyStep < 3) && (
+              <button
+                onClick={next}
+                disabled={!canContinue}
+                className="flex-1 rounded-sm bg-signal py-3 font-mono text-[12px] font-bold text-[#0A0A0A] disabled:opacity-40"
+              >
+                CONTINUE
+              </button>
+            )}
           </div>
         </div>
       )}
