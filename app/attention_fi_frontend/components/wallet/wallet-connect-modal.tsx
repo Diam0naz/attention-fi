@@ -1,20 +1,22 @@
 "use client";
 
 import { X } from "lucide-react";
-import { cn } from "@/lib/utils";
 
 export interface WalletOption {
   id: string;
   name: string;
   detected?: boolean;
-  icon?: React.ReactNode;
+  /** CSS background (brand color or gradient) for the icon chip. */
+  brand: string;
+  /** Foreground color for the icon initial. */
+  fg: string;
 }
 
 const DEFAULT_WALLETS: WalletOption[] = [
-  { id: "phantom", name: "Phantom", detected: true },
-  { id: "solflare", name: "Solflare" },
-  { id: "backpack", name: "Backpack" },
-  { id: "coinbase", name: "Coinbase Wallet" },
+  { id: "phantom", name: "Phantom", detected: true, brand: "linear-gradient(135deg,#ab9ff2,#4fd1c5)", fg: "#2a2250" },
+  { id: "solflare", name: "Solflare", brand: "linear-gradient(135deg,#3b82f6,#1652f0)", fg: "#ffffff" },
+  { id: "backpack", name: "Backpack", brand: "#0b0b0e", fg: "#e33e5c" },
+  { id: "coinbase", name: "Coinbase Wallet", brand: "linear-gradient(135deg,#f5b300,#e08a00)", fg: "#1a1200" },
 ];
 
 export function WalletConnectModal({
@@ -36,7 +38,7 @@ export function WalletConnectModal({
       onClick={onClose}
     >
       <div
-        className="w-full max-w-[420px] rounded-sm border border-white/10 bg-[#0f1620] shadow-2xl"
+        className="w-full max-w-[420px] overflow-hidden rounded-lg border border-white/10 bg-[#0d141c] shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center border-b border-white/[0.08] px-5 py-4">
@@ -44,7 +46,7 @@ export function WalletConnectModal({
           <button
             aria-label="Close"
             onClick={onClose}
-            className="ml-auto text-[#6B6B6B] transition-colors hover:text-[#F5F4F0]"
+            className="ml-auto rounded-md p-1 text-[#6B6B6B] transition-colors hover:bg-white/10 hover:text-[#F5F4F0]"
           >
             <X className="h-4 w-4" />
           </button>
@@ -55,12 +57,18 @@ export function WalletConnectModal({
             <button
               key={w.id}
               onClick={() => onSelect(w.id)}
-              className="flex items-center gap-3 rounded-sm border border-white/10 bg-[#12181f] px-3.5 py-3 text-left text-[13px] font-semibold text-[#F5F4F0] transition-colors hover:border-white/20"
+              className="group flex items-center gap-3 rounded-md border border-white/[0.08] bg-[#12181f] px-3.5 py-3 text-left text-[13px] font-semibold text-[#F5F4F0] transition-all hover:border-signal/40 hover:bg-[#151d26] active:scale-[0.99]"
             >
-              <span className="h-6.5 w-6.5 shrink-0 rounded-sm bg-white/10" aria-hidden />
+              <span
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md font-mono text-[13px] font-bold shadow-inner"
+                style={{ background: w.brand, color: w.fg }}
+                aria-hidden
+              >
+                {w.name.charAt(0)}
+              </span>
               {w.name}
               {w.detected && (
-                <span className="ml-auto font-mono text-[9px] tracking-[0.08em] text-[#6B6B6B]">
+                <span className="ml-auto rounded-full border border-signal/30 bg-signal/[0.08] px-2 py-0.5 font-mono text-[8px] font-bold tracking-[0.1em] text-signal">
                   DETECTED
                 </span>
               )}
