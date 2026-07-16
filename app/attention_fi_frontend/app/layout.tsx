@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { cn } from "@/lib/utils";
+import { WalletProvider } from "@/components/wallet/wallet-provider";
 
 // Fonts are declared as a zero-network CSS stack in globals.css (`--font-sans` /
 // `--font-geist-mono`) — no build-time fetch, so dev never hangs offline. Uses
@@ -19,7 +20,7 @@ export default function RootLayout({
   return (
     <html lang="en" className={cn("dark h-full antialiased font-sans")}>
       <body className="min-h-full flex flex-col bg-[#0A0A0A] text-[#F5F4F0]">
-        {children}
+        <WalletProvider>{children}</WalletProvider>
       </body>
     </html>
   );

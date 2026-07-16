@@ -9,6 +9,7 @@ import { X_URL } from "@/lib/config";
 import { PriceChart } from "@/components/token/price-chart";
 import { Footer } from "@/components/feed/footer";
 import { WalletConnectModal } from "@/components/wallet/wallet-connect-modal";
+import { useWallet } from "@/components/wallet/wallet-provider";
 import { TxStatus, type TxState } from "@/components/wallet/tx-status";
 
 const TABS = ["chart", "trades", "holders", "about"] as const;
@@ -21,9 +22,9 @@ function usd(n: number): string {
 }
 
 export function TokenDetailTerminal({ token }: { token: TokenDetail }) {
+  const { connected, shortAddress, disconnect } = useWallet();
   const [side, setSide] = useState<"buy" | "sell">("buy");
   const [amount, setAmount] = useState("");
-  const [connected, setConnected] = useState(false);
   const [walletOpen, setWalletOpen] = useState(false);
   const [tx, setTx] = useState<TxState | null>(null);
   const [tab, setTab] = useState<Tab>("chart");
@@ -59,10 +60,10 @@ export function TokenDetailTerminal({ token }: { token: TokenDetail }) {
             <div className="flex items-center gap-1.5 rounded-sm border border-signal/40 bg-signal/[0.06] px-1 py-0.5">
               <span className="inline-flex items-center gap-1.5 px-2 py-1 font-mono text-[11px] font-bold text-signal">
                 <span className="h-1.5 w-1.5 rounded-full bg-signal af-pulse-dot" />
-                {token.balanceSol} SOL
+                {shortAddress}
               </span>
               <button
-                onClick={() => setConnected(false)}
+                onClick={disconnect}
                 className="rounded-sm px-2 py-1 font-mono text-[10px] text-[#6B6B6B] transition-colors hover:bg-white/10 hover:text-noise"
               >
                 Disconnect
@@ -359,14 +360,7 @@ export function TokenDetailTerminal({ token }: { token: TokenDetail }) {
 
       <Footer />
 
-      <WalletConnectModal
-        open={walletOpen}
-        onClose={() => setWalletOpen(false)}
-        onSelect={() => {
-          setConnected(true);
-          setWalletOpen(false);
-        }}
-      />
+      <WalletConnectModal open={walletOpen} onClose={() => setWalletOpen(false)} />
     </div>
   );
 }

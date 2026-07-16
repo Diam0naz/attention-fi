@@ -5,6 +5,8 @@ import Link from "next/link";
 import { ArrowLeft, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { VerifyHandleFlow } from "@/components/onboarding/verify-handle-flow";
+import { WalletConnectModal } from "@/components/wallet/wallet-connect-modal";
+import { useWallet } from "@/components/wallet/wallet-provider";
 import { TxStatus, type TxState } from "@/components/wallet/tx-status";
 
 type MechId = "bonding" | "dutch" | "conviction" | "revenue";
@@ -28,9 +30,13 @@ const tierFor = (m: number) => TIERS.find((t) => m >= t.min) ?? TIERS[TIERS.leng
 const STEPS = ["Mechanism", "Verify", "Seed & review", "Confirm"];
 
 export function LaunchFlow() {
+  const { connected, shortAddress } = useWallet();
   const [step, setStep] = useState(0); // 0..3
   const [mech, setMech] = useState<MechId>("bonding");
   const [handle, setHandle] = useState("");
+  const [name, setName] = useState("");
+  const [symbol, setSymbol] = useState("");
+  const [walletOpen, setWalletOpen] = useState(false);
   // Wallet is connected (1); start on "awaiting signature" (2) so the SIGN button shows.
   const [verifyStep, setVerifyStep] = useState<2 | 3>(2);
   const [tx, setTx] = useState<TxState | null>(null);
@@ -38,7 +44,9 @@ export function LaunchFlow() {
   const mindshare = 0.98; // mock: fetched from Kaito for the handle
   const t = tierFor(mindshare);
   const mechName = MECHANISMS.find((m) => m.id === mech)!.name;
-  const canContinue = step !== 0 || handle.trim().length > 0;
+  // Symbol defaults to the token name (or handle) if the creator leaves it blank.
+  const ticker = (symbol || name || handle).replace(/[^a-zA-Z0-9]/g, "").slice(0, 6).toUpperCase();
+  const canContinue = step !== 0 || (handle.trim().length > 0 && name.trim().length > 0);
 
   function next() {
     if (step === 1 && verifyStep < 3) return; // must finish verify
@@ -58,6 +66,19 @@ export function LaunchFlow() {
           <ArrowLeft className="h-4 w-4" />
         </Link>
         <span className="text-[15px] font-bold">Launch a token</span>
+        {connected ? (
+          <span className="ml-auto inline-flex items-center gap-1.5 rounded-sm border border-signal/40 bg-signal/[0.06] px-2.5 py-1 font-mono text-[10px] font-bold text-signal">
+            <span className="h-1.5 w-1.5 rounded-full bg-signal af-pulse-dot" />
+            {shortAddress}
+          </span>
+        ) : (
+          <button
+            onClick={() => setWalletOpen(true)}
+            className="ml-auto rounded-sm bg-signal px-3 py-1 font-mono text-[10px] font-bold text-[#0A0A0A]"
+          >
+            Connect Wallet
+          </button>
+        )}
       </div>
       <div className="mt-4 flex gap-1">
         {STEPS.map((_, i) => (
@@ -107,18 +128,61 @@ export function LaunchFlow() {
                 className="w-full bg-transparent px-1.5 py-2.5 text-[13px] outline-none placeholder:text-[#4b5563]"
               />
             </div>
+
+            <div className="mt-1 grid grid-cols-[1fr_120px] gap-2">
+              <div>
+                <label className="font-mono text-[10px] uppercase tracking-[0.1em] text-[#6B6B6B]">
+                  Token name
+                </label>
+                <input
+                  value={name}
+                  onChange={(e) => setName(e.target.value.slice(0, 32))}
+                  placeholder="e.g. Solana KOL"
+                  className="mt-1 w-full rounded-sm border border-white/10 bg-[#12181f] px-3 py-2.5 text-[13px] outline-none placeholder:text-[#4b5563]"
+                />
+              </div>
+              <div>
+                <label className="font-mono text-[10px] uppercase tracking-[0.1em] text-[#6B6B6B]">
+                  Symbol
+                </label>
+                <div className="mt-1 flex items-center rounded-sm border border-white/10 bg-[#12181f] px-3">
+                  <span className="text-[#6B6B6B]">$</span>
+                  <input
+                    value={symbol}
+                    onChange={(e) => setSymbol(e.target.value.replace(/[^a-zA-Z0-9]/g, "").slice(0, 6))}
+                    placeholder={ticker || "TICKER"}
+                    className="w-full bg-transparent px-1 py-2.5 font-mono text-[13px] uppercase outline-none placeholder:text-[#4b5563]"
+                  />
+                </div>
+              </div>
+            </div>
           </div>
         )}
 
         {/* Step 2 — verify handle */}
-        {step === 1 && (
-          <VerifyHandleFlow
-            handle={handle || "handle"}
-            walletAddress="8XZQ…eJ96"
-            step={verifyStep}
-            onSign={() => setVerifyStep(3)}
-          />
-        )}
+        {step === 1 &&
+          (connected ? (
+            <VerifyHandleFlow
+              handle={handle || "handle"}
+              walletAddress={shortAddress ?? ""}
+              step={verifyStep}
+              onSign={() => setVerifyStep(3)}
+            />
+          ) : (
+            <div className="rounded-sm border border-white/[0.08] bg-[#0f1620] p-6 text-center">
+              <div className="text-[13px] font-bold">Connect a wallet to verify</div>
+              <p className="mx-auto mt-1.5 max-w-xs text-[11px] leading-relaxed text-[#6B6B6B]">
+                Verification binds @{handle || "your handle"} to your wallet on-chain — connect the
+                wallet that will own the creator-fee address.
+              </p>
+              <button
+                onClick={() => setWalletOpen(true)}
+                className="mt-4 rounded-sm bg-signal px-5 py-2.5 font-mono text-[12px] font-bold text-[#0A0A0A]"
+              >
+                Connect Wallet
+              </button>
+            </div>
+          ))}
 
         {/* Step 3 — seed & review */}
         {step === 2 && (
@@ -130,6 +194,7 @@ export function LaunchFlow() {
             </p>
             <dl className="mt-4 flex flex-col gap-2.5 font-mono text-[12px]">
               {[
+                ["Token", `${name || handle} ($${ticker})`],
                 ["Mechanism", mechName],
                 ["Seed market cap", t.seed],
                 ["Total supply", "1,000,000,000"],
@@ -150,7 +215,8 @@ export function LaunchFlow() {
           <div className="rounded-sm border border-white/[0.08] bg-[#0f1620] p-5">
             <div className="text-[13px] font-bold">Confirm & launch</div>
             <p className="mt-1 text-[11px] text-[#6B6B6B]">
-              Launching a <span className="text-[#F5F4F0]">{mechName}</span> token for{" "}
+              Launching <span className="text-[#F5F4F0]">{name || handle} (${ticker})</span>, a{" "}
+              <span className="text-[#F5F4F0]">{mechName}</span> token for{" "}
               <span className="text-[#F5F4F0]">@{handle}</span>, seeded at {t.seed}.
             </p>
 
@@ -159,7 +225,7 @@ export function LaunchFlow() {
                 <TxStatus
                   state={tx}
                   title={tx === "pending" ? "Launching…" : "Token launched"}
-                  detail={`@${handle} · ${mechName}`}
+                  detail={`$${ticker} · ${mechName}`}
                   signature="3xРq…8kQ2"
                   explorerUrl="#"
                 />
@@ -177,7 +243,7 @@ export function LaunchFlow() {
                 onClick={launch}
                 className="mt-4 w-full rounded-sm bg-signal py-3 font-mono text-[13px] font-bold text-[#0A0A0A]"
               >
-                LAUNCH ${handle.slice(0, 4).toUpperCase()}
+                LAUNCH ${ticker}
               </button>
             )}
           </div>
@@ -208,6 +274,8 @@ export function LaunchFlow() {
           </div>
         </div>
       )}
+
+      <WalletConnectModal open={walletOpen} onClose={() => setWalletOpen(false)} />
     </div>
   );
 }

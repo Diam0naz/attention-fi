@@ -1,36 +1,27 @@
 "use client";
 
+import { useState } from "react";
 import { X } from "lucide-react";
-
-export interface WalletOption {
-  id: string;
-  name: string;
-  detected?: boolean;
-  /** CSS background (brand color or gradient) for the icon chip. */
-  brand: string;
-  /** Foreground color for the icon initial. */
-  fg: string;
-}
-
-const DEFAULT_WALLETS: WalletOption[] = [
-  { id: "phantom", name: "Phantom", detected: true, brand: "linear-gradient(135deg,#ab9ff2,#4fd1c5)", fg: "#2a2250" },
-  { id: "solflare", name: "Solflare", brand: "linear-gradient(135deg,#3b82f6,#1652f0)", fg: "#ffffff" },
-  { id: "backpack", name: "Backpack", brand: "#0b0b0e", fg: "#e33e5c" },
-  { id: "coinbase", name: "Coinbase Wallet", brand: "linear-gradient(135deg,#f5b300,#e08a00)", fg: "#1a1200" },
-];
+import { WALLETS, useWallet } from "@/components/wallet/wallet-provider";
 
 export function WalletConnectModal({
   open,
   onClose,
-  onSelect,
-  wallets = DEFAULT_WALLETS,
 }: {
   open: boolean;
   onClose: () => void;
-  onSelect: (walletId: string) => void;
-  wallets?: WalletOption[];
 }) {
+  const { detected, connect } = useWallet();
+  const [busy, setBusy] = useState<string | null>(null);
+
   if (!open) return null;
+
+  async function pick(id: string) {
+    setBusy(id);
+    const ok = await connect(id);
+    setBusy(null);
+    if (ok) onClose();
+  }
 
   return (
     <div
@@ -53,27 +44,37 @@ export function WalletConnectModal({
         </div>
 
         <div className="flex flex-col gap-2 p-4">
-          {wallets.map((w) => (
-            <button
-              key={w.id}
-              onClick={() => onSelect(w.id)}
-              className="group flex items-center gap-3 rounded-md border border-white/[0.08] bg-[#12181f] px-3.5 py-3 text-left text-[13px] font-semibold text-[#F5F4F0] transition-all hover:border-signal/40 hover:bg-[#151d26] active:scale-[0.99]"
-            >
-              <span
-                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md font-mono text-[13px] font-bold shadow-inner"
-                style={{ background: w.brand, color: w.fg }}
-                aria-hidden
+          {WALLETS.map((w) => {
+            const isDetected = detected.has(w.id);
+            return (
+              <button
+                key={w.id}
+                onClick={() => pick(w.id)}
+                disabled={busy !== null}
+                className="group flex items-center gap-3 rounded-md border border-white/[0.08] bg-[#12181f] px-3.5 py-3 text-left text-[13px] font-semibold text-[#F5F4F0] transition-all hover:border-signal/40 hover:bg-[#151d26] active:scale-[0.99] disabled:opacity-50"
               >
-                {w.name.charAt(0)}
-              </span>
-              {w.name}
-              {w.detected && (
-                <span className="ml-auto rounded-full border border-signal/30 bg-signal/[0.08] px-2 py-0.5 font-mono text-[8px] font-bold tracking-[0.1em] text-signal">
-                  DETECTED
+                <span
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md font-mono text-[13px] font-bold shadow-inner"
+                  style={{ background: w.brand, color: w.fg }}
+                  aria-hidden
+                >
+                  {w.name.charAt(0)}
                 </span>
-              )}
-            </button>
-          ))}
+                {w.name}
+                <span className="ml-auto">
+                  {busy === w.id ? (
+                    <span className="font-mono text-[9px] tracking-[0.1em] text-[#6B6B6B]">CONNECTING…</span>
+                  ) : isDetected ? (
+                    <span className="rounded-full border border-signal/30 bg-signal/[0.08] px-2 py-0.5 font-mono text-[8px] font-bold tracking-[0.1em] text-signal">
+                      DETECTED
+                    </span>
+                  ) : (
+                    <span className="font-mono text-[8px] tracking-[0.1em] text-[#4b5563]">INSTALL</span>
+                  )}
+                </span>
+              </button>
+            );
+          })}
           <p className="mt-1.5 text-center font-mono text-[10px] text-[#6B6B6B]">
             By connecting you accept the Terms of Use
           </p>
