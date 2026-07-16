@@ -8,7 +8,7 @@ export default async function TokenPage({
   params: Promise<{ handle: string }>;
 }) {
   const { handle } = await params;
+  if (!handle.trim()) notFound();
   const token = getTokenDetail(handle);
-  if (!token) notFound();
   return <TokenDetailTerminal token={token} />;
 }

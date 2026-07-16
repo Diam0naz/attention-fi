@@ -94,18 +94,37 @@ const CANDLES: { h: number; up: boolean }[] = [
   { h: 66, up: false }, { h: 78, up: true }, { h: 82, up: true }, { h: 88, up: true },
 ];
 
-/** Build a detail view from a feed token (synthesises the extra terminal fields). */
-export function getTokenDetail(handle: string): TokenDetail | null {
-  const token = MOCK_TOKENS.find((t) => t.handle === handle);
-  if (!token) return null;
+/** A just-launched token that isn't in the curated feed yet (e.g. via /launch). */
+function freshToken(handle: string): Token {
+  return {
+    rank: MOCK_TOKENS.length + 1,
+    handle,
+    name: handle.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
+    vertical: "Narrative",
+    mindshare: 0.08,
+    marketCap: 2_000,
+    delta24h: 0,
+    tier: "New",
+    verified: false,
+    spark: [0.05, 0.06, 0.06, 0.07, 0.07, 0.08, 0.08, 0.08],
+  };
+}
+
+/**
+ * Build a detail view for a token. Matches feed handles case-insensitively; any
+ * other handle is treated as a freshly-launched token so its page still renders.
+ */
+export function getTokenDetail(handle: string): TokenDetail {
+  const token =
+    MOCK_TOKENS.find((t) => t.handle.toLowerCase() === handle.toLowerCase()) ?? freshToken(handle);
   return {
     ...token,
-    symbol: handle.slice(0, 4).toUpperCase(),
+    symbol: token.handle.slice(0, 4).toUpperCase(),
     rank: token.rank,
     raisedUsd: Math.round(token.marketCap * 0.35),
     targetUsd: 69_000,
     balanceSol: 12.4,
-    holders: 120 + token.rank * 46,
+    holders: Math.max(3, Math.round(token.marketCap / 250)),
     liquidityUsd: Math.round(token.marketCap * 0.5),
     virtualSol: 30,
     creatorFeeBps: 50,
