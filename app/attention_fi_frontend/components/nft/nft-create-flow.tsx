@@ -8,6 +8,7 @@ import { useWallet } from "@/components/wallet/wallet-provider";
 import { WalletConnectModal } from "@/components/wallet/wallet-connect-modal";
 import { TxStatus, type TxState } from "@/components/wallet/tx-status";
 import { PageBackground } from "@/components/reactbits/page-background";
+import { NftCardFace, type NftCardData } from "@/components/nft/nft-card";
 import { getNftState, getPortfolio } from "@/lib/mock-data";
 
 type Kind = "genesis" | "auction";
@@ -60,6 +61,18 @@ export function NftCreateFlow() {
   }, [nft]);
 
   const kindMeta = KINDS.find((k) => k.id === kind)!;
+
+  // What the confirm step previews: the genesis being minted, or the asset listed.
+  const previewData: NftCardData =
+    kind === "genesis"
+      ? { kind: "genesis", shareBps: Math.max(1, Math.round(+sharePct * 100)), id: "GEN-0001" }
+      : assetId.startsWith("PERK")
+        ? { kind: "perk", level: nft?.perk?.level ?? 1, discountBps: nft?.perk?.discountBps ?? 100 }
+        : {
+            kind: "genesis",
+            shareBps: nft?.genesis.find((g) => g.id === assetId)?.shareBps ?? 100,
+            id: assetId || "GEN-0001",
+          };
   const validGenesis = tokenHandle !== "" && +sharePct > 0 && +supply > 0;
   const validAuction = assetId !== "" && +startUsd > +floorUsd && +floorUsd > 0;
   const canContinue = step !== 1 || (kind === "genesis" ? validGenesis : validAuction);
@@ -282,6 +295,71 @@ export function NftCreateFlow() {
                 ? `Minting ${supply} genesis NFTs at ${sharePct}% each for @${tokenHandle}.`
                 : `Listing ${assetId} from $${(+startUsd).toLocaleString()} down to $${(+floorUsd).toLocaleString()} over ${duration}.`}
             </p>
+
+            {/* preview + params */}
+            <div className="mt-4 flex gap-4">
+              <div className="w-24 shrink-0">
+                <NftCardFace data={previewData} />
+              </div>
+              <dl className="flex flex-1 flex-col gap-1.5 font-mono text-[11px]">
+                {(kind === "genesis"
+                  ? [
+                      ["Token", `@${tokenHandle}`],
+                      ["Share / NFT", `${sharePct}%`],
+                      ["Supply", supply],
+                      ["Allocated", `${(+sharePct * +supply || 0).toFixed(1)}%`],
+                    ]
+                  : [
+                      ["Asset", assetId],
+                      ["Start", `$${(+startUsd).toLocaleString()}`],
+                      ["Floor", `$${(+floorUsd).toLocaleString()}`],
+                      ["Duration", duration],
+                    ]
+                ).map(([k, v]) => (
+                  <div key={k} className="flex justify-between border-b border-white/[0.06] pb-1.5">
+                    <span className="text-[#6B6B6B]">{k}</span>
+                    <span className="truncate pl-2 text-[#F5F4F0]">{v}</span>
+                  </div>
+                ))}
+                <div className="flex justify-between pt-0.5">
+                  <span className="text-[#6B6B6B]">Network fee</span>
+                  <span className="text-[#F5F4F0]">~0.002 SOL</span>
+                </div>
+              </dl>
+            </div>
+
+            {/* auction price decay preview */}
+            {kind === "auction" && (
+              <div className="mt-4 rounded-sm border border-white/[0.06] bg-[#12181f] p-3">
+                <div className="flex justify-between font-mono text-[9px] text-[#6B6B6B]">
+                  <span>${(+startUsd).toLocaleString()} now</span>
+                  <span>${(+floorUsd).toLocaleString()} at {duration}</span>
+                </div>
+                <div className="mt-2 h-8 w-full">
+                  <svg viewBox="0 0 100 32" preserveAspectRatio="none" className="h-full w-full">
+                    <defs>
+                      <linearGradient id="decay" x1="0" x2="1">
+                        <stop offset="0" stopColor="#00ff85" stopOpacity="0.5" />
+                        <stop offset="1" stopColor="#00ff85" stopOpacity="0.08" />
+                      </linearGradient>
+                    </defs>
+                    <path d="M0,3 L100,29" stroke="url(#decay)" strokeWidth="1.5" fill="none" />
+                    <path d="M0,3 L100,29 L100,32 L0,32 Z" fill="url(#decay)" opacity="0.25" />
+                  </svg>
+                </div>
+                <div className="font-mono text-[9px] text-[#4b5563]">
+                  price descends linearly · first buyer wins
+                </div>
+              </div>
+            )}
+
+            {/* what happens */}
+            <div className="mt-4 rounded-sm border border-white/[0.06] bg-[#12181f] p-3 text-[11px] leading-relaxed text-[#6B6B6B]">
+              {kind === "genesis"
+                ? `On confirm, ${supply} Metaplex Core assets mint to your wallet and a fee-share pool opens for @${tokenHandle}. Holders accrue their share of every trade fee and claim any time.`
+                : `On confirm, ${assetId} is escrowed by the auction PDA and the descending price starts. It transfers to the first buyer automatically; you can cancel before a sale.`}
+            </div>
+
             {tx ? (
               <div className="mt-4">
                 <TxStatus
@@ -320,9 +398,9 @@ export function NftCreateFlow() {
         )}
       </div>
 
-      {/* nav */}
+      {/* nav — no scrim/box; the wizard is centred so it sits right under the card */}
       {step < 3 && (
-        <div className="sticky bottom-0 mt-6 border-t border-white/[0.08] bg-[#0A0A0A]/70 py-4 backdrop-blur-md">
+        <div className="mt-5">
           <div className="flex gap-2">
             {step > 0 && (
               <button
@@ -353,8 +431,8 @@ function Shell({ children, shortAddress }: { children: React.ReactNode; shortAdd
       <div className="pointer-events-none fixed inset-0 -z-10 opacity-80 [mask-image:radial-gradient(ellipse_at_center,#000_25%,transparent_85%)]">
         <PageBackground />
       </div>
-      <div className="relative mx-auto min-h-screen max-w-lg px-5 py-6">
-        <div className="mb-4 flex items-center gap-2">
+      <div className="relative mx-auto flex min-h-screen max-w-lg flex-col px-5 py-6">
+        <div className="flex items-center gap-2">
           <Link href="/nft" className="text-[#6B6B6B] hover:text-[#F5F4F0]">
             <ArrowLeft className="h-4 w-4" />
           </Link>
@@ -366,7 +444,8 @@ function Shell({ children, shortAddress }: { children: React.ReactNode; shortAdd
             </span>
           )}
         </div>
-        {children}
+        {/* centre the wizard so short steps don't leave a huge void */}
+        <div className="flex flex-1 flex-col justify-center py-6">{children}</div>
       </div>
     </>
   );
