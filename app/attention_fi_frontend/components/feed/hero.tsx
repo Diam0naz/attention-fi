@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Search } from "lucide-react";
 import { WaitlistButton } from "@/components/waitlist/waitlist-button";
 import Strands from "@/components/reactbits/strands";
@@ -40,6 +41,12 @@ export function Hero() {
               className="w-48 bg-transparent text-[12px] text-[#F5F4F0] outline-none placeholder:text-[#4b5563]"
             />
           </label>
+          <Link
+            href="/launch"
+            className="ml-auto font-mono text-[11px] font-bold text-[#F5F4F0] transition-colors hover:text-signal md:ml-0"
+          >
+            Launch →
+          </Link>
           <WaitlistButton />
         </div>
       </nav>
