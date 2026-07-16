@@ -1,13 +1,14 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, BadgeCheck, Copy, Sparkles } from "lucide-react";
+import { ArrowLeft, BadgeCheck, Camera, Check, Copy, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useWallet } from "@/components/wallet/wallet-provider";
 import { WalletConnectModal } from "@/components/wallet/wallet-connect-modal";
 import { TxStatus, type TxState } from "@/components/wallet/tx-status";
 import { Footer } from "@/components/feed/footer";
+import { NftCard } from "@/components/nft/nft-card";
 import { getNftState, getPortfolio } from "@/lib/mock-data";
 
 function usd(n: number): string {
@@ -20,9 +21,40 @@ export function ProfileView() {
   const { connected, address, shortAddress, disconnect } = useWallet();
   const [walletOpen, setWalletOpen] = useState(false);
   const [claimTx, setClaimTx] = useState<TxState | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [pfp, setPfp] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   const portfolio = useMemo(() => (address ? getPortfolio(address) : null), [address]);
   const nft = useMemo(() => (address ? getNftState(address) : null), [address]);
+
+  // Opt-in profile picture, persisted per wallet address (client-only).
+  useEffect(() => {
+    setPfp(address ? window.localStorage.getItem(`af.pfp.${address}`) : null);
+  }, [address]);
+
+  function copyAddress() {
+    if (!address) return;
+    navigator.clipboard
+      ?.writeText(address)
+      .then(() => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1200);
+      })
+      .catch(() => undefined);
+  }
+
+  function onPickFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file || !address) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const url = String(reader.result);
+      setPfp(url);
+      window.localStorage.setItem(`af.pfp.${address}`, url);
+    };
+    reader.readAsDataURL(file);
+  }
 
   if (!connected || !portfolio || !nft) {
     return (
@@ -55,14 +87,33 @@ export function ProfileView() {
       <div className="mx-auto w-full max-w-4xl flex-1 px-5 py-7">
         {/* overview */}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-[repeating-linear-gradient(45deg,#1c2733,#1c2733_5px,#222f3d_5px,#222f3d_10px)] font-mono text-[15px] font-bold text-signal">
-            {address?.slice(0, 2)}
-          </div>
+          <button
+            onClick={() => fileRef.current?.click()}
+            className="group relative h-14 w-14 shrink-0 overflow-hidden rounded-full border border-white/10"
+            aria-label="Set profile picture"
+          >
+            {pfp ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={pfp} alt="Profile" className="h-full w-full object-cover" />
+            ) : (
+              <span className="flex h-full w-full items-center justify-center bg-[repeating-linear-gradient(45deg,#1c2733,#1c2733_5px,#222f3d_5px,#222f3d_10px)] font-mono text-[15px] font-bold text-signal">
+                {address?.slice(0, 2)}
+              </span>
+            )}
+            <span className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 transition-opacity group-hover:opacity-100">
+              <Camera className="h-4 w-4 text-white" />
+            </span>
+          </button>
+          <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={onPickFile} />
           <div className="min-w-0">
             <div className="flex items-center gap-2 font-mono text-[15px] font-bold">
               {shortAddress}
-              <button className="text-[#4b5563] hover:text-[#F5F4F0]" aria-label="Copy address">
-                <Copy className="h-3.5 w-3.5" />
+              <button
+                onClick={copyAddress}
+                className="text-[#4b5563] transition-colors hover:text-signal"
+                aria-label="Copy address"
+              >
+                {copied ? <Check className="h-3.5 w-3.5 text-signal" /> : <Copy className="h-3.5 w-3.5" />}
               </button>
             </div>
             <div className="mt-1 flex items-center gap-2 text-[12px] text-[#6B6B6B]">
@@ -163,28 +214,24 @@ export function ProfileView() {
           )}
         </Section>
 
-        {/* NFTs summary */}
+        {/* NFTs — the actual issued assets */}
         <Section title="Your NFTs">
-          <div className="grid gap-3 sm:grid-cols-3">
-            <NftChip
-              label="Verification"
-              value={nft.verified ? "Soulbound ✓" : "Not minted"}
-              ok={nft.verified}
-            />
-            <NftChip
-              label="Perk NFT"
-              value={nft.perk ? `Lvl ${nft.perk.level} · ${(nft.perk.discountBps / 100).toFixed(0)}% off` : "None"}
-              ok={!!nft.perk}
-            />
-            <NftChip
-              label="Genesis (fee-share)"
-              value={nft.genesis.length ? `${nft.genesis.length} held` : "None"}
-              ok={nft.genesis.length > 0}
-            />
-          </div>
+          {nft.verified || nft.perk || nft.genesis.length > 0 ? (
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+              {nft.verified && <NftCard data={{ kind: "verification", handle: nft.handle ?? "you" }} />}
+              {nft.perk && <NftCard data={{ kind: "perk", level: nft.perk.level, discountBps: nft.perk.discountBps }} />}
+              {nft.genesis.map((g) => (
+                <NftCard key={g.id} data={{ kind: "genesis", shareBps: g.shareBps, id: g.id }} />
+              ))}
+            </div>
+          ) : (
+            <p className="text-[12px] text-[#6B6B6B]">
+              No NFTs yet — verify your handle or mint a perk to start your collection.
+            </p>
+          )}
           <Link
             href="/nft"
-            className="mt-3 inline-flex items-center gap-1.5 font-mono text-[11px] font-bold text-signal hover:underline"
+            className="mt-4 inline-flex items-center gap-1.5 font-mono text-[11px] font-bold text-signal hover:underline"
           >
             <Sparkles className="h-3.5 w-3.5" /> Manage NFTs & auctions →
           </Link>
@@ -236,14 +283,5 @@ function Section({ title, count, children }: { title: string; count?: number; ch
       </div>
       {children}
     </section>
-  );
-}
-
-function NftChip({ label, value, ok }: { label: string; value: string; ok: boolean }) {
-  return (
-    <div className={cn("rounded-sm border bg-[#0f1620] p-3.5", ok ? "border-signal/25" : "border-white/[0.08]")}>
-      <div className="font-mono text-[9px] uppercase tracking-[0.08em] text-[#6B6B6B]">{label}</div>
-      <div className={cn("mt-1 text-[13px] font-bold", ok ? "text-signal" : "text-[#6B6B6B]")}>{value}</div>
-    </div>
   );
 }

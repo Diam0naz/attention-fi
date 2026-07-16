@@ -26,13 +26,10 @@ export function Hero() {
     <>
       {/* Tighter, full-bleed divider with a constrained inner row (phase0 style). */}
       <nav className="border-b border-white/[0.08]">
-        <div className="mx-auto flex max-w-5xl items-center gap-4 px-5 py-3">
+        <div className="mx-auto flex max-w-5xl items-center gap-2.5 px-4 py-3 sm:gap-4 sm:px-5">
           <a href="#feed" aria-label="AttentionFi home">
             <Logo />
           </a>
-          <span className="rounded-sm border border-white/10 px-1.5 py-0.5 font-mono text-[9px] tracking-[0.1em] text-[#6B6B6B]">
-            PHASE 0 · PREVIEW
-          </span>
           <ul className="ml-2 hidden gap-5 text-[12px] text-[#6B6B6B] lg:flex">
             {NAV.map((l) => (
               <li key={l.href}>

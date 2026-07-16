@@ -27,9 +27,9 @@ export function WalletButton() {
       <>
         <button
           onClick={() => setModalOpen(true)}
-          className="rounded-sm bg-signal px-3.5 py-1.5 font-mono text-[11px] font-bold tracking-wide text-[#0A0A0A] transition-opacity hover:opacity-90"
+          className="whitespace-nowrap rounded-sm border border-signal/50 px-3 py-1.5 font-mono text-[11px] font-bold tracking-wide text-signal transition-colors hover:bg-signal/10"
         >
-          Connect Wallet
+          Connect<span className="hidden sm:inline"> Wallet</span>
         </button>
         <WalletConnectModal open={modalOpen} onClose={() => setModalOpen(false)} />
       </>

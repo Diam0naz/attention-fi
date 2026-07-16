@@ -43,9 +43,12 @@ export function WaitlistButton() {
     <>
       <button
         onClick={() => setOpen(true)}
-        className="rounded-sm bg-signal px-3 py-1.5 font-mono text-[11px] font-bold tracking-wide text-[#0A0A0A] transition-opacity hover:opacity-90"
+        className="whitespace-nowrap rounded-sm bg-signal px-3 py-1.5 font-mono text-[11px] font-bold tracking-wide text-[#0A0A0A] transition-opacity hover:opacity-90"
       >
-        {status ? `#${status.position} · Waitlist` : "Join Waitlist →"}
+        <span className="hidden sm:inline">
+          {status ? `#${status.position} · Waitlist` : "Join Waitlist →"}
+        </span>
+        <span className="sm:hidden">{status ? `#${status.position}` : "Waitlist"}</span>
       </button>
 
       {open && (

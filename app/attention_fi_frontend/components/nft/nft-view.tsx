@@ -9,6 +9,7 @@ import { WalletConnectModal } from "@/components/wallet/wallet-connect-modal";
 import { TxStatus, type TxState } from "@/components/wallet/tx-status";
 import { Footer } from "@/components/feed/footer";
 import { getNftAuctions, getNftState } from "@/lib/mock-data";
+import { NftCard } from "@/components/nft/nft-card";
 
 function usd(n: number): string {
   if (n >= 1_000) return `$${(n / 1_000).toFixed(1)}K`;
@@ -86,8 +87,27 @@ export function NftView() {
           </div>
         )}
 
-        {/* role cards */}
-        <div className="mt-6 grid gap-3 md:grid-cols-2">
+        {/* your collection — the actually-issued NFTs */}
+        <div className="mt-6">
+          <h2 className="text-[14px] font-bold">Your collection</h2>
+          {verified || level > 0 || base.genesis.length > 0 ? (
+            <div className="mt-3 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+              {verified && <NftCard data={{ kind: "verification", handle: base.handle ?? "you" }} />}
+              {level > 0 && <NftCard data={{ kind: "perk", level, discountBps }} />}
+              {base.genesis.map((g) => (
+                <NftCard key={g.id} data={{ kind: "genesis", shareBps: g.shareBps, id: g.id }} />
+              ))}
+            </div>
+          ) : (
+            <p className="mt-2 text-[12px] text-[#6B6B6B]">
+              You don&apos;t hold any AttentionFi NFTs yet — mint one below and it&apos;ll appear here.
+            </p>
+          )}
+        </div>
+
+        {/* role cards — mint / upgrade / claim */}
+        <h2 className="mt-9 text-[14px] font-bold">Manage</h2>
+        <div className="mt-3 grid gap-3 md:grid-cols-2">
           {/* Verification (soulbound) */}
           <Card icon={<Lock className="h-4 w-4" />} title="Verification" tag="SOULBOUND">
             {verified ? (
