@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Reveal } from "@/components/brand/reveal";
 
 // Copy sourced from components/attentionfi-strategy.html (mechanism-design section).
 const LAUNCH_TYPES = [
@@ -25,18 +26,20 @@ const FEES = [
 export function Mechanism() {
   return (
     <section id="mechanism" className="mx-auto mt-24 max-w-5xl scroll-mt-16 px-5">
-      <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-signal">
-        Mechanism design
-      </div>
-      <h2 className="mt-3 max-w-2xl text-[clamp(26px,4vw,40px)] font-bold leading-[1.1] tracking-[-0.02em]">
-        The right curve for the right asset
-      </h2>
-      <p className="mt-4 max-w-xl text-[15px] leading-relaxed text-[#9aa4af]">
-        Pump uses one mechanism for everything. AttentionFi picks the mechanism to fit the
-        underlying social primitive — four launch types, chosen at creation.
-      </p>
+      <Reveal>
+        <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-signal">
+          Mechanism design
+        </div>
+        <h2 className="mt-3 max-w-2xl text-[clamp(26px,4vw,40px)] font-bold leading-[1.1] tracking-[-0.02em]">
+          The right curve for the right asset
+        </h2>
+        <p className="mt-4 max-w-xl text-[15px] leading-relaxed text-[#9aa4af]">
+          Pump uses one mechanism for everything. AttentionFi picks the mechanism to fit the
+          underlying social primitive — four launch types, chosen at creation.
+        </p>
+      </Reveal>
 
-      <div className="mt-8 grid gap-3 md:grid-cols-2">
+      <Reveal delay={100} className="mt-8 grid gap-3 md:grid-cols-2">
         {LAUNCH_TYPES.map((m) => (
           <div key={m.name} className="rounded-sm border border-white/[0.08] bg-[#0f1620] p-5">
             <div className="flex items-center gap-2">
@@ -51,10 +54,11 @@ export function Mechanism() {
             </div>
           </div>
         ))}
-      </div>
+      </Reveal>
 
-      {/* Mindshare seed tiers */}
-      <h3 className="mt-10 text-[15px] font-bold">How mindshare seeds the price</h3>
+      <Reveal>
+        {/* Mindshare seed tiers */}
+        <h3 className="mt-10 text-[15px] font-bold">How mindshare seeds the price</h3>
       <p className="mt-2 max-w-xl text-[13px] leading-relaxed text-[#9aa4af]">
         The curve doesn&apos;t start at zero. It starts at a price proportional to the
         subject&apos;s existing mindshare rank — so a top-100 KOL token doesn&apos;t launch flat.
@@ -72,10 +76,12 @@ export function Mechanism() {
             <span className="text-right font-mono text-signal">{seed}</span>
           </div>
         ))}
-      </div>
+        </div>
+      </Reveal>
 
-      {/* Graduation fees */}
-      <h3 className="mt-10 text-[15px] font-bold">The graduation path</h3>
+      <Reveal>
+        {/* Graduation fees */}
+        <h3 className="mt-10 text-[15px] font-bold">The graduation path</h3>
       <p className="mt-2 max-w-xl text-[13px] leading-relaxed text-[#9aa4af]">
         At $69K a token graduates to a native AMM — and unlocks what Pump doesn&apos;t: the
         subject themselves earns from it.
@@ -95,7 +101,8 @@ export function Mechanism() {
         className="mt-8 inline-flex rounded-sm bg-signal px-5 py-3 font-mono text-[12px] font-bold text-[#0A0A0A]"
       >
         Launch a token →
-      </Link>
+        </Link>
+      </Reveal>
     </section>
   );
 }
