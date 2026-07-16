@@ -82,11 +82,21 @@ export function NftView() {
       <TopBar shortAddress={shortAddress} onDisconnect={disconnect} />
 
       <div className="mx-auto w-full max-w-4xl flex-1 px-5 py-7">
-        <h1 className="text-[18px] font-bold">NFTs</h1>
-        <p className="mt-1 max-w-lg text-[12px] leading-relaxed text-[#6B6B6B]">
-          Four on-chain roles: a soulbound verification credential, upgradeable trading perks,
-          fee-share genesis NFTs, and 1-of-1 asset auctions.
-        </p>
+        <div className="flex items-start gap-4">
+          <div>
+            <h1 className="text-[18px] font-bold">NFTs</h1>
+            <p className="mt-1 max-w-lg text-[12px] leading-relaxed text-[#6B6B6B]">
+              Four on-chain roles: a soulbound verification credential, upgradeable trading perks,
+              fee-share genesis NFTs, and 1-of-1 asset auctions.
+            </p>
+          </div>
+          <Link
+            href="/nft/create"
+            className="ml-auto shrink-0 whitespace-nowrap rounded-sm bg-signal px-4 py-2 font-mono text-[11px] font-bold text-[#0A0A0A]"
+          >
+            + Create
+          </Link>
+        </div>
 
         {tx && (
           <div className="mt-4">

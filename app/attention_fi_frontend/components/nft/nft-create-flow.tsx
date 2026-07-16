@@ -1,0 +1,382 @@
+"use client";
+
+import { useMemo, useState } from "react";
+import Link from "next/link";
+import { ArrowLeft, Check, Gift, Gavel } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { useWallet } from "@/components/wallet/wallet-provider";
+import { WalletConnectModal } from "@/components/wallet/wallet-connect-modal";
+import { TxStatus, type TxState } from "@/components/wallet/tx-status";
+import { PageBackground } from "@/components/reactbits/page-background";
+import { getNftState, getPortfolio } from "@/lib/mock-data";
+
+type Kind = "genesis" | "auction";
+
+const KINDS: { id: Kind; name: string; tag: string; desc: string; icon: React.ReactNode }[] = [
+  {
+    id: "genesis",
+    name: "Genesis (fee-share)",
+    tag: "TRANSFERABLE",
+    desc: "Issue NFTs that earn a pro-rata cut of your token's fee stream, forever. Holders claim as fees accrue.",
+    icon: <Gift className="h-4 w-4" />,
+  },
+  {
+    id: "auction",
+    name: "1-of-1 auction",
+    tag: "DUTCH",
+    desc: "List a rare asset you own via descending Dutch auction — the price falls until someone buys. No front-running.",
+    icon: <Gavel className="h-4 w-4" />,
+  },
+];
+
+const STEPS = ["Type", "Configure", "Review", "Confirm"];
+const DURATIONS = ["6h", "12h", "24h", "48h"];
+
+export function NftCreateFlow() {
+  const { connected, address, shortAddress } = useWallet();
+  const [walletOpen, setWalletOpen] = useState(false);
+  const [step, setStep] = useState(0);
+  const [kind, setKind] = useState<Kind>("genesis");
+  const [tx, setTx] = useState<TxState | null>(null);
+
+  // genesis config
+  const [tokenHandle, setTokenHandle] = useState("");
+  const [sharePct, setSharePct] = useState("1.0");
+  const [supply, setSupply] = useState("100");
+  // auction config
+  const [assetId, setAssetId] = useState("");
+  const [startUsd, setStartUsd] = useState("10000");
+  const [floorUsd, setFloorUsd] = useState("2500");
+  const [duration, setDuration] = useState("24h");
+
+  const portfolio = useMemo(() => (address ? getPortfolio(address) : null), [address]);
+  const nft = useMemo(() => (address ? getNftState(address) : null), [address]);
+  const created = portfolio?.created ?? [];
+  const ownedAssets = useMemo(() => {
+    const out: { id: string; label: string }[] = [];
+    if (nft?.perk) out.push({ id: `PERK-${nft.perk.level}`, label: `Perk NFT · Lvl ${nft.perk.level}` });
+    for (const g of nft?.genesis ?? []) out.push({ id: g.id, label: `Genesis ${g.id} · ${(g.shareBps / 100).toFixed(1)}%` });
+    return out;
+  }, [nft]);
+
+  const kindMeta = KINDS.find((k) => k.id === kind)!;
+  const validGenesis = tokenHandle !== "" && +sharePct > 0 && +supply > 0;
+  const validAuction = assetId !== "" && +startUsd > +floorUsd && +floorUsd > 0;
+  const canContinue = step !== 1 || (kind === "genesis" ? validGenesis : validAuction);
+
+  function mint() {
+    setTx("pending");
+    setTimeout(() => setTx("confirmed"), 1700);
+  }
+
+  if (!connected) {
+    return (
+      <Shell>
+        <div className="rounded-sm border border-white/[0.08] bg-[#0f1620] p-8 text-center">
+          <div className="text-[15px] font-bold">Connect a wallet to create</div>
+          <p className="mx-auto mt-2 max-w-xs text-[12px] leading-relaxed text-[#6B6B6B]">
+            Issuing genesis NFTs or listing a 1-of-1 requires the wallet that owns the asset.
+          </p>
+          <button
+            onClick={() => setWalletOpen(true)}
+            className="mt-5 rounded-sm bg-signal px-6 py-2.5 font-mono text-[12px] font-bold text-[#0A0A0A]"
+          >
+            Connect Wallet
+          </button>
+        </div>
+        <WalletConnectModal open={walletOpen} onClose={() => setWalletOpen(false)} />
+      </Shell>
+    );
+  }
+
+  return (
+    <Shell shortAddress={shortAddress}>
+      {/* progress */}
+      <div className="flex gap-1">
+        {STEPS.map((_, i) => (
+          <div key={i} className={cn("h-[3px] flex-1 rounded-full", i <= step ? "bg-signal" : "bg-white/10")} />
+        ))}
+      </div>
+      <div className="mt-4 font-mono text-[9px] uppercase tracking-[0.1em] text-[#6B6B6B]">
+        Step {step + 1} · {STEPS[step]}
+      </div>
+
+      <div className="mt-4">
+        {/* 1 — type */}
+        {step === 0 && (
+          <div className="flex flex-col gap-2.5">
+            {KINDS.map((k) => (
+              <button
+                key={k.id}
+                onClick={() => setKind(k.id)}
+                className={cn(
+                  "rounded-sm border p-4 text-left transition-colors",
+                  kind === k.id ? "border-signal bg-signal/[0.06]" : "border-white/[0.08] hover:border-white/20",
+                )}
+              >
+                <div className="flex items-center gap-2">
+                  <span className="text-signal">{k.icon}</span>
+                  <span className="text-[13px] font-bold">{k.name}</span>
+                  <span className="ml-auto rounded-full border border-white/15 px-2 py-0.5 font-mono text-[8px] text-[#6B6B6B]">
+                    {k.tag}
+                  </span>
+                </div>
+                <p className="mt-2 text-[11px] leading-relaxed text-[#9aa4af]">{k.desc}</p>
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* 2 — configure */}
+        {step === 1 && kind === "genesis" && (
+          <div className="rounded-sm border border-white/[0.08] bg-[#0f1620] p-5">
+            <div className="text-[13px] font-bold">Configure genesis</div>
+            <p className="mt-1 text-[11px] text-[#6B6B6B]">
+              Each NFT earns its share of every fee your token collects, split pro-rata.
+            </p>
+            <Field label="Token you created">
+              {created.length ? (
+                <select
+                  value={tokenHandle}
+                  onChange={(e) => setTokenHandle(e.target.value)}
+                  className="w-full rounded-sm border border-white/10 bg-[#12181f] px-3 py-2.5 text-[13px] outline-none"
+                >
+                  <option value="">Select a token…</option>
+                  {created.map((c) => (
+                    <option key={c.handle} value={c.handle}>
+                      @{c.handle} (${c.symbol})
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <p className="text-[11px] text-noise">You haven&apos;t launched a token yet.</p>
+              )}
+            </Field>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Share per NFT (%)">
+                <input
+                  value={sharePct}
+                  onChange={(e) => setSharePct(e.target.value.replace(/[^0-9.]/g, ""))}
+                  inputMode="decimal"
+                  className="w-full rounded-sm border border-white/10 bg-[#12181f] px-3 py-2.5 font-mono text-[13px] outline-none"
+                />
+              </Field>
+              <Field label="Supply">
+                <input
+                  value={supply}
+                  onChange={(e) => setSupply(e.target.value.replace(/[^0-9]/g, ""))}
+                  inputMode="numeric"
+                  className="w-full rounded-sm border border-white/10 bg-[#12181f] px-3 py-2.5 font-mono text-[13px] outline-none"
+                />
+              </Field>
+            </div>
+            <div className="mt-1 font-mono text-[10px] text-[#6B6B6B]">
+              Total allocated: {(+sharePct * +supply || 0).toFixed(1)}% of the fee stream
+              {+sharePct * +supply > 100 && <span className="text-noise"> · exceeds 100%</span>}
+            </div>
+          </div>
+        )}
+
+        {step === 1 && kind === "auction" && (
+          <div className="rounded-sm border border-white/[0.08] bg-[#0f1620] p-5">
+            <div className="text-[13px] font-bold">Configure auction</div>
+            <p className="mt-1 text-[11px] text-[#6B6B6B]">
+              The price descends from start to floor over the duration. First buyer wins.
+            </p>
+            <Field label="Asset to list">
+              {ownedAssets.length ? (
+                <select
+                  value={assetId}
+                  onChange={(e) => setAssetId(e.target.value)}
+                  className="w-full rounded-sm border border-white/10 bg-[#12181f] px-3 py-2.5 text-[13px] outline-none"
+                >
+                  <option value="">Select an asset…</option>
+                  {ownedAssets.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.label}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <p className="text-[11px] text-noise">You don&apos;t own any listable NFTs yet.</p>
+              )}
+            </Field>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Start price ($)">
+                <input
+                  value={startUsd}
+                  onChange={(e) => setStartUsd(e.target.value.replace(/[^0-9]/g, ""))}
+                  inputMode="numeric"
+                  className="w-full rounded-sm border border-white/10 bg-[#12181f] px-3 py-2.5 font-mono text-[13px] outline-none"
+                />
+              </Field>
+              <Field label="Floor price ($)">
+                <input
+                  value={floorUsd}
+                  onChange={(e) => setFloorUsd(e.target.value.replace(/[^0-9]/g, ""))}
+                  inputMode="numeric"
+                  className="w-full rounded-sm border border-white/10 bg-[#12181f] px-3 py-2.5 font-mono text-[13px] outline-none"
+                />
+              </Field>
+            </div>
+            {+floorUsd >= +startUsd && (
+              <div className="mt-1 font-mono text-[10px] text-noise">Floor must be below the start price.</div>
+            )}
+            <Field label="Duration">
+              <div className="flex gap-1.5">
+                {DURATIONS.map((d) => (
+                  <button
+                    key={d}
+                    onClick={() => setDuration(d)}
+                    className={cn(
+                      "rounded-sm border px-3 py-1.5 font-mono text-[11px]",
+                      duration === d ? "border-signal text-signal" : "border-white/10 text-[#9aa4af]",
+                    )}
+                  >
+                    {d}
+                  </button>
+                ))}
+              </div>
+            </Field>
+          </div>
+        )}
+
+        {/* 3 — review */}
+        {step === 2 && (
+          <div className="rounded-sm border border-white/[0.08] bg-[#0f1620] p-5">
+            <div className="text-[13px] font-bold">Review</div>
+            <dl className="mt-4 flex flex-col gap-2.5 font-mono text-[12px]">
+              {(kind === "genesis"
+                ? [
+                    ["Type", kindMeta.name],
+                    ["Token", `@${tokenHandle}`],
+                    ["Share per NFT", `${sharePct}%`],
+                    ["Supply", supply],
+                    ["Total allocated", `${(+sharePct * +supply || 0).toFixed(1)}%`],
+                    ["Standard", "Metaplex Core"],
+                  ]
+                : [
+                    ["Type", kindMeta.name],
+                    ["Asset", assetId],
+                    ["Start price", `$${(+startUsd).toLocaleString()}`],
+                    ["Floor price", `$${(+floorUsd).toLocaleString()}`],
+                    ["Duration", duration],
+                    ["Standard", "Metaplex Core"],
+                  ]
+              ).map(([k, v]) => (
+                <div key={k} className="flex justify-between border-b border-white/[0.06] pb-2 last:border-0">
+                  <span className="text-[#6B6B6B]">{k}</span>
+                  <span>{v}</span>
+                </div>
+              ))}
+            </dl>
+          </div>
+        )}
+
+        {/* 4 — confirm */}
+        {step === 3 && (
+          <div className="rounded-sm border border-white/[0.08] bg-[#0f1620] p-5">
+            <div className="text-[13px] font-bold">Confirm</div>
+            <p className="mt-1 text-[11px] text-[#6B6B6B]">
+              {kind === "genesis"
+                ? `Minting ${supply} genesis NFTs at ${sharePct}% each for @${tokenHandle}.`
+                : `Listing ${assetId} from $${(+startUsd).toLocaleString()} down to $${(+floorUsd).toLocaleString()} over ${duration}.`}
+            </p>
+            {tx ? (
+              <div className="mt-4">
+                <TxStatus
+                  state={tx}
+                  title={
+                    tx === "pending"
+                      ? kind === "genesis"
+                        ? "Minting genesis…"
+                        : "Listing asset…"
+                      : kind === "genesis"
+                        ? "Genesis minted"
+                        : "Auction live"
+                  }
+                  detail={kind === "genesis" ? `@${tokenHandle} · ${supply} NFTs` : `${assetId} · ${duration}`}
+                  signature="8xРq…4kL7"
+                  explorerUrl="#"
+                />
+                {tx === "confirmed" && (
+                  <Link
+                    href="/nft"
+                    className="mt-3 flex items-center justify-center gap-1.5 rounded-sm border border-signal/40 py-2.5 font-mono text-[11px] font-bold text-signal"
+                  >
+                    <Check className="h-3.5 w-3.5" /> View in NFTs
+                  </Link>
+                )}
+              </div>
+            ) : (
+              <button
+                onClick={mint}
+                className="mt-4 w-full rounded-sm bg-signal py-3 font-mono text-[13px] font-bold text-[#0A0A0A]"
+              >
+                {kind === "genesis" ? "MINT GENESIS" : "START AUCTION"}
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* nav */}
+      {step < 3 && (
+        <div className="sticky bottom-0 mt-6 border-t border-white/[0.08] bg-[#0A0A0A]/70 py-4 backdrop-blur-md">
+          <div className="flex gap-2">
+            {step > 0 && (
+              <button
+                onClick={() => setStep((s) => s - 1)}
+                className="rounded-sm border border-white/15 px-4 py-3 font-mono text-[12px] font-bold text-[#F5F4F0]"
+              >
+                Back
+              </button>
+            )}
+            <button
+              onClick={() => setStep((s) => Math.min(3, s + 1))}
+              disabled={!canContinue}
+              className="flex-1 rounded-sm bg-signal py-3 font-mono text-[12px] font-bold text-[#0A0A0A] disabled:opacity-40"
+            >
+              CONTINUE
+            </button>
+          </div>
+        </div>
+      )}
+      <WalletConnectModal open={walletOpen} onClose={() => setWalletOpen(false)} />
+    </Shell>
+  );
+}
+
+function Shell({ children, shortAddress }: { children: React.ReactNode; shortAddress?: string | null }) {
+  return (
+    <>
+      <div className="pointer-events-none fixed inset-0 -z-10 opacity-80 [mask-image:radial-gradient(ellipse_at_center,#000_25%,transparent_85%)]">
+        <PageBackground />
+      </div>
+      <div className="relative mx-auto min-h-screen max-w-lg px-5 py-6">
+        <div className="mb-4 flex items-center gap-2">
+          <Link href="/nft" className="text-[#6B6B6B] hover:text-[#F5F4F0]">
+            <ArrowLeft className="h-4 w-4" />
+          </Link>
+          <span className="text-[15px] font-bold">Create an NFT</span>
+          {shortAddress && (
+            <span className="ml-auto inline-flex items-center gap-1.5 rounded-sm border border-signal/40 bg-signal/[0.06] px-2.5 py-1 font-mono text-[10px] font-bold text-signal">
+              <span className="af-pulse-dot h-1.5 w-1.5 rounded-full bg-signal" />
+              {shortAddress}
+            </span>
+          )}
+        </div>
+        {children}
+      </div>
+    </>
+  );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="mt-4">
+      <label className="font-mono text-[10px] uppercase tracking-[0.1em] text-[#6B6B6B]">{label}</label>
+      <div className="mt-1.5">{children}</div>
+    </div>
+  );
+}
