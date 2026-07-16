@@ -8,7 +8,8 @@ import { useWallet } from "@/components/wallet/wallet-provider";
 import { WalletConnectModal } from "@/components/wallet/wallet-connect-modal";
 import { TxStatus, type TxState } from "@/components/wallet/tx-status";
 import { Footer } from "@/components/feed/footer";
-import { NftCard } from "@/components/nft/nft-card";
+import { NftCard, type NftCardData } from "@/components/nft/nft-card";
+import { NftLanyard } from "@/components/nft/nft-lanyard";
 import { getNftState, getPortfolio } from "@/lib/mock-data";
 
 function usd(n: number): string {
@@ -23,6 +24,7 @@ export function ProfileView() {
   const [claimTx, setClaimTx] = useState<TxState | null>(null);
   const [copied, setCopied] = useState(false);
   const [pfp, setPfp] = useState<string | null>(null);
+  const [selectedNft, setSelectedNft] = useState<NftCardData | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const portfolio = useMemo(() => (address ? getPortfolio(address) : null), [address]);
@@ -79,6 +81,11 @@ export function ProfileView() {
       </div>
     );
   }
+
+  const nftCollection: NftCardData[] = [];
+  if (nft.verified) nftCollection.push({ kind: "verification", handle: nft.handle ?? "you" });
+  if (nft.perk) nftCollection.push({ kind: "perk", level: nft.perk.level, discountBps: nft.perk.discountBps });
+  for (const g of nft.genesis) nftCollection.push({ kind: "genesis", shareBps: g.shareBps, id: g.id });
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -216,12 +223,10 @@ export function ProfileView() {
 
         {/* NFTs — the actual issued assets */}
         <Section title="Your NFTs">
-          {nft.verified || nft.perk || nft.genesis.length > 0 ? (
+          {nftCollection.length > 0 ? (
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-              {nft.verified && <NftCard data={{ kind: "verification", handle: nft.handle ?? "you" }} />}
-              {nft.perk && <NftCard data={{ kind: "perk", level: nft.perk.level, discountBps: nft.perk.discountBps }} />}
-              {nft.genesis.map((g) => (
-                <NftCard key={g.id} data={{ kind: "genesis", shareBps: g.shareBps, id: g.id }} />
+              {nftCollection.map((d, i) => (
+                <NftCard key={i} data={d} onClick={() => setSelectedNft(d)} />
               ))}
             </div>
           ) : (
@@ -240,6 +245,7 @@ export function ProfileView() {
 
       <Footer />
       <WalletConnectModal open={walletOpen} onClose={() => setWalletOpen(false)} />
+      <NftLanyard data={selectedNft} onClose={() => setSelectedNft(null)} />
     </div>
   );
 }

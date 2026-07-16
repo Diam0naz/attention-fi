@@ -15,7 +15,7 @@ const PERK_TIERS = [
   { name: "Apex", grad: "linear-gradient(150deg,#4a3a0b,#1a1404)", accent: "#f5b300" },
 ];
 
-interface Visual {
+export interface NftVisual {
   label: string;
   tag: string;
   grad: string;
@@ -25,9 +25,10 @@ interface Visual {
   statLabel: string;
   icon: React.ReactNode;
   id: string;
+  blurb: string;
 }
 
-function resolve(data: NftCardData): Visual {
+export function getNftVisual(data: NftCardData): NftVisual {
   if (data.kind === "verification") {
     return {
       label: "Verification",
@@ -39,6 +40,7 @@ function resolve(data: NftCardData): Visual {
       statLabel: "BOUND HANDLE",
       icon: <BadgeCheck className="h-6 w-6" />,
       id: data.id ?? "SBT-0001",
+      blurb: "A non-transferable SAS credential binding your X handle to this wallet. Gates creator-fee claims; can never be sold or moved.",
     };
   }
   if (data.kind === "perk") {
@@ -53,6 +55,7 @@ function resolve(data: NftCardData): Visual {
       statLabel: "FEE DISCOUNT",
       icon: <TrendingUp className="h-6 w-6" />,
       id: data.id ?? `PERK-${String(data.level).padStart(4, "0")}`,
+      blurb: "An upgradeable trading perk. Each level rewrites its on-chain Attributes for +1% fee discount, capped at 5%.",
     };
   }
   return {
@@ -65,58 +68,61 @@ function resolve(data: NftCardData): Visual {
     statLabel: "REVENUE SHARE",
     icon: <Gift className="h-6 w-6" />,
     id: data.id,
+    blurb: "A transferable fee-share NFT earning a pro-rata cut of the subject's fee stream, forever. Trade it or hold to accrue.",
   };
 }
 
-export function NftCard({ data }: { data: NftCardData }) {
-  const v = resolve(data);
+/** The card visual only (no tilt) — reused by the tilt card and the lanyard. */
+export function NftCardFace({ data }: { data: NftCardData }) {
+  const v = getNftVisual(data);
+  return (
+    <div
+      className="relative aspect-[3/4] w-full overflow-hidden rounded-xl border p-4 shadow-xl"
+      style={{ background: v.grad, borderColor: `${v.accent}55` }}
+    >
+      <div
+        className="pointer-events-none absolute inset-0 opacity-[0.14]"
+        style={{
+          backgroundImage:
+            "linear-gradient(rgba(255,255,255,0.4) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,0.4) 1px,transparent 1px)",
+          backgroundSize: "22px 22px",
+        }}
+      />
+      <div className="relative flex items-center justify-between">
+        <span className="inline-flex items-center gap-1.5 font-mono text-[10px] font-bold uppercase tracking-wide" style={{ color: v.accent }}>
+          {v.icon}
+          {v.label}
+        </span>
+        <span className="rounded-full border px-2 py-0.5 font-mono text-[7px] tracking-[0.1em]" style={{ borderColor: `${v.accent}55`, color: v.accent }}>
+          {v.tag}
+        </span>
+      </div>
+      <div className="relative mt-7 flex flex-col items-center" style={{ transform: "translateZ(40px)" }}>
+        <div
+          className="flex h-16 w-16 items-center justify-center rounded-full border-2"
+          style={{ borderColor: v.accent, color: v.accent, boxShadow: `0 0 24px ${v.accent}44` }}
+        >
+          {v.icon}
+        </div>
+        <div className="mt-3 text-center text-[16px] font-bold text-[#F5F4F0]">{v.tier}</div>
+      </div>
+      <div className="absolute inset-x-4 bottom-4">
+        <div className="font-mono text-[8px] uppercase tracking-[0.1em] text-white/45">{v.statLabel}</div>
+        <div className="truncate font-mono text-[15px] font-bold" style={{ color: v.accent }}>
+          {v.stat}
+        </div>
+        <div className="mt-1 font-mono text-[8px] text-white/30">{v.id} · AttentionFi</div>
+      </div>
+    </div>
+  );
+}
+
+export function NftCard({ data, onClick }: { data: NftCardData; onClick?: () => void }) {
   return (
     <TiltCard>
-      <div
-        className="relative aspect-[3/4] w-full overflow-hidden rounded-xl border p-4 shadow-xl"
-        style={{ background: v.grad, borderColor: `${v.accent}55` }}
-      >
-        {/* subtle grid texture */}
-        <div
-          className="pointer-events-none absolute inset-0 opacity-[0.14]"
-          style={{
-            backgroundImage:
-              "linear-gradient(rgba(255,255,255,0.4) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,0.4) 1px,transparent 1px)",
-            backgroundSize: "22px 22px",
-          }}
-        />
-
-        <div className="relative flex items-center justify-between">
-          <span className="inline-flex items-center gap-1.5 font-mono text-[10px] font-bold uppercase tracking-wide" style={{ color: v.accent }}>
-            {v.icon}
-            {v.label}
-          </span>
-          <span
-            className="rounded-full border px-2 py-0.5 font-mono text-[7px] tracking-[0.1em]"
-            style={{ borderColor: `${v.accent}55`, color: v.accent }}
-          >
-            {v.tag}
-          </span>
-        </div>
-
-        <div className="relative mt-7 flex flex-col items-center" style={{ transform: "translateZ(40px)" }}>
-          <div
-            className="flex h-16 w-16 items-center justify-center rounded-full border-2"
-            style={{ borderColor: v.accent, color: v.accent, boxShadow: `0 0 24px ${v.accent}44` }}
-          >
-            {v.icon}
-          </div>
-          <div className="mt-3 text-center text-[16px] font-bold text-[#F5F4F0]">{v.tier}</div>
-        </div>
-
-        <div className="absolute inset-x-4 bottom-4">
-          <div className="font-mono text-[8px] uppercase tracking-[0.1em] text-white/45">{v.statLabel}</div>
-          <div className="truncate font-mono text-[15px] font-bold" style={{ color: v.accent }}>
-            {v.stat}
-          </div>
-          <div className="mt-1 font-mono text-[8px] text-white/30">{v.id} · AttentionFi</div>
-        </div>
-      </div>
+      <button type="button" onClick={onClick} className="block w-full cursor-pointer text-left">
+        <NftCardFace data={data} />
+      </button>
     </TiltCard>
   );
 }

@@ -186,6 +186,20 @@
   .af-logo-core { animation: none; opacity: 1; }
 }
 
+/* NFT lanyard — a card that gently sways from its strap. */
+@keyframes af-sway {
+  0%, 100% { transform: rotate(-2.4deg); }
+  50%      { transform: rotate(2.4deg); }
+}
+.af-sway { animation: af-sway 4.5s ease-in-out infinite; transform-origin: top center; }
+@keyframes af-slide-in {
+  0%   { transform: translateX(24px); opacity: 0; }
+  100% { transform: translateX(0); opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .af-sway { animation: none; }
+}
+
 /* react-bits-style effects */
 @keyframes af-gradient {
   0%, 100% { background-position: 0% 50%; }

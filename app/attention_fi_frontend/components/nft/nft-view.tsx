@@ -9,7 +9,8 @@ import { WalletConnectModal } from "@/components/wallet/wallet-connect-modal";
 import { TxStatus, type TxState } from "@/components/wallet/tx-status";
 import { Footer } from "@/components/feed/footer";
 import { getNftAuctions, getNftState } from "@/lib/mock-data";
-import { NftCard } from "@/components/nft/nft-card";
+import { NftCard, type NftCardData } from "@/components/nft/nft-card";
+import { NftLanyard } from "@/components/nft/nft-lanyard";
 
 function usd(n: number): string {
   if (n >= 1_000) return `$${(n / 1_000).toFixed(1)}K`;
@@ -22,6 +23,7 @@ export function NftView() {
   const { connected, address, shortAddress, disconnect } = useWallet();
   const [walletOpen, setWalletOpen] = useState(false);
   const [tx, setTx] = useState<{ state: TxState; title: string; detail: string } | null>(null);
+  const [selected, setSelected] = useState<NftCardData | null>(null);
 
   const base = useMemo(() => (address ? getNftState(address) : null), [address]);
   const auctions = useMemo(() => getNftAuctions(), []);
@@ -70,6 +72,11 @@ export function NftView() {
 
   const discountBps = Math.min(500, level * 100);
 
+  const collection: NftCardData[] = [];
+  if (verified) collection.push({ kind: "verification", handle: base.handle ?? "you" });
+  if (level > 0) collection.push({ kind: "perk", level, discountBps });
+  for (const g of base.genesis) collection.push({ kind: "genesis", shareBps: g.shareBps, id: g.id });
+
   return (
     <div className="flex min-h-screen flex-col">
       <TopBar shortAddress={shortAddress} onDisconnect={disconnect} />
@@ -90,12 +97,10 @@ export function NftView() {
         {/* your collection — the actually-issued NFTs */}
         <div className="mt-6">
           <h2 className="text-[14px] font-bold">Your collection</h2>
-          {verified || level > 0 || base.genesis.length > 0 ? (
+          {collection.length > 0 ? (
             <div className="mt-3 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-              {verified && <NftCard data={{ kind: "verification", handle: base.handle ?? "you" }} />}
-              {level > 0 && <NftCard data={{ kind: "perk", level, discountBps }} />}
-              {base.genesis.map((g) => (
-                <NftCard key={g.id} data={{ kind: "genesis", shareBps: g.shareBps, id: g.id }} />
+              {collection.map((d, i) => (
+                <NftCard key={i} data={d} onClick={() => setSelected(d)} />
               ))}
             </div>
           ) : (
@@ -257,6 +262,7 @@ export function NftView() {
 
       <Footer />
       <WalletConnectModal open={walletOpen} onClose={() => setWalletOpen(false)} />
+      <NftLanyard data={selected} onClose={() => setSelected(null)} />
     </div>
   );
 }
