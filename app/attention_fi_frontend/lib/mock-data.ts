@@ -210,6 +210,25 @@ export function getTrades(handle: string): Trade[] {
   });
 }
 
+/** Social-proof mentions that "feed" the mindshare score (design 1b). */
+export interface Mention { text: string; ago: string; impressions: number }
+
+export function getMentions(handle: string): Mention[] {
+  const rand = mulberry32(hashStr(handle) ^ 0x0feed1);
+  const quoted = 2 + Math.floor(rand() * 4);
+  const templates = [
+    `“the work @${handle} is shipping is genuinely the most underrated thing in the space right now”`,
+    `quoted by ${quoted} top-100 crypto-twitter accounts this week`,
+    `thread referencing @${handle}'s benchmark is compounding across the timeline`,
+  ];
+  const agos = ["2h ago", "6h ago", "1d ago"];
+  return templates.map((text, i) => ({
+    text,
+    ago: agos[i] ?? "1d ago",
+    impressions: Math.round(400 + rand() * 4200),
+  }));
+}
+
 export interface Holder { rank: number; wallet: string; pct: number; tag?: "curve" | "creator" | "others" }
 
 export function getHolders(handle: string): Holder[] {

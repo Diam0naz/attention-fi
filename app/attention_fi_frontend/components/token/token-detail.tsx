@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { getHolders, getTrades, type TokenDetail } from "@/lib/mock-data";
 import { X_URL } from "@/lib/config";
 import { PriceChart } from "@/components/token/price-chart";
+import { MindshareView } from "@/components/token/mindshare-view";
 import { Footer } from "@/components/feed/footer";
 import { WalletConnectModal } from "@/components/wallet/wallet-connect-modal";
 import { useWallet } from "@/components/wallet/wallet-provider";
@@ -28,6 +29,8 @@ export function TokenDetailTerminal({ token }: { token: TokenDetail }) {
   const [walletOpen, setWalletOpen] = useState(false);
   const [tx, setTx] = useState<TxState | null>(null);
   const [tab, setTab] = useState<Tab>("chart");
+  // 1a "Trading Terminal" (data-dense) vs 1b "Mindshare-First" (social proof).
+  const [view, setView] = useState<"terminal" | "mindshare">("terminal");
 
   const trades = useMemo(() => getTrades(token.handle), [token.handle]);
   const holders = useMemo(() => getHolders(token.handle), [token.handle]);
@@ -128,6 +131,30 @@ export function TokenDetailTerminal({ token }: { token: TokenDetail }) {
             <span className="text-[11px] text-[#6B6B6B]">market cap</span>
           </div>
 
+          {/* view toggle — 1a data-dense terminal vs 1b mindshare-first */}
+          <div className="mt-4 inline-flex rounded-sm border border-white/10 p-0.5">
+            {(["terminal", "mindshare"] as const).map((v) => (
+              <button
+                key={v}
+                onClick={() => setView(v)}
+                className={cn(
+                  "rounded-sm px-3 py-1.5 font-mono text-[10px] font-bold uppercase tracking-[0.08em] transition-colors",
+                  view === v ? "bg-signal text-[#0A0A0A]" : "text-[#6B6B6B] hover:text-[#F5F4F0]",
+                )}
+              >
+                {v}
+              </button>
+            ))}
+          </div>
+
+          {view === "mindshare" && (
+            <div className="mt-4">
+              <MindshareView token={token} />
+            </div>
+          )}
+
+          {view === "terminal" && (
+            <>
           {/* tabs */}
           <div className="mt-4 flex gap-5 border-b border-white/[0.08] pb-2.5 font-mono text-[11px]">
             {TABS.map((t) => (
@@ -241,6 +268,8 @@ export function TokenDetailTerminal({ token }: { token: TokenDetail }) {
               </div>
             )}
           </div>
+            </>
+          )}
         </div>
 
         {/* right: order panel */}
