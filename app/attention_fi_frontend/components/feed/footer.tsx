@@ -1,0 +1,54 @@
+import { X_HANDLE, X_URL } from "@/lib/config";
+
+const PRODUCT = ["Feed", "Thesis", "Mechanism", "Verticals"];
+
+export function Footer() {
+  return (
+    <footer className="mt-16 border-t border-white/[0.08]">
+      <div className="mx-auto max-w-5xl px-5 py-10">
+        <div className="flex flex-col gap-8 sm:flex-row sm:items-start sm:justify-between">
+          <div className="max-w-xs">
+            <div className="font-mono text-[13px] font-bold tracking-[0.14em] text-signal">
+              ATTENTIONFI
+            </div>
+            <p className="mt-2 text-[12px] leading-relaxed text-[#6B6B6B]">
+              Pump.fun for X — mindshare is the asset. Trade the attention of the X
+              social graph on bonding curves seeded by real data.
+            </p>
+            <a
+              href={X_URL}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-3 inline-flex font-mono text-[11px] text-[#9aa4af] transition-colors hover:text-signal"
+            >
+              Follow @{X_HANDLE} on X →
+            </a>
+          </div>
+
+          <div className="flex gap-12 font-mono text-[11px]">
+            <div className="flex flex-col gap-2 text-[#6B6B6B]">
+              <span className="text-[9px] uppercase tracking-[0.1em] text-[#4b5563]">Product</span>
+              {PRODUCT.map((l) => (
+                <span key={l} className="cursor-pointer transition-colors hover:text-[#F5F4F0]">
+                  {l}
+                </span>
+              ))}
+            </div>
+            <div className="flex flex-col gap-2 text-[#6B6B6B]">
+              <span className="text-[9px] uppercase tracking-[0.1em] text-[#4b5563]">Community</span>
+              <a href={X_URL} target="_blank" rel="noreferrer" className="transition-colors hover:text-[#F5F4F0]">
+                X / Twitter
+              </a>
+              <span className="cursor-pointer transition-colors hover:text-[#F5F4F0]">Waitlist</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-8 flex flex-col gap-2 border-t border-white/[0.06] pt-5 font-mono text-[10px] text-[#4b5563] sm:flex-row sm:items-center sm:justify-between">
+          <span>© 2026 AttentionFi · Phase 0 preview</span>
+          <span>Experimental software · not audited · not financial advice</span>
+        </div>
+      </div>
+    </footer>
+  );
+}
