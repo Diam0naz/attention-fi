@@ -47,7 +47,7 @@ export function SignalBoard() {
   );
 
   return (
-    <section className="mx-auto mt-10 w-full max-w-5xl px-5">
+    <section id="feed" className="mx-auto mt-10 w-full max-w-5xl scroll-mt-16 px-5">
       <div className="mb-3 flex flex-wrap gap-1.5">
         {VERTICALS.map((v) => (
           <button

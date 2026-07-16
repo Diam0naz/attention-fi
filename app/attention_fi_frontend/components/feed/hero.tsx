@@ -6,7 +6,12 @@ import { MagicCircle } from "@/components/reactbits/magic-circle";
 import { GradientText, ShinyText } from "@/components/reactbits/text";
 import { CountUp } from "@/components/reactbits/count-up";
 
-const NAV = ["Feed", "Thesis", "Mechanism", "Verticals"];
+const NAV = [
+  { label: "Feed", href: "#feed" },
+  { label: "Thesis", href: "#thesis" },
+  { label: "Mechanism", href: "#mechanism" },
+  { label: "Verticals", href: "#verticals" },
+];
 
 const STATS = [
   { value: 138, prefix: "$", suffix: "M", label: "Pump.fun peak / mo" },
@@ -28,8 +33,10 @@ export function Hero() {
           </span>
           <ul className="ml-2 hidden gap-5 text-[12px] text-[#6B6B6B] lg:flex">
             {NAV.map((l) => (
-              <li key={l} className="cursor-pointer transition-colors hover:text-[#F5F4F0]">
-                {l}
+              <li key={l.href}>
+                <a href={l.href} className="transition-colors hover:text-[#F5F4F0]">
+                  {l.label}
+                </a>
               </li>
             ))}
           </ul>

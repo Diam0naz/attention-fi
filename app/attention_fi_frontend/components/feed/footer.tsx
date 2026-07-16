@@ -1,6 +1,11 @@
 import { X_HANDLE, X_URL } from "@/lib/config";
 
-const PRODUCT = ["Feed", "Thesis", "Mechanism", "Verticals"];
+const PRODUCT = [
+  { label: "Feed", href: "/#feed" },
+  { label: "Thesis", href: "/#thesis" },
+  { label: "Mechanism", href: "/#mechanism" },
+  { label: "Verticals", href: "/#verticals" },
+];
 
 export function Footer() {
   return (
@@ -29,9 +34,9 @@ export function Footer() {
             <div className="flex flex-col gap-2 text-[#6B6B6B]">
               <span className="text-[9px] uppercase tracking-[0.1em] text-[#4b5563]">Product</span>
               {PRODUCT.map((l) => (
-                <span key={l} className="cursor-pointer transition-colors hover:text-[#F5F4F0]">
-                  {l}
-                </span>
+                <a key={l.href} href={l.href} className="transition-colors hover:text-[#F5F4F0]">
+                  {l.label}
+                </a>
               ))}
             </div>
             <div className="flex flex-col gap-2 text-[#6B6B6B]">
