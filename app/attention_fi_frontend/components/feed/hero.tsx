@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Search } from "lucide-react";
 import { Logo } from "@/components/brand/logo";
+import { WalletButton } from "@/components/wallet/wallet-button";
 import { WaitlistButton } from "@/components/waitlist/waitlist-button";
 import Strands from "@/components/reactbits/strands";
 import { MagicCircle } from "@/components/reactbits/magic-circle";
@@ -55,6 +56,7 @@ export function Hero() {
           >
             Launch →
           </Link>
+          <WalletButton />
           <WaitlistButton />
         </div>
       </nav>

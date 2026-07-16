@@ -233,6 +233,109 @@ export function getHolders(handle: string): Holder[] {
   return holders;
 }
 
+export interface Holding { handle: string; name: string; symbol: string; amount: number; valueUsd: number; delta24h: number }
+export interface CreatedToken { handle: string; name: string; symbol: string; marketCap: number; claimableUsd: number; verified: boolean }
+export interface Portfolio {
+  address: string;
+  verifiedHandle: string | null;
+  holdings: Holding[];
+  created: CreatedToken[];
+  totalValueUsd: number;
+  claimableUsd: number;
+}
+
+/** Deterministic mock portfolio for a connected wallet address. */
+export function getPortfolio(address: string): Portfolio {
+  const rand = mulberry32(hashStr(address));
+  const holdings: Holding[] = [];
+  for (const tk of MOCK_TOKENS.slice(0, 8)) {
+    if (rand() > 0.5) continue; // hold roughly half
+    const valueUsd = Math.round(50 + rand() * 1800);
+    holdings.push({
+      handle: tk.handle,
+      name: tk.name,
+      symbol: tk.handle.slice(0, 4).toUpperCase(),
+      amount: Math.round(valueUsd / (0.00002 + rand() * 0.00004)),
+      valueUsd,
+      delta24h: tk.delta24h,
+    });
+  }
+  if (holdings.length === 0) {
+    const tk = MOCK_TOKENS[0]!;
+    holdings.push({
+      handle: tk.handle,
+      name: tk.name,
+      symbol: tk.handle.slice(0, 4).toUpperCase(),
+      amount: 120_000,
+      valueUsd: 420,
+      delta24h: tk.delta24h,
+    });
+  }
+  const ct = MOCK_TOKENS[Math.floor(rand() * MOCK_TOKENS.length)] ?? MOCK_TOKENS[0]!;
+  const verified = rand() > 0.4;
+  const created: CreatedToken[] = [
+    {
+      handle: ct.handle,
+      name: ct.name,
+      symbol: ct.handle.slice(0, 4).toUpperCase(),
+      marketCap: ct.marketCap,
+      claimableUsd: Math.round(rand() * 260),
+      verified,
+    },
+  ];
+  return {
+    address,
+    verifiedHandle: verified ? ct.handle : null,
+    holdings,
+    created,
+    totalValueUsd: holdings.reduce((a, h) => a + h.valueUsd, 0),
+    claimableUsd: created.reduce((a, c) => a + c.claimableUsd, 0),
+  };
+}
+
+// --- NFT layer (mirrors the on-chain roles: verify / perk / genesis / auction) ---
+
+export interface PerkNft { level: number; discountBps: number }
+export interface GenesisNft { id: string; shareBps: number; claimableUsd: number }
+export interface NftState {
+  verified: boolean;
+  handle: string | null;
+  perk: PerkNft | null;
+  genesis: GenesisNft[];
+}
+
+export function getNftState(address: string): NftState {
+  const rand = mulberry32(hashStr(address) ^ 0x1c0ffee);
+  const verified = rand() > 0.4;
+  const hasPerk = rand() > 0.3;
+  const level = hasPerk ? 1 + Math.floor(rand() * 4) : 0; // 1..4 (cap 5%)
+  const perk = hasPerk ? { level, discountBps: Math.min(500, level * 100) } : null;
+  const genesis: GenesisNft[] = Array.from({ length: Math.floor(rand() * 3) }, () => ({
+    id: randWallet(rand),
+    shareBps: 50 + Math.floor(rand() * 150),
+    claimableUsd: Math.round(rand() * 90),
+  }));
+  return { verified, handle: verified ? (MOCK_TOKENS[0]?.handle ?? null) : null, perk, genesis };
+}
+
+export interface NftAuction {
+  id: string;
+  name: string;
+  handle: string;
+  startUsd: number;
+  currentUsd: number;
+  floorUsd: number;
+  endsIn: string;
+}
+
+export function getNftAuctions(): NftAuction[] {
+  return [
+    { id: "genesis-001", name: "Genesis #001", handle: "solana_kol", startUsd: 12_000, currentUsd: 7_400, floorUsd: 3_000, endsIn: "4h 12m" },
+    { id: "founder-007", name: "Founder Key #7", handle: "ai_narrative", startUsd: 8_000, currentUsd: 5_950, floorUsd: 2_500, endsIn: "1h 48m" },
+    { id: "og-verify-3", name: "OG Verify #3", handle: "zk_builder", startUsd: 5_000, currentUsd: 4_100, floorUsd: 1_800, endsIn: "9h 03m" },
+  ];
+}
+
 /** Small deterministic-ish nudge for the "live" feel (client-side only). */
 export function jitter(token: Token): Token {
   const drift = (Math.random() - 0.5) * 0.06;
