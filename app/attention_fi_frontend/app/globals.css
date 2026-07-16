@@ -139,6 +139,8 @@
   html {
     @apply font-sans;
     scroll-behavior: smooth;
+    /* no rubber-band / scroll-chaining past the page */
+    overscroll-behavior-y: none;
   }
 }
 

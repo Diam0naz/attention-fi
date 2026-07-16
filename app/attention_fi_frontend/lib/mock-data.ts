@@ -164,14 +164,21 @@ export interface Candle { time: number; open: number; high: number; low: number;
 export interface Volume { time: number; value: number; color: string }
 
 /** Hourly OHLC (of market cap, in USD) + volume, ending at the token's current cap. */
-export function getChartSeries(handle: string, marketCap: number): { candles: Candle[]; volumes: Volume[] } {
-  const rand = mulberry32(hashStr(handle) ^ 0x9e3779b9);
-  const n = 96;
+export function getChartSeries(
+  handle: string,
+  marketCap: number,
+  intervalSec = 3600,
+  n = 120,
+): { candles: Candle[]; volumes: Volume[] } {
+  const rand = mulberry32((hashStr(handle) ^ 0x9e3779b9 ^ intervalSec) >>> 0);
+  // Volatility scales with the square root of the interval (random-walk scaling),
+  // so 1m candles are tight and 1D candles swing — like a real market.
+  const vol = 0.05 * Math.sqrt(intervalSec / 3600);
   const start = Math.max(400, marketCap * 0.4);
   let p = start;
   const closesRaw: number[] = [];
   for (let i = 0; i < n; i++) {
-    p *= 1 + (rand() - 0.46) * 0.05;
+    p *= 1 + (rand() - 0.46) * vol;
     closesRaw.push(p);
   }
   const scale = marketCap / p; // p === last close
@@ -180,11 +187,13 @@ export function getChartSeries(handle: string, marketCap: number): { candles: Ca
   const volumes: Volume[] = [];
   let prevClose = start * scale * 0.99;
   for (let i = 0; i < n; i++) {
-    const time = now - (n - 1 - i) * 3600;
+    // align to the interval so candles sit on clean boundaries
+    const time = (Math.floor(now / intervalSec) - (n - 1 - i)) * intervalSec;
     const close = (closesRaw[i] ?? p) * scale;
     const open = prevClose;
-    const high = Math.max(open, close) * (1 + rand() * 0.018);
-    const low = Math.min(open, close) * (1 - rand() * 0.018);
+    const wick = 0.018 * Math.sqrt(intervalSec / 3600);
+    const high = Math.max(open, close) * (1 + rand() * wick);
+    const low = Math.min(open, close) * (1 - rand() * wick);
     candles.push({ time, open, high, low, close });
     volumes.push({
       time,
