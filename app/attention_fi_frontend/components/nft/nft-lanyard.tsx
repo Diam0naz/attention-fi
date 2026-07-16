@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { X, RotateCw } from "lucide-react";
 import { NftCardFace, getNftVisual, type NftCardData } from "@/components/nft/nft-card";
+import { useScrollLock } from "@/lib/use-scroll-lock";
 
 /**
  * A dangling, flippable NFT viewer shown in a side panel. Click the card to flip
@@ -10,6 +11,7 @@ import { NftCardFace, getNftVisual, type NftCardData } from "@/components/nft/nf
  */
 export function NftLanyard({ data, onClose }: { data: NftCardData | null; onClose: () => void }) {
   const [flipped, setFlipped] = useState(false);
+  useScrollLock(!!data);
 
   useEffect(() => {
     setFlipped(false); // reset when a new NFT opens

@@ -8,7 +8,7 @@ import { VerifyHandleFlow } from "@/components/onboarding/verify-handle-flow";
 import { WalletConnectModal } from "@/components/wallet/wallet-connect-modal";
 import { useWallet } from "@/components/wallet/wallet-provider";
 import { TxStatus, type TxState } from "@/components/wallet/tx-status";
-import { Threads } from "@/components/reactbits/threads";
+import { PageBackground } from "@/components/reactbits/page-background";
 
 type MechId = "bonding" | "dutch" | "conviction" | "revenue";
 
@@ -61,8 +61,8 @@ export function LaunchFlow() {
 
   return (
     <>
-      <div className="pointer-events-none fixed inset-0 -z-10 opacity-40 [mask-image:radial-gradient(ellipse_at_center,#000_20%,transparent_75%)]">
-        <Threads count={7} />
+      <div className="pointer-events-none fixed inset-0 -z-10 opacity-80 [mask-image:radial-gradient(ellipse_at_center,#000_25%,transparent_85%)]">
+        <PageBackground />
       </div>
       <div className="relative mx-auto min-h-screen max-w-lg px-5 py-6">
       {/* header + progress */}
@@ -257,7 +257,7 @@ export function LaunchFlow() {
 
       {/* nav — Back on any step past the first; CONTINUE except while awaiting the signature */}
       {step < 3 && (
-        <div className="sticky bottom-0 mt-6 border-t border-white/[0.08] bg-[#0A0A0A] py-4">
+        <div className="sticky bottom-0 mt-6 border-t border-white/[0.08] bg-[#0A0A0A]/70 py-4 backdrop-blur-md">
           <div className="flex gap-2">
             {step > 0 && (
               <button

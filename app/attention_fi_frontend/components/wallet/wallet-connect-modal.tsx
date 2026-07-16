@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { X } from "lucide-react";
 import { WALLETS, useWallet } from "@/components/wallet/wallet-provider";
+import { useScrollLock } from "@/lib/use-scroll-lock";
 
 export function WalletConnectModal({
   open,
@@ -13,6 +14,7 @@ export function WalletConnectModal({
 }) {
   const { detected, connect } = useWallet();
   const [busy, setBusy] = useState<string | null>(null);
+  useScrollLock(open);
 
   if (!open) return null;
 
