@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Check, Copy, Star } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { X_HANDLE, X_URL } from "@/lib/config";
 import {
   TASKS,
   type LeaderboardRow,
@@ -56,10 +57,10 @@ export function WaitlistPanel({
   function onTaskClick(task: TaskId) {
     if (status.tasks.includes(task)) return;
     if (task === "follow_x") {
-      window.open("https://x.com/", "_blank", "noopener");
+      window.open(X_URL, "_blank", "noopener");
       runTask(task);
     } else if (task === "share_x") {
-      const text = "I'm trading attention on @attentionfi — join the waitlist:";
+      const text = `I'm trading attention on @${X_HANDLE} — join the waitlist:`;
       window.open(
         `https://x.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(referralUrl)}`,
         "_blank",
