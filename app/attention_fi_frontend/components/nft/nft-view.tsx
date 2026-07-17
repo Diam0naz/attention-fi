@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, BadgeCheck, Lock, TrendingUp, Gift, Gavel } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -28,15 +28,16 @@ export function NftView() {
   const base = useMemo(() => (address ? getNftState(address) : null), [address]);
   const auctions = useMemo(() => getNftAuctions(), []);
 
-  // Local demo state so "mint"/"level up" feel live; synced from mock on connect.
+  // Local demo state so "mint"/"level up" feel live; synced from mock on connect
+  // via the adjust-state-on-prop-change pattern (no setState-in-effect).
   const [verified, setVerified] = useState(false);
   const [level, setLevel] = useState(0);
-  useEffect(() => {
-    if (base) {
-      setVerified(base.verified);
-      setLevel(base.perk?.level ?? 0);
-    }
-  }, [base]);
+  const [syncedFrom, setSyncedFrom] = useState<typeof base>(null);
+  if (base && base !== syncedFrom) {
+    setSyncedFrom(base);
+    setVerified(base.verified);
+    setLevel(base.perk?.level ?? 0);
+  }
 
   function run(title: string, detail: string, after?: () => void) {
     setTx({ state: "pending", title, detail });

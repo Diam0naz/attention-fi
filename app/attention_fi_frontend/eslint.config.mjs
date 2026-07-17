@@ -12,6 +12,9 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Design handoff reference material (HTML prototype + source TSX we copied
+    // from) — not app code, so it isn't held to the app's lint rules.
+    "components/Attention-fi Repository (1)/**",
   ]),
 ]);
 

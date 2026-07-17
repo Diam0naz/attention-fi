@@ -22,10 +22,9 @@ export function Reveal({
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      setVisible(true);
-      return;
-    }
+    // Reduced motion is handled purely in CSS below (motion-reduce:* forces the
+    // content visible), so we simply don't observe.
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     const io = new IntersectionObserver(
       ([entry]) => setVisible(entry.isIntersecting),
       { threshold: 0.15, rootMargin: "0px 0px -12% 0px" },

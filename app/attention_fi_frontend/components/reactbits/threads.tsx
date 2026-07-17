@@ -55,7 +55,8 @@ export function Threads({ className, count = 6, color = "0, 255, 133" }: Threads
             baseY +
             Math.sin(x * 0.006 + t * speed + p * 3) * amp +
             Math.sin(x * 0.013 - t * speed * 0.6) * (amp * 0.4);
-          x === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+          if (x === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
         }
         ctx.strokeStyle = `rgba(${color}, ${opacity})`;
         ctx.lineWidth = 1.2;

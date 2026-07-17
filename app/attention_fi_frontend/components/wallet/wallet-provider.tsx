@@ -79,11 +79,13 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   // Detect installed wallets on mount and when the tab regains focus (wallets
   // inject asynchronously, so re-check after a short delay too).
   useEffect(() => {
-    refreshDetected();
-    const t = setTimeout(refreshDetected, 800);
+    // Probe from timer callbacks rather than synchronously in the effect body.
+    const first = setTimeout(refreshDetected, 0);
+    const retry = setTimeout(refreshDetected, 800);
     window.addEventListener("focus", refreshDetected);
     return () => {
-      clearTimeout(t);
+      clearTimeout(first);
+      clearTimeout(retry);
       window.removeEventListener("focus", refreshDetected);
     };
   }, [refreshDetected]);

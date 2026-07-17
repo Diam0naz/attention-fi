@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { Check, Copy, Star } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { X_HANDLE, X_URL } from "@/lib/config";
@@ -28,17 +28,20 @@ export function WaitlistPanel({
       ? `${window.location.origin}/?ref=${status.referralCode}`
       : "";
 
-  const loadBoard = useCallback(async () => {
-    const res = await fetch("/api/waitlist");
-    if (res.ok) {
-      const data = (await res.json()) as { leaderboard?: LeaderboardRow[] };
-      setBoard(data.leaderboard ?? []);
-    }
-  }, []);
-
+  // Reload the leaderboard whenever the user's points change. Cancels in-flight
+  // work on unmount / re-run so a stale response can't clobber fresher state.
   useEffect(() => {
-    loadBoard();
-  }, [loadBoard, status.points]);
+    let cancelled = false;
+    (async () => {
+      const res = await fetch("/api/waitlist");
+      if (!res.ok || cancelled) return;
+      const data = (await res.json()) as { leaderboard?: LeaderboardRow[] };
+      if (!cancelled) setBoard(data.leaderboard ?? []);
+    })().catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [status.points]);
 
   async function runTask(task: TaskId, extra?: { rating?: number; wallet?: string }) {
     setBusy(task);

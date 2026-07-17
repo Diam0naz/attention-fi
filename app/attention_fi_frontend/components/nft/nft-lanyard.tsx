@@ -13,9 +13,12 @@ export function NftLanyard({ data, onClose }: { data: NftCardData | null; onClos
   const [flipped, setFlipped] = useState(false);
   useScrollLock(!!data);
 
-  useEffect(() => {
-    setFlipped(false); // reset when a new NFT opens
-  }, [data]);
+  // Reset the flip when a different NFT opens (adjust-state-on-prop-change).
+  const [lastData, setLastData] = useState(data);
+  if (data !== lastData) {
+    setLastData(data);
+    setFlipped(false);
+  }
 
   useEffect(() => {
     if (!data) return;

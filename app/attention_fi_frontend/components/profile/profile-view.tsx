@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, BadgeCheck, Camera, Check, Copy, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -30,10 +30,13 @@ export function ProfileView() {
   const portfolio = useMemo(() => (address ? getPortfolio(address) : null), [address]);
   const nft = useMemo(() => (address ? getNftState(address) : null), [address]);
 
-  // Opt-in profile picture, persisted per wallet address (client-only).
-  useEffect(() => {
+  // Opt-in profile picture, persisted per wallet address (client-only). Loaded on
+  // address change via adjust-state-on-prop-change (no setState-in-effect).
+  const [pfpFor, setPfpFor] = useState<string | null>(null);
+  if (address !== pfpFor) {
+    setPfpFor(address);
     setPfp(address ? window.localStorage.getItem(`af.pfp.${address}`) : null);
-  }, [address]);
+  }
 
   function copyAddress() {
     if (!address) return;

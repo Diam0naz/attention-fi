@@ -247,26 +247,30 @@ export default function Strands({
     dispersion,
     glassSize
   });
-  propsRef.current = {
-    colors,
-    count,
-    speed,
-    amplitude,
-    waviness,
-    thickness,
-    glow,
-    taper,
-    spread,
-    hueShift,
-    intensity,
-    saturation,
-    opacity,
-    scale,
-    glass,
-    refraction,
-    dispersion,
-    glassSize
-  };
+  // Keep the animation loop reading the latest props without re-creating the
+  // renderer. Synced in an effect — refs must not be written during render.
+  useEffect(() => {
+    propsRef.current = {
+      colors,
+      count,
+      speed,
+      amplitude,
+      waviness,
+      thickness,
+      glow,
+      taper,
+      spread,
+      hueShift,
+      intensity,
+      saturation,
+      opacity,
+      scale,
+      glass,
+      refraction,
+      dispersion,
+      glassSize
+    };
+  });
 
   const ctnDom = useRef<HTMLDivElement>(null);
 
