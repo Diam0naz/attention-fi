@@ -14,6 +14,7 @@ import { PublicKey } from "@solana/web3.js";
 import { useWallet } from "@/components/wallet/wallet-provider";
 import { useLiveTokenDetail } from "@/components/token/use-live-token";
 import { useProgram } from "@/lib/solana/use-program";
+import { useSolBalance } from "@/lib/solana/use-sol-balance";
 import { handleToMint } from "@/lib/solana/registry";
 import { buyTokens, sellTokens } from "@/lib/solana/trade";
 import { explorerTx } from "@/lib/solana/config";
@@ -33,6 +34,9 @@ export function TokenDetailTerminal({ token: tokenProp }: { token: TokenDetail }
   const { token, source } = useLiveTokenDetail(tokenProp);
   const { connected, address, shortAddress, disconnect } = useWallet();
   const program = useProgram();
+  const solBalance = useSolBalance();
+  // Real wallet SOL when connected; mock as a preview fallback.
+  const walletSol = solBalance ?? token.balanceSol;
   const [side, setSide] = useState<"buy" | "sell">("buy");
   const [amount, setAmount] = useState("");
   const [walletOpen, setWalletOpen] = useState(false);
@@ -343,7 +347,9 @@ export function TokenDetailTerminal({ token: tokenProp }: { token: TokenDetail }
             <div className="mt-3 rounded-sm border border-white/[0.08] bg-[#12181f] p-3">
               <div className="flex justify-between font-mono text-[10px] text-[#6B6B6B]">
                 <span>AMOUNT</span>
-                <span>BAL: {token.balanceSol} SOL</span>
+                <span>
+                  BAL: {connected && solBalance == null ? "…" : walletSol.toFixed(2)} SOL
+                </span>
               </div>
               <div className="mt-2 flex items-baseline gap-1.5">
                 <input
@@ -360,9 +366,7 @@ export function TokenDetailTerminal({ token: tokenProp }: { token: TokenDetail }
                   <button
                     key={q}
                     onClick={() =>
-                      setAmount(
-                        String(token.balanceSol * (q === "MAX" ? 1 : parseInt(q) / 100)),
-                      )
+                      setAmount((walletSol * (q === "MAX" ? 1 : parseInt(q) / 100)).toFixed(3))
                     }
                     className="rounded-sm border border-white/10 px-2 py-1 font-mono text-[9px] text-[#9aa4af] hover:border-white/20"
                   >
