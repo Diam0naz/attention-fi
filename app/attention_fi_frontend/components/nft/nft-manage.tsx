@@ -290,18 +290,18 @@ function PerkModal({
   useScrollLock(true);
   return (
     <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm" onClick={onClose}>
-      <div className="w-full max-w-md overflow-hidden rounded-lg border border-white/10 bg-[#0d141c] shadow-2xl" onClick={(e) => e.stopPropagation()}>
+      <div className="w-full max-w-lg overflow-hidden rounded-lg border border-white/10 bg-[#0d141c] shadow-2xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center border-b border-white/[0.08] px-5 py-4">
           <span className="font-mono text-[13px] font-bold">Manage perk</span>
           <button onClick={onClose} className="ml-auto rounded-md p-1 text-[#6B6B6B] hover:bg-white/10 hover:text-[#F5F4F0]" aria-label="Close">
             <X className="h-4 w-4" />
           </button>
         </div>
-        <div className="flex gap-5 p-5">
-          <div className="w-32 shrink-0">
+        <div className="flex flex-col items-center gap-5 p-5 sm:flex-row sm:items-start">
+          <div className="w-44 max-w-full shrink-0">
             <NftCardFace data={{ kind: "perk", level, discountBps }} />
           </div>
-          <div className="flex-1">
+          <div className="w-full flex-1">
             <div className="font-mono text-[11px] text-[#6B6B6B]">CURRENT DISCOUNT</div>
             <div className="font-mono text-[22px] font-bold text-signal">{(discountBps / 100).toFixed(0)}% off</div>
             <div className="mt-3 flex gap-1">

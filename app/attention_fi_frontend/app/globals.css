@@ -198,6 +198,23 @@
   0%   { transform: translateX(24px); opacity: 0; }
   100% { transform: translateX(0); opacity: 1; }
 }
+
+/* NFT card — flowing gradient base + a sweeping light sheen, per class. */
+@keyframes af-nft-grad {
+  0%, 100% { background-position: 0% 50%; }
+  50%      { background-position: 100% 50%; }
+}
+.af-nft-grad { background-size: 200% 200%; animation: af-nft-grad 9s ease infinite; }
+@keyframes af-nft-sheen {
+  0%   { transform: translateX(-120%) skewX(-12deg); opacity: 0; }
+  35%  { opacity: 0.55; }
+  100% { transform: translateX(320%) skewX(-12deg); opacity: 0; }
+}
+.af-nft-sheen { animation: af-nft-sheen 6.5s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .af-nft-grad { animation: none; }
+  .af-nft-sheen { animation: none; opacity: 0; }
+}
 @media (prefers-reduced-motion: reduce) {
   .af-sway { animation: none; }
 }

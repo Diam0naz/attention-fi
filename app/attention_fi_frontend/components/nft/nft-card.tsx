@@ -7,12 +7,13 @@ export type NftCardData =
   | { kind: "genesis"; shareBps: number; id: string };
 
 // Perk levels map to named tiers with their own palette (bronze → gold).
+// 3-stop gradients with a vivid mid band that sweeps via .af-nft-grad.
 const PERK_TIERS = [
-  { name: "Initiate", grad: "linear-gradient(150deg,#2b3340,#141a21)", accent: "#9fb2c6" },
-  { name: "Trader", grad: "linear-gradient(150deg,#1e3a5f,#0e1b2c)", accent: "#5b8fff" },
-  { name: "Pro", grad: "linear-gradient(150deg,#0f3d33,#08201b)", accent: "#00ff85" },
-  { name: "Elite", grad: "linear-gradient(150deg,#0b4a2f,#05170f)", accent: "#3dffa0" },
-  { name: "Apex", grad: "linear-gradient(150deg,#4a3a0b,#1a1404)", accent: "#f5b300" },
+  { name: "Initiate", grad: "linear-gradient(120deg,#1c2530,#41556b,#222d3a)", accent: "#9fb2c6" },
+  { name: "Trader", grad: "linear-gradient(120deg,#0e1b2c,#2f6bff,#12233a)", accent: "#5b8fff" },
+  { name: "Pro", grad: "linear-gradient(120deg,#08241d,#0aa06a,#0b2b22)", accent: "#00ff85" },
+  { name: "Elite", grad: "linear-gradient(120deg,#05231a,#1dd688,#062a1c)", accent: "#3dffa0" },
+  { name: "Apex", grad: "linear-gradient(120deg,#1e1704,#d99a12,#241a06)", accent: "#f5b300" },
 ];
 
 export interface NftVisual {
@@ -33,7 +34,7 @@ export function getNftVisual(data: NftCardData): NftVisual {
     return {
       label: "Verification",
       tag: "SOULBOUND",
-      grad: "linear-gradient(150deg,#0f3d33,#071612)",
+      grad: "linear-gradient(120deg,#062b22,#0f7a54,#063d2f)",
       accent: "#00ff85",
       tier: "Verified",
       stat: `@${data.handle}`,
@@ -61,7 +62,7 @@ export function getNftVisual(data: NftCardData): NftVisual {
   return {
     label: "Genesis",
     tag: "TRANSFERABLE",
-    grad: "linear-gradient(150deg,#2a1e4a,#120a24)",
+    grad: "linear-gradient(120deg,#1a1038,#5b3fd6,#22164a)",
     accent: "#5b8fff",
     tier: "Fee-share",
     stat: `${(data.shareBps / 100).toFixed(1)}%`,
@@ -77,9 +78,10 @@ export function NftCardFace({ data }: { data: NftCardData }) {
   const v = getNftVisual(data);
   return (
     <div
-      className="relative aspect-[3/4] w-full overflow-hidden rounded-xl border p-4 shadow-xl"
-      style={{ background: v.grad, borderColor: `${v.accent}55` }}
+      className="af-nft-grad relative aspect-[3/4] w-full overflow-hidden rounded-xl border p-4 shadow-xl"
+      style={{ background: v.grad, borderColor: `${v.accent}77` }}
     >
+      {/* grid texture */}
       <div
         className="pointer-events-none absolute inset-0 opacity-[0.14]"
         style={{
@@ -88,6 +90,13 @@ export function NftCardFace({ data }: { data: NftCardData }) {
           backgroundSize: "22px 22px",
         }}
       />
+      {/* sweeping light sheen */}
+      <div
+        className="af-nft-sheen pointer-events-none absolute inset-y-0 left-0 w-1/3"
+        style={{ background: "linear-gradient(90deg,transparent,rgba(255,255,255,0.35),transparent)" }}
+      />
+      {/* bottom scrim keeps the footer text readable over the vivid gradient */}
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-2/5 bg-gradient-to-t from-black/55 to-transparent" />
       <div className="relative flex items-center justify-between">
         <span className="inline-flex items-center gap-1.5 font-mono text-[10px] font-bold uppercase tracking-wide" style={{ color: v.accent }}>
           {v.icon}
