@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { X, RotateCw } from "lucide-react";
 import { NftCardFace, getNftVisual, type NftCardData } from "@/components/nft/nft-card";
 import { useScrollLock } from "@/lib/use-scroll-lock";
@@ -11,7 +11,22 @@ import { useScrollLock } from "@/lib/use-scroll-lock";
  */
 export function NftLanyard({ data, onClose }: { data: NftCardData | null; onClose: () => void }) {
   const [flipped, setFlipped] = useState(false);
+  // Cursor tilt folded into the SAME transform as the flip (shared perspective),
+  // rather than nesting a TiltCard — which would invert on the flipped face and
+  // fight the flip's backface hiding.
+  const cardRef = useRef<HTMLButtonElement>(null);
+  const [tilt, setTilt] = useState({ rx: 0, ry: 0, active: false });
   useScrollLock(!!data);
+
+  function onMove(e: React.MouseEvent) {
+    const el = cardRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const px = (e.clientX - r.left) / r.width - 0.5;
+    const py = (e.clientY - r.top) / r.height - 0.5;
+    setTilt({ rx: -py * 16, ry: px * 16, active: true });
+  }
+  const onLeave = () => setTilt({ rx: 0, ry: 0, active: false });
 
   // Reset the flip when a different NFT opens (adjust-state-on-prop-change).
   const [lastData, setLastData] = useState(data);
@@ -51,7 +66,10 @@ export function NftLanyard({ data, onClose }: { data: NftCardData | null; onClos
 
         {/* strap + dangling card */}
         <div className="flex flex-1 flex-col items-center justify-center">
-          <div className="af-sway flex flex-col items-center" style={{ perspective: 1200 }}>
+          <div
+            className="af-sway flex flex-col items-center"
+            style={{ perspective: 1200, animationPlayState: tilt.active ? "paused" : "running" }}
+          >
             {/* lanyard strap */}
             <div
               className="h-24 w-8 rounded-b-sm"
@@ -61,11 +79,16 @@ export function NftLanyard({ data, onClose }: { data: NftCardData | null; onClos
             <div className="-mt-1 h-3 w-5 rounded-sm border border-white/20 bg-[#1a222c]" />
 
             <button
+              ref={cardRef}
               onClick={() => setFlipped((f) => !f)}
+              onMouseMove={onMove}
+              onMouseLeave={onLeave}
               className="relative mt-2 w-56 cursor-pointer [transform-style:preserve-3d]"
               style={{
-                transform: flipped ? "rotateY(180deg)" : "rotateY(0deg)",
-                transition: "transform 0.6s cubic-bezier(0.2,0.7,0.2,1)",
+                transform: `rotateX(${tilt.rx}deg) rotateY(${(flipped ? 180 : 0) + tilt.ry}deg)`,
+                transition: tilt.active
+                  ? "transform 90ms ease-out"
+                  : "transform 0.55s cubic-bezier(0.2,0.7,0.2,1)",
               }}
               aria-label="Flip card"
             >
