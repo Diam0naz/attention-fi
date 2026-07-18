@@ -261,6 +261,15 @@ export function getHolders(handle: string): Holder[] {
   return holders;
 }
 
+/**
+ * Deterministic avatar image for a token/handle (Pump.fun-style thumbnails).
+ * DiceBear generates a stable, colorful image per handle; loads client-side in
+ * the user's browser. Components fall back to the gradient tile if it fails.
+ */
+export function tokenImage(handle: string): string {
+  return `https://api.dicebear.com/9.x/shapes/svg?seed=${encodeURIComponent(handle)}&size=96`;
+}
+
 export interface Holding { handle: string; name: string; symbol: string; amount: number; valueUsd: number; delta24h: number }
 export interface CreatedToken { handle: string; name: string; symbol: string; marketCap: number; claimableUsd: number; verified: boolean }
 export interface Portfolio {

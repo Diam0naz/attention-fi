@@ -6,6 +6,7 @@ import { ArrowLeft, BadgeCheck, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { MOCK_TOKENS, VERTICALS, type Token, type Vertical } from "@/lib/mock-data";
 import { Logo } from "@/components/brand/logo";
+import { Avatar } from "@/components/feed/avatar";
 import { WalletButton } from "@/components/wallet/wallet-button";
 import { Footer } from "@/components/feed/footer";
 
@@ -33,7 +34,7 @@ function TokenCard({ t, max }: { t: Token; max: number }) {
       className="group flex w-[220px] shrink-0 flex-col rounded-sm border border-white/[0.08] bg-[#0f1620] p-4 transition-colors hover:border-signal/30"
     >
       <div className="flex items-center gap-2">
-        <span className="h-7 w-7 shrink-0 rounded-full bg-[repeating-linear-gradient(45deg,#1c2733,#1c2733_4px,#222f3d_4px,#222f3d_8px)]" />
+        <Avatar handle={t.handle} className="h-7 w-7" />
         <span className="truncate text-[13px] font-bold">@{t.handle}</span>
         {t.verified && <BadgeCheck className="h-3.5 w-3.5 shrink-0 text-signal" />}
       </div>
@@ -119,7 +120,7 @@ export function CuratedFeed() {
         <div className="mt-6 overflow-hidden rounded-sm border border-signal/30 bg-[linear-gradient(90deg,rgba(0,255,133,0.12),transparent)] p-5">
           <div className="font-mono text-[9px] uppercase tracking-[0.15em] text-signal">Editor&apos;s Pick · Today</div>
           <div className="mt-3 flex flex-col gap-4 sm:flex-row sm:items-center">
-            <span className="h-12 w-12 shrink-0 rounded-full bg-[repeating-linear-gradient(45deg,#1c2733,#1c2733_5px,#222f3d_5px,#222f3d_10px)]" />
+            <Avatar handle={editor.handle} className="h-14 w-14 ring-2 ring-signal/30" />
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
                 <span className="text-[18px] font-bold">@{editor.handle}</span>

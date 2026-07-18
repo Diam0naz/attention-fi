@@ -13,7 +13,13 @@ import { getNftState, getPortfolio } from "@/lib/mock-data";
 
 type Kind = "genesis" | "auction";
 
-const KINDS: { id: Kind; name: string; tag: string; desc: string; icon: React.ReactNode }[] = [
+const KINDS: {
+  id: Kind;
+  name: string;
+  tag: string;
+  desc: string;
+  icon: React.ReactNode;
+}[] = [
   {
     id: "genesis",
     name: "Genesis (fee-share)",
@@ -50,13 +56,24 @@ export function NftCreateFlow() {
   const [floorUsd, setFloorUsd] = useState("2500");
   const [duration, setDuration] = useState("24h");
 
-  const portfolio = useMemo(() => (address ? getPortfolio(address) : null), [address]);
+  const portfolio = useMemo(
+    () => (address ? getPortfolio(address) : null),
+    [address],
+  );
   const nft = useMemo(() => (address ? getNftState(address) : null), [address]);
   const created = portfolio?.created ?? [];
   const ownedAssets = useMemo(() => {
     const out: { id: string; label: string }[] = [];
-    if (nft?.perk) out.push({ id: `PERK-${nft.perk.level}`, label: `Perk NFT · Lvl ${nft.perk.level}` });
-    for (const g of nft?.genesis ?? []) out.push({ id: g.id, label: `Genesis ${g.id} · ${(g.shareBps / 100).toFixed(1)}%` });
+    if (nft?.perk)
+      out.push({
+        id: `PERK-${nft.perk.level}`,
+        label: `Perk NFT · Lvl ${nft.perk.level}`,
+      });
+    for (const g of nft?.genesis ?? [])
+      out.push({
+        id: g.id,
+        label: `Genesis ${g.id} · ${(g.shareBps / 100).toFixed(1)}%`,
+      });
     return out;
   }, [nft]);
 
@@ -65,17 +82,26 @@ export function NftCreateFlow() {
   // What the confirm step previews: the genesis being minted, or the asset listed.
   const previewData: NftCardData =
     kind === "genesis"
-      ? { kind: "genesis", shareBps: Math.max(1, Math.round(+sharePct * 100)), id: "GEN-0001" }
+      ? {
+          kind: "genesis",
+          shareBps: Math.max(1, Math.round(+sharePct * 100)),
+          id: "GEN-0001",
+        }
       : assetId.startsWith("PERK")
-        ? { kind: "perk", level: nft?.perk?.level ?? 1, discountBps: nft?.perk?.discountBps ?? 100 }
-        : {
-            kind: "genesis",
-            shareBps: nft?.genesis.find((g) => g.id === assetId)?.shareBps ?? 100,
-            id: assetId || "GEN-0001",
-          };
+      ? {
+          kind: "perk",
+          level: nft?.perk?.level ?? 1,
+          discountBps: nft?.perk?.discountBps ?? 100,
+        }
+      : {
+          kind: "genesis",
+          shareBps: nft?.genesis.find((g) => g.id === assetId)?.shareBps ?? 100,
+          id: assetId || "GEN-0001",
+        };
   const validGenesis = tokenHandle !== "" && +sharePct > 0 && +supply > 0;
   const validAuction = assetId !== "" && +startUsd > +floorUsd && +floorUsd > 0;
-  const canContinue = step !== 1 || (kind === "genesis" ? validGenesis : validAuction);
+  const canContinue =
+    step !== 1 || (kind === "genesis" ? validGenesis : validAuction);
 
   function mint() {
     setTx("pending");
@@ -86,18 +112,23 @@ export function NftCreateFlow() {
     return (
       <Shell>
         <div className="rounded-sm border border-white/[0.08] bg-[#0f1620] p-8 text-center">
-          <div className="text-[15px] font-bold">Connect a wallet to create</div>
+          <div className="text-[15px] font-bold">
+            Connect a wallet to create
+          </div>
           <p className="mx-auto mt-2 max-w-xs text-[12px] leading-relaxed text-[#6B6B6B]">
-            Issuing genesis NFTs or listing a 1-of-1 requires the wallet that owns the asset.
+            Issuing genesis NFTs or listing a 1-of-1 requires the wallet that
+            owns the asset.
           </p>
           <button
             onClick={() => setWalletOpen(true)}
-            className="mt-5 rounded-sm bg-signal px-6 py-2.5 font-mono text-[12px] font-bold text-[#0A0A0A]"
-          >
+            className="mt-5 rounded-sm bg-signal px-6 py-2.5 font-mono text-[12px] font-bold text-[#0A0A0A]">
             Connect Wallet
           </button>
         </div>
-        <WalletConnectModal open={walletOpen} onClose={() => setWalletOpen(false)} />
+        <WalletConnectModal
+          open={walletOpen}
+          onClose={() => setWalletOpen(false)}
+        />
       </Shell>
     );
   }
@@ -107,14 +138,20 @@ export function NftCreateFlow() {
       {/* progress */}
       <div className="flex gap-1">
         {STEPS.map((_, i) => (
-          <div key={i} className={cn("h-[3px] flex-1 rounded-full", i <= step ? "bg-signal" : "bg-white/10")} />
+          <div
+            key={i}
+            className={cn(
+              "h-[3px] flex-1 rounded-full",
+              i <= step ? "bg-signal" : "bg-white/10",
+            )}
+          />
         ))}
       </div>
       <div className="mt-4 font-mono text-[9px] uppercase tracking-[0.1em] text-[#6B6B6B]">
         Step {step + 1} · {STEPS[step]}
       </div>
 
-      <div className="mt-4">
+      <div className="mt-4 min-h-[360px]">
         {/* 1 — type */}
         {step === 0 && (
           <div className="flex flex-col gap-2.5">
@@ -124,9 +161,10 @@ export function NftCreateFlow() {
                 onClick={() => setKind(k.id)}
                 className={cn(
                   "rounded-sm border p-4 text-left transition-colors",
-                  kind === k.id ? "border-signal bg-signal/[0.06]" : "border-white/[0.08] hover:border-white/20",
-                )}
-              >
+                  kind === k.id
+                    ? "border-signal bg-signal/[0.06]"
+                    : "border-white/[0.08] hover:border-white/20",
+                )}>
                 <div className="flex items-center gap-2">
                   <span className="text-signal">{k.icon}</span>
                   <span className="text-[13px] font-bold">{k.name}</span>
@@ -134,7 +172,9 @@ export function NftCreateFlow() {
                     {k.tag}
                   </span>
                 </div>
-                <p className="mt-2 text-[11px] leading-relaxed text-[#9aa4af]">{k.desc}</p>
+                <p className="mt-2 text-[11px] leading-relaxed text-[#9aa4af]">
+                  {k.desc}
+                </p>
               </button>
             ))}
           </div>
@@ -145,15 +185,15 @@ export function NftCreateFlow() {
           <div className="rounded-sm border border-white/[0.08] bg-[#0f1620] p-5">
             <div className="text-[13px] font-bold">Configure genesis</div>
             <p className="mt-1 text-[11px] text-[#6B6B6B]">
-              Each NFT earns its share of every fee your token collects, split pro-rata.
+              Each NFT earns its share of every fee your token collects, split
+              pro-rata.
             </p>
             <Field label="Token you created">
               {created.length ? (
                 <select
                   value={tokenHandle}
                   onChange={(e) => setTokenHandle(e.target.value)}
-                  className="w-full rounded-sm border border-white/10 bg-[#12181f] px-3 py-2.5 text-[13px] outline-none"
-                >
+                  className="w-full rounded-sm border border-white/10 bg-[#12181f] px-3 py-2.5 text-[13px] outline-none">
                   <option value="">Select a token…</option>
                   {created.map((c) => (
                     <option key={c.handle} value={c.handle}>
@@ -162,14 +202,18 @@ export function NftCreateFlow() {
                   ))}
                 </select>
               ) : (
-                <p className="text-[11px] text-noise">You haven&apos;t launched a token yet.</p>
+                <p className="text-[11px] text-noise">
+                  You haven&apos;t launched a token yet.
+                </p>
               )}
             </Field>
             <div className="grid grid-cols-2 gap-3">
               <Field label="Share per NFT (%)">
                 <input
                   value={sharePct}
-                  onChange={(e) => setSharePct(e.target.value.replace(/[^0-9.]/g, ""))}
+                  onChange={(e) =>
+                    setSharePct(e.target.value.replace(/[^0-9.]/g, ""))
+                  }
                   inputMode="decimal"
                   className="w-full rounded-sm border border-white/10 bg-[#12181f] px-3 py-2.5 font-mono text-[13px] outline-none"
                 />
@@ -177,15 +221,20 @@ export function NftCreateFlow() {
               <Field label="Supply">
                 <input
                   value={supply}
-                  onChange={(e) => setSupply(e.target.value.replace(/[^0-9]/g, ""))}
+                  onChange={(e) =>
+                    setSupply(e.target.value.replace(/[^0-9]/g, ""))
+                  }
                   inputMode="numeric"
                   className="w-full rounded-sm border border-white/10 bg-[#12181f] px-3 py-2.5 font-mono text-[13px] outline-none"
                 />
               </Field>
             </div>
             <div className="mt-1 font-mono text-[10px] text-[#6B6B6B]">
-              Total allocated: {(+sharePct * +supply || 0).toFixed(1)}% of the fee stream
-              {+sharePct * +supply > 100 && <span className="text-noise"> · exceeds 100%</span>}
+              Total allocated: {(+sharePct * +supply || 0).toFixed(1)}% of the
+              fee stream
+              {+sharePct * +supply > 100 && (
+                <span className="text-noise"> · exceeds 100%</span>
+              )}
             </div>
           </div>
         )}
@@ -194,15 +243,15 @@ export function NftCreateFlow() {
           <div className="rounded-sm border border-white/[0.08] bg-[#0f1620] p-5">
             <div className="text-[13px] font-bold">Configure auction</div>
             <p className="mt-1 text-[11px] text-[#6B6B6B]">
-              The price descends from start to floor over the duration. First buyer wins.
+              The price descends from start to floor over the duration. First
+              buyer wins.
             </p>
             <Field label="Asset to list">
               {ownedAssets.length ? (
                 <select
                   value={assetId}
                   onChange={(e) => setAssetId(e.target.value)}
-                  className="w-full rounded-sm border border-white/10 bg-[#12181f] px-3 py-2.5 text-[13px] outline-none"
-                >
+                  className="w-full rounded-sm border border-white/10 bg-[#12181f] px-3 py-2.5 text-[13px] outline-none">
                   <option value="">Select an asset…</option>
                   {ownedAssets.map((a) => (
                     <option key={a.id} value={a.id}>
@@ -211,14 +260,18 @@ export function NftCreateFlow() {
                   ))}
                 </select>
               ) : (
-                <p className="text-[11px] text-noise">You don&apos;t own any listable NFTs yet.</p>
+                <p className="text-[11px] text-noise">
+                  You don&apos;t own any listable NFTs yet.
+                </p>
               )}
             </Field>
             <div className="grid grid-cols-2 gap-3">
               <Field label="Start price ($)">
                 <input
                   value={startUsd}
-                  onChange={(e) => setStartUsd(e.target.value.replace(/[^0-9]/g, ""))}
+                  onChange={(e) =>
+                    setStartUsd(e.target.value.replace(/[^0-9]/g, ""))
+                  }
                   inputMode="numeric"
                   className="w-full rounded-sm border border-white/10 bg-[#12181f] px-3 py-2.5 font-mono text-[13px] outline-none"
                 />
@@ -226,14 +279,18 @@ export function NftCreateFlow() {
               <Field label="Floor price ($)">
                 <input
                   value={floorUsd}
-                  onChange={(e) => setFloorUsd(e.target.value.replace(/[^0-9]/g, ""))}
+                  onChange={(e) =>
+                    setFloorUsd(e.target.value.replace(/[^0-9]/g, ""))
+                  }
                   inputMode="numeric"
                   className="w-full rounded-sm border border-white/10 bg-[#12181f] px-3 py-2.5 font-mono text-[13px] outline-none"
                 />
               </Field>
             </div>
             {+floorUsd >= +startUsd && (
-              <div className="mt-1 font-mono text-[10px] text-noise">Floor must be below the start price.</div>
+              <div className="mt-1 font-mono text-[10px] text-noise">
+                Floor must be below the start price.
+              </div>
             )}
             <Field label="Duration">
               <div className="flex gap-1.5">
@@ -243,9 +300,10 @@ export function NftCreateFlow() {
                     onClick={() => setDuration(d)}
                     className={cn(
                       "rounded-sm border px-3 py-1.5 font-mono text-[11px]",
-                      duration === d ? "border-signal text-signal" : "border-white/10 text-[#9aa4af]",
-                    )}
-                  >
+                      duration === d
+                        ? "border-signal text-signal"
+                        : "border-white/10 text-[#9aa4af]",
+                    )}>
                     {d}
                   </button>
                 ))}
@@ -265,7 +323,10 @@ export function NftCreateFlow() {
                     ["Token", `@${tokenHandle}`],
                     ["Share per NFT", `${sharePct}%`],
                     ["Supply", supply],
-                    ["Total allocated", `${(+sharePct * +supply || 0).toFixed(1)}%`],
+                    [
+                      "Total allocated",
+                      `${(+sharePct * +supply || 0).toFixed(1)}%`,
+                    ],
                     ["Standard", "Metaplex Core"],
                   ]
                 : [
@@ -277,7 +338,9 @@ export function NftCreateFlow() {
                     ["Standard", "Metaplex Core"],
                   ]
               ).map(([k, v]) => (
-                <div key={k} className="flex justify-between border-b border-white/[0.06] pb-2 last:border-0">
+                <div
+                  key={k}
+                  className="flex justify-between border-b border-white/[0.06] pb-2 last:border-0">
                   <span className="text-[#6B6B6B]">{k}</span>
                   <span>{v}</span>
                 </div>
@@ -297,17 +360,20 @@ export function NftCreateFlow() {
             </p>
 
             {/* preview + params */}
-            <div className="mt-4 flex gap-4">
-              <div className="w-24 shrink-0">
+            <div className="mt-4 flex flex-col items-center gap-5 sm:flex-row sm:items-start">
+              <div className="w-44 max-w-full shrink-0">
                 <NftCardFace data={previewData} />
               </div>
-              <dl className="flex flex-1 flex-col gap-1.5 font-mono text-[11px]">
+              <dl className="flex w-full flex-1 flex-col gap-1.5 font-mono text-[11px]">
                 {(kind === "genesis"
                   ? [
                       ["Token", `@${tokenHandle}`],
                       ["Share / NFT", `${sharePct}%`],
                       ["Supply", supply],
-                      ["Allocated", `${(+sharePct * +supply || 0).toFixed(1)}%`],
+                      [
+                        "Allocated",
+                        `${(+sharePct * +supply || 0).toFixed(1)}%`,
+                      ],
                     ]
                   : [
                       ["Asset", assetId],
@@ -316,7 +382,9 @@ export function NftCreateFlow() {
                       ["Duration", duration],
                     ]
                 ).map(([k, v]) => (
-                  <div key={k} className="flex justify-between border-b border-white/[0.06] pb-1.5">
+                  <div
+                    key={k}
+                    className="flex justify-between border-b border-white/[0.06] pb-1.5">
                     <span className="text-[#6B6B6B]">{k}</span>
                     <span className="truncate pl-2 text-[#F5F4F0]">{v}</span>
                   </div>
@@ -333,18 +401,40 @@ export function NftCreateFlow() {
               <div className="mt-4 rounded-sm border border-white/[0.06] bg-[#12181f] p-3">
                 <div className="flex justify-between font-mono text-[9px] text-[#6B6B6B]">
                   <span>${(+startUsd).toLocaleString()} now</span>
-                  <span>${(+floorUsd).toLocaleString()} at {duration}</span>
+                  <span>
+                    ${(+floorUsd).toLocaleString()} at {duration}
+                  </span>
                 </div>
                 <div className="mt-2 h-8 w-full">
-                  <svg viewBox="0 0 100 32" preserveAspectRatio="none" className="h-full w-full">
+                  <svg
+                    viewBox="0 0 100 32"
+                    preserveAspectRatio="none"
+                    className="h-full w-full">
                     <defs>
                       <linearGradient id="decay" x1="0" x2="1">
-                        <stop offset="0" stopColor="#00ff85" stopOpacity="0.5" />
-                        <stop offset="1" stopColor="#00ff85" stopOpacity="0.08" />
+                        <stop
+                          offset="0"
+                          stopColor="#00ff85"
+                          stopOpacity="0.5"
+                        />
+                        <stop
+                          offset="1"
+                          stopColor="#00ff85"
+                          stopOpacity="0.08"
+                        />
                       </linearGradient>
                     </defs>
-                    <path d="M0,3 L100,29" stroke="url(#decay)" strokeWidth="1.5" fill="none" />
-                    <path d="M0,3 L100,29 L100,32 L0,32 Z" fill="url(#decay)" opacity="0.25" />
+                    <path
+                      d="M0,3 L100,29"
+                      stroke="url(#decay)"
+                      strokeWidth="1.5"
+                      fill="none"
+                    />
+                    <path
+                      d="M0,3 L100,29 L100,32 L0,32 Z"
+                      fill="url(#decay)"
+                      opacity="0.25"
+                    />
                   </svg>
                 </div>
                 <div className="font-mono text-[9px] text-[#4b5563]">
@@ -370,18 +460,21 @@ export function NftCreateFlow() {
                         ? "Minting genesis…"
                         : "Listing asset…"
                       : kind === "genesis"
-                        ? "Genesis minted"
-                        : "Auction live"
+                      ? "Genesis minted"
+                      : "Auction live"
                   }
-                  detail={kind === "genesis" ? `@${tokenHandle} · ${supply} NFTs` : `${assetId} · ${duration}`}
+                  detail={
+                    kind === "genesis"
+                      ? `@${tokenHandle} · ${supply} NFTs`
+                      : `${assetId} · ${duration}`
+                  }
                   signature="8xРq…4kL7"
                   explorerUrl="#"
                 />
                 {tx === "confirmed" && (
                   <Link
                     href="/nft"
-                    className="mt-3 flex items-center justify-center gap-1.5 rounded-sm border border-signal/40 py-2.5 font-mono text-[11px] font-bold text-signal"
-                  >
+                    className="mt-3 flex items-center justify-center gap-1.5 rounded-sm border border-signal/40 py-2.5 font-mono text-[11px] font-bold text-signal">
                     <Check className="h-3.5 w-3.5" /> View in NFTs
                   </Link>
                 )}
@@ -389,8 +482,7 @@ export function NftCreateFlow() {
             ) : (
               <button
                 onClick={mint}
-                className="mt-4 w-full rounded-sm bg-signal py-3 font-mono text-[13px] font-bold text-[#0A0A0A]"
-              >
+                className="mt-4 w-full rounded-sm bg-signal py-3 font-mono text-[13px] font-bold text-[#0A0A0A]">
                 {kind === "genesis" ? "MINT GENESIS" : "START AUCTION"}
               </button>
             )}
@@ -405,27 +497,34 @@ export function NftCreateFlow() {
             {step > 0 && (
               <button
                 onClick={() => setStep((s) => s - 1)}
-                className="rounded-sm border border-white/15 px-4 py-3 font-mono text-[12px] font-bold text-[#F5F4F0]"
-              >
+                className="rounded-sm border border-white/15 px-4 py-3 font-mono text-[12px] font-bold text-[#F5F4F0]">
                 Back
               </button>
             )}
             <button
               onClick={() => setStep((s) => Math.min(3, s + 1))}
               disabled={!canContinue}
-              className="flex-1 rounded-sm bg-signal py-3 font-mono text-[12px] font-bold text-[#0A0A0A] disabled:opacity-40"
-            >
+              className="flex-1 rounded-sm bg-signal py-3 font-mono text-[12px] font-bold text-[#0A0A0A] disabled:opacity-40">
               CONTINUE
             </button>
           </div>
         </div>
       )}
-      <WalletConnectModal open={walletOpen} onClose={() => setWalletOpen(false)} />
+      <WalletConnectModal
+        open={walletOpen}
+        onClose={() => setWalletOpen(false)}
+      />
     </Shell>
   );
 }
 
-function Shell({ children, shortAddress }: { children: React.ReactNode; shortAddress?: string | null }) {
+function Shell({
+  children,
+  shortAddress,
+}: {
+  children: React.ReactNode;
+  shortAddress?: string | null;
+}) {
   return (
     <>
       <div className="pointer-events-none fixed inset-0 -z-10 opacity-80 [mask-image:radial-gradient(ellipse_at_center,#000_25%,transparent_85%)]">
@@ -444,17 +543,26 @@ function Shell({ children, shortAddress }: { children: React.ReactNode; shortAdd
             </span>
           )}
         </div>
-        {/* centre the wizard so short steps don't leave a huge void */}
-        <div className="flex flex-1 flex-col justify-center py-6">{children}</div>
+        {/* top-aligned to match the token launch wizard; steps hold a min-height
+            so a short step (Review) doesn't shrink sharply vs the others */}
+        <div className="py-6">{children}</div>
       </div>
     </>
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
   return (
     <div className="mt-4">
-      <label className="font-mono text-[10px] uppercase tracking-[0.1em] text-[#6B6B6B]">{label}</label>
+      <label className="font-mono text-[10px] uppercase tracking-[0.1em] text-[#6B6B6B]">
+        {label}
+      </label>
       <div className="mt-1.5">{children}</div>
     </div>
   );
