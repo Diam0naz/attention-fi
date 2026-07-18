@@ -1,0 +1,54 @@
+import { AnchorProvider, Program } from "@anchor-lang/core";
+import { Connection, PublicKey, type Transaction, type VersionedTransaction } from "@solana/web3.js";
+import idlJson from "@/lib/idl/attention_fi.json";
+import type { AttentionFi } from "@/lib/idl/attention_fi";
+import { PROGRAM_ID, RPC_ENDPOINT } from "./config";
+
+/** The slice of a wallet Anchor needs to sign. */
+export interface AnchorWalletLike {
+  publicKey: PublicKey;
+  signTransaction<T extends Transaction | VersionedTransaction>(tx: T): Promise<T>;
+  signAllTransactions<T extends Transaction | VersionedTransaction>(txs: T[]): Promise<T[]>;
+}
+
+let cached: Connection | null = null;
+
+export function getConnection(): Connection {
+  cached ??= new Connection(RPC_ENDPOINT, "confirmed");
+  return cached;
+}
+
+/** Program bound to a connected wallet — required for anything that signs. */
+export function getProgram(wallet: AnchorWalletLike): Program<AttentionFi> {
+  const provider = new AnchorProvider(getConnection(), wallet, { commitment: "confirmed" });
+  return new Program(idlJson as AttentionFi, provider);
+}
+
+/**
+ * Program for reads only. Anchor needs a wallet on the provider, but account
+ * fetches never sign, so a throwing stub keeps misuse loud instead of silent.
+ */
+export function getReadonlyProgram(): Program<AttentionFi> {
+  const stub: AnchorWalletLike = {
+    publicKey: PublicKey.default,
+    signTransaction: () => Promise.reject(new Error("read-only provider cannot sign")),
+    signAllTransactions: () => Promise.reject(new Error("read-only provider cannot sign")),
+  };
+  const provider = new AnchorProvider(getConnection(), stub, { commitment: "confirmed" });
+  return new Program(idlJson as AttentionFi, provider);
+}
+
+// --- PDAs (seeds mirror the program's constants) -----------------------------
+// TextEncoder/toBytes rather than Buffer so this works in the browser without a
+// Node polyfill.
+const enc = new TextEncoder();
+
+export const globalPda = (): PublicKey =>
+  PublicKey.findProgramAddressSync([enc.encode("global")], PROGRAM_ID)[0];
+
+export const curvePda = (mint: PublicKey): PublicKey =>
+  PublicKey.findProgramAddressSync([enc.encode("curve"), mint.toBytes()], PROGRAM_ID)[0];
+
+/** Verification is keyed by the subject wallet, not the handle. */
+export const verificationPda = (subject: PublicKey): PublicKey =>
+  PublicKey.findProgramAddressSync([enc.encode("verify"), subject.toBytes()], PROGRAM_ID)[0];

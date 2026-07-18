@@ -10,6 +10,9 @@ interface Injected {
   publicKey?: { toString(): string } | null;
   connect: (opts?: { onlyIfTrusted?: boolean }) => Promise<{ publicKey?: { toString(): string } }>;
   disconnect?: () => Promise<void>;
+  signTransaction?: <T>(tx: T) => Promise<T>;
+  signAllTransactions?: <T>(txs: T[]) => Promise<T[]>;
+  signMessage?: (msg: Uint8Array, encoding?: string) => Promise<{ signature: Uint8Array } | Uint8Array>;
 }
 
 export interface WalletMeta {
@@ -61,6 +64,8 @@ interface WalletContextValue {
   detected: Set<string>;
   connect: (id: string) => Promise<boolean>;
   disconnect: () => void;
+  /** The live injected provider — used to sign real transactions. */
+  getSigner: () => Injected | undefined;
 }
 
 const WalletContext = createContext<WalletContextValue | null>(null);
@@ -135,6 +140,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     window.localStorage.removeItem(STORAGE_KEY);
   }, [walletId]);
 
+  const getSigner = useCallback(() => (walletId ? getProvider(walletId) : undefined), [walletId]);
+
   const value = useMemo<WalletContextValue>(
     () => ({
       connected: address !== null,
@@ -144,8 +151,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       detected,
       connect,
       disconnect,
+      getSigner,
     }),
-    [address, walletId, detected, connect, disconnect],
+    [address, walletId, detected, connect, disconnect, getSigner],
   );
 
   return <WalletContext.Provider value={value}>{children}</WalletContext.Provider>;

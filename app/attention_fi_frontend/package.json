@@ -9,7 +9,9 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@anchor-lang/core": "0.32.1",
     "@neondatabase/serverless": "^1.1.0",
+    "@solana/web3.js": "1.98.4",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lightweight-charts": "5.2.0",
