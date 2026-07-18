@@ -10,6 +10,9 @@ import { TxStatus, type TxState } from "@/components/wallet/tx-status";
 import { Footer } from "@/components/feed/footer";
 import { NftCard, type NftCardData } from "@/components/nft/nft-card";
 import { NftLanyard } from "@/components/nft/nft-lanyard";
+import { useSolBalance } from "@/lib/solana/use-sol-balance";
+import { useTokenBalance } from "@/lib/solana/use-token-balance";
+import { USDC_MINT } from "@/lib/solana/config";
 import { getNftState, getPortfolio } from "@/lib/mock-data";
 
 function usd(n: number): string {
@@ -27,6 +30,8 @@ export function ProfileView() {
   const [selectedNft, setSelectedNft] = useState<NftCardData | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
+  const solBalance = useSolBalance();
+  const usdcBalance = useTokenBalance(USDC_MINT);
   const portfolio = useMemo(() => (address ? getPortfolio(address) : null), [address]);
   const nft = useMemo(() => (address ? getNftState(address) : null), [address]);
 
@@ -139,6 +144,8 @@ export function ProfileView() {
           <div className="grid grid-cols-2 gap-3 sm:ml-auto">
             <Stat label="PORTFOLIO" value={usd(portfolio.totalValueUsd)} />
             <Stat label="CLAIMABLE FEES" value={usd(portfolio.claimableUsd)} accent />
+            <Stat label="SOL BALANCE" value={solBalance != null ? solBalance.toFixed(3) : "…"} />
+            <Stat label="USDC" value={usdcBalance != null ? `$${usdcBalance.toFixed(2)}` : "…"} />
           </div>
         </div>
 
