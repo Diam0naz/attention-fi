@@ -15,6 +15,7 @@ import { useWallet } from "@/components/wallet/wallet-provider";
 import { useLiveTokenDetail } from "@/components/token/use-live-token";
 import { useProgram } from "@/lib/solana/use-program";
 import { useSolBalance } from "@/lib/solana/use-sol-balance";
+import { useTokenBalance } from "@/lib/solana/use-token-balance";
 import { handleToMint } from "@/lib/solana/registry";
 import { buyTokens, sellTokens } from "@/lib/solana/trade";
 import { explorerTx } from "@/lib/solana/config";
@@ -35,6 +36,9 @@ export function TokenDetailTerminal({ token: tokenProp }: { token: TokenDetail }
   const { connected, address, shortAddress, disconnect } = useWallet();
   const program = useProgram();
   const solBalance = useSolBalance();
+  const tokenMint = handleToMint(token.handle)?.toBase58() ?? "";
+  // How many of THIS token the wallet holds (null when none / unregistered).
+  const heldTokens = useTokenBalance(tokenMint);
   // Real wallet SOL when connected; mock as a preview fallback.
   const walletSol = solBalance ?? token.balanceSol;
   const [side, setSide] = useState<"buy" | "sell">("buy");
@@ -53,7 +57,13 @@ export function TokenDetailTerminal({ token: tokenProp }: { token: TokenDetail }
   const up = token.delta24h >= 0;
   const gradPct = Math.min(100, Math.round((token.raisedUsd / token.targetUsd) * 100));
   const amt = parseFloat(amount) || 0;
-  const receive = side === "buy" ? amt * 24_000 : amt; // mock rate
+  // Price estimate (SOL/token) from market cap (works for live + mock); the real
+  // fill comes from the on-chain curve. Buy: SOL→tokens; Sell: tokens→SOL.
+  const priceSol = token.marketCap / 164.2 / 1_000_000_000;
+  const receive = side === "buy" ? (priceSol > 0 ? amt / priceSol : 0) : amt * priceSol;
+  // Balance for the active side: SOL when buying, token holdings when selling.
+  const sideBalance = side === "buy" ? walletSol : heldTokens ?? 0;
+  const balLoading = connected && (side === "buy" ? solBalance == null : heldTokens == null);
 
   async function submit() {
     if (!connected) return setWalletOpen(true);
@@ -348,7 +358,12 @@ export function TokenDetailTerminal({ token: tokenProp }: { token: TokenDetail }
               <div className="flex justify-between font-mono text-[10px] text-[#6B6B6B]">
                 <span>AMOUNT</span>
                 <span>
-                  BAL: {connected && solBalance == null ? "…" : walletSol.toFixed(2)} SOL
+                  BAL:{" "}
+                  {balLoading
+                    ? "…"
+                    : side === "buy"
+                      ? `${walletSol.toFixed(2)} SOL`
+                      : `${sideBalance.toLocaleString(undefined, { maximumFractionDigits: 0 })} ${token.symbol}`}
                 </span>
               </div>
               <div className="mt-2 flex items-baseline gap-1.5">
@@ -365,9 +380,14 @@ export function TokenDetailTerminal({ token: tokenProp }: { token: TokenDetail }
                 {(["25%", "50%", "MAX"] as const).map((q) => (
                   <button
                     key={q}
-                    onClick={() =>
-                      setAmount((walletSol * (q === "MAX" ? 1 : parseInt(q) / 100)).toFixed(3))
-                    }
+                    onClick={() => {
+                      const frac = q === "MAX" ? 1 : parseInt(q) / 100;
+                      setAmount(
+                        side === "buy"
+                          ? (sideBalance * frac).toFixed(3)
+                          : String(Math.floor(sideBalance * frac)),
+                      );
+                    }}
                     className="rounded-sm border border-white/10 px-2 py-1 font-mono text-[9px] text-[#9aa4af] hover:border-white/20"
                   >
                     {q}
@@ -379,7 +399,7 @@ export function TokenDetailTerminal({ token: tokenProp }: { token: TokenDetail }
             <div className="mt-2.5 flex justify-between font-mono text-[10px] text-[#6B6B6B]">
               <span>You receive</span>
               <span className="text-[#F5F4F0]">
-                ≈ {receive.toLocaleString(undefined, { maximumFractionDigits: 0 })}{" "}
+                ≈ {receive.toLocaleString(undefined, { maximumFractionDigits: side === "buy" ? 0 : 4 })}{" "}
                 {side === "buy" ? token.symbol : "SOL"}
               </span>
             </div>
