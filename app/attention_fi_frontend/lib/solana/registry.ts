@@ -6,7 +6,11 @@ import { PublicKey } from "@solana/web3.js";
  * { "handle": "<mint base58>" }) or by extending DEFAULTS below. Until an entry
  * exists, the UI falls back to mock data for that token.
  */
-const DEFAULTS: Record<string, string> = {};
+const DEFAULTS: Record<string, string> = {
+  // Live demo token launched on devnet (Top100 tier). Opening /token/solana_kol
+  // reads this curve on-chain and flips the terminal to LIVE.
+  solana_kol: "FmYyWGtpvBEpyrY5JJhLkhWH1aiWdnVxzivJcBcfis4B",
+};
 
 function loadRegistry(): Record<string, string> {
   try {
