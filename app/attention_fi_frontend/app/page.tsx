@@ -1,5 +1,6 @@
 import { TickerTape } from "@/components/feed/ticker-tape";
 import { Hero } from "@/components/feed/hero";
+import { TrendingWall } from "@/components/feed/trending-wall";
 import { SignalBoard } from "@/components/feed/signal-board";
 import { Thesis } from "@/components/feed/thesis";
 import { Mechanism } from "@/components/feed/mechanism";
@@ -12,6 +13,7 @@ export default function Home() {
       <TickerTape />
       <main className="flex-1">
         <Hero />
+        <TrendingWall />
         <SignalBoard />
         <Thesis />
         <Mechanism />
