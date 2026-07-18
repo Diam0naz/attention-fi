@@ -70,10 +70,18 @@ export function SignalBoard() {
           <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-[#6B6B6B]">
             Live Mindshare Feed
           </span>
-          <span className="inline-flex items-center gap-1.5 font-mono text-[10px] tracking-[0.1em] text-signal">
-            <span className="af-pulse-dot inline-block h-1.5 w-1.5 rounded-full bg-signal" />
-            LIVE
-          </span>
+          <div className="flex items-center gap-4">
+            <Link
+              href="/discover"
+              className="font-mono text-[10px] tracking-[0.1em] text-[#6B6B6B] transition-colors hover:text-signal"
+            >
+              Browse by vertical →
+            </Link>
+            <span className="inline-flex items-center gap-1.5 font-mono text-[10px] tracking-[0.1em] text-signal">
+              <span className="af-pulse-dot inline-block h-1.5 w-1.5 rounded-full bg-signal" />
+              LIVE
+            </span>
+          </div>
         </div>
 
         <div className="grid grid-cols-[24px_1fr_64px_48px] items-center gap-2 border-b border-white/[0.06] px-4 py-2 font-mono text-[9px] uppercase tracking-wider text-[#6B6B6B] sm:grid-cols-[28px_1fr_72px_72px_56px_64px] sm:px-5">
