@@ -16,7 +16,16 @@ export function NftLanyard({ data, onClose }: { data: NftCardData | null; onClos
   // fight the flip's backface hiding.
   const cardRef = useRef<HTMLButtonElement>(null);
   const [tilt, setTilt] = useState({ rx: 0, ry: 0, active: false });
+  // While a flip is animating, force the slow transition so clicking mid-tilt
+  // doesn't snap at the fast tilt-tracking speed.
+  const [flipping, setFlipping] = useState(false);
   useScrollLock(!!data);
+
+  function flip() {
+    setFlipped((f) => !f);
+    setFlipping(true);
+    window.setTimeout(() => setFlipping(false), 750);
+  }
 
   function onMove(e: React.MouseEvent) {
     const el = cardRef.current;
@@ -80,15 +89,17 @@ export function NftLanyard({ data, onClose }: { data: NftCardData | null; onClos
 
             <button
               ref={cardRef}
-              onClick={() => setFlipped((f) => !f)}
+              onClick={flip}
               onMouseMove={onMove}
               onMouseLeave={onLeave}
               className="relative mt-2 w-56 cursor-pointer [transform-style:preserve-3d]"
               style={{
                 transform: `rotateX(${tilt.rx}deg) rotateY(${(flipped ? 180 : 0) + tilt.ry}deg)`,
-                transition: tilt.active
-                  ? "transform 90ms ease-out"
-                  : "transform 0.55s cubic-bezier(0.2,0.7,0.2,1)",
+                transition: flipping
+                  ? "transform 0.75s cubic-bezier(0.2,0.7,0.2,1)"
+                  : tilt.active
+                    ? "transform 90ms ease-out"
+                    : "transform 0.55s cubic-bezier(0.2,0.7,0.2,1)",
               }}
               aria-label="Flip card"
             >
@@ -116,7 +127,7 @@ export function NftLanyard({ data, onClose }: { data: NftCardData | null; onClos
           </div>
 
           <button
-            onClick={() => setFlipped((f) => !f)}
+            onClick={flip}
             className="mt-8 inline-flex items-center gap-1.5 font-mono text-[10px] text-[#6B6B6B] transition-colors hover:text-[#F5F4F0]"
           >
             <RotateCw className="h-3 w-3" /> {flipped ? "Show front" : "Flip for details"}
