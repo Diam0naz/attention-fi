@@ -10,20 +10,24 @@ export interface VerticalTokenSummary {
   delta: string;
   verified?: boolean;
   positive?: boolean;
+  marketCap?: number;
+  tier?: string;
 }
 
 export const DEFAULT_TOKENS: VerticalTokenSummary[] = [
-  { handle: "@solana_kol", label: "Solana Maxi", mindshare: "3.24%", delta: "+41%", verified: true, positive: true },
-  { handle: "@degen_pilled", label: "Degen Pilled", mindshare: "0.81%", delta: "+8%", verified: true, positive: true },
-  { handle: "@mev_searcher", label: "MEV Searcher", mindshare: "0.58%", delta: "+3%", positive: true },
-  { handle: "@base_degen", label: "Base Degen", mindshare: "0.32%", delta: "-6%", positive: false },
-  { handle: "@liquidity_wiz", label: "Liquidity Wizard", mindshare: "0.29%", delta: "+2%", positive: true },
-  { handle: "@yield_farmer", label: "Yield Farmer", mindshare: "0.24%", delta: "+1%", positive: true },
-  { handle: "@vault_ape", label: "Vault Ape", mindshare: "0.19%", delta: "-3%", positive: false },
-  { handle: "@perp_nomad", label: "Perp Nomad", mindshare: "0.15%", delta: "+1%", positive: true },
+  { handle: "@solana_kol", label: "Solana Maxi", mindshare: "3.24%", delta: "+41%", verified: true, positive: true, marketCap: 182_000, tier: "Top 10" },
+  { handle: "@degen_pilled", label: "Degen Pilled", mindshare: "0.81%", delta: "+18%", verified: true, positive: true, marketCap: 48_000, tier: "Emerging" },
+  { handle: "@mev_searcher", label: "MEV Searcher", mindshare: "0.58%", delta: "+3%", positive: true, marketCap: 21_400, tier: "Emerging" },
+  { handle: "@base_degen", label: "Base Degen", mindshare: "0.32%", delta: "-6%", positive: false, marketCap: 12_000, tier: "New" },
+  { handle: "@liquidity_wiz", label: "Liquidity Wizard", mindshare: "0.29%", delta: "+12%", positive: true, marketCap: 9_000, tier: "New" },
+  { handle: "@yield_farmer", label: "Yield Farmer", mindshare: "0.24%", delta: "+1%", positive: true, marketCap: 7_000, tier: "New" },
+  { handle: "@vault_ape", label: "Vault Ape", mindshare: "0.19%", delta: "-3%", positive: false, marketCap: 62_000, tier: "Top 100" },
+  { handle: "@perp_nomad", label: "Perp Nomad", mindshare: "0.15%", delta: "+1%", positive: true, marketCap: 4_200, tier: "New" },
 ];
 
 const SORTS = ["MINDSHARE", "24H CHANGE", "VERIFIED ONLY"];
+const STATUS = ["All", "Rising >10%", "Near graduation", "New", "Graduating"];
+const GRAD_USD = 69_000;
 
 /** Full grid view reached via the "SEE ALL →" link on a feed vertical shelf
  *  (Feed / DeFi / AI-Tech shelves) — see Token Trading Page.dc.html #6c. */
@@ -43,14 +47,25 @@ export function VerticalSeeAll({
   onSelectToken?: (handle: string) => void;
 }) {
   const [sortIdx, setSortIdx] = useState(0);
+  const [statusIdx, setStatusIdx] = useState(0);
   const num = (s: string) => Number.parseFloat(s.replace(/[^0-9.-]/g, "")) || 0;
 
-  // 0 = sort by mindshare, 1 = sort by 24h change, 2 = verified only.
   const displayed = useMemo(() => {
-    if (sortIdx === 2) return tokens.filter((t) => t.verified);
+    const s = STATUS[statusIdx];
+    const byStatus = (t: VerticalTokenSummary) => {
+      const mc = t.marketCap ?? 0;
+      if (s === "Rising >10%") return num(t.delta) > 10;
+      if (s === "New") return t.tier === "New";
+      if (s === "Near graduation") return mc >= GRAD_USD * 0.6 && mc < GRAD_USD;
+      if (s === "Graduating") return mc >= GRAD_USD;
+      return true;
+    };
+    const list = tokens.filter(byStatus);
+    // 0 = sort by mindshare, 1 = sort by 24h change, 2 = verified only.
+    if (sortIdx === 2) return list.filter((t) => t.verified);
     const key = sortIdx === 1 ? "delta" : "mindshare";
-    return [...tokens].sort((a, b) => num(b[key]) - num(a[key]));
-  }, [tokens, sortIdx]);
+    return [...list].sort((a, b) => num(b[key]) - num(a[key]));
+  }, [tokens, sortIdx, statusIdx]);
 
   return (
     <div className="w-full">
@@ -78,6 +93,24 @@ export function VerticalSeeAll({
             </button>
           ))}
         </div>
+      </div>
+
+      {/* status sub-filters */}
+      <div className="flex gap-1.5 overflow-x-auto px-5 pt-3 sm:px-7">
+        {STATUS.map((s, i) => (
+          <button
+            key={s}
+            onClick={() => setStatusIdx(i)}
+            className={cn(
+              "shrink-0 rounded-full border px-3 py-1 font-mono text-[10px] tracking-wide transition-colors",
+              i === statusIdx
+                ? "border-signal bg-signal/10 text-signal"
+                : "border-white/10 text-[#6B6B6B] hover:text-[#F5F4F0]",
+            )}
+          >
+            {s}
+          </button>
+        ))}
       </div>
 
       {displayed.length === 0 && (

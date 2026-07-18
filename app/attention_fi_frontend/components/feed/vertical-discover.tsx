@@ -29,6 +29,8 @@ export function VerticalDiscover({ vertical }: { vertical: Vertical }) {
         delta: `${t.delta24h >= 0 ? "+" : ""}${t.delta24h.toFixed(0)}%`,
         verified: t.verified,
         positive: t.delta24h >= 0,
+        marketCap: t.marketCap,
+        tier: t.tier,
       })),
     [vertical],
   );
