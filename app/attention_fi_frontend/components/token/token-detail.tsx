@@ -11,6 +11,7 @@ import { MindshareView } from "@/components/token/mindshare-view";
 import { Footer } from "@/components/feed/footer";
 import { WalletConnectModal } from "@/components/wallet/wallet-connect-modal";
 import { useWallet } from "@/components/wallet/wallet-provider";
+import { useLiveTokenDetail } from "@/components/token/use-live-token";
 import { TxStatus, type TxState } from "@/components/wallet/tx-status";
 
 const TABS = ["chart", "trades", "holders", "about"] as const;
@@ -22,7 +23,9 @@ function usd(n: number): string {
   return `$${n}`;
 }
 
-export function TokenDetailTerminal({ token }: { token: TokenDetail }) {
+export function TokenDetailTerminal({ token: tokenProp }: { token: TokenDetail }) {
+  // Mock now, upgraded to live on-chain curve state when the token is deployed.
+  const { token, source } = useLiveTokenDetail(tokenProp);
   const { connected, shortAddress, disconnect } = useWallet();
   const [side, setSide] = useState<"buy" | "sell">("buy");
   const [amount, setAmount] = useState("");
@@ -58,6 +61,17 @@ export function TokenDetailTerminal({ token }: { token: TokenDetail }) {
         <span className="text-[#4b5563]">/</span>
         <span className="font-mono text-[12px]">@{token.handle}</span>
         <div className="ml-auto flex items-center gap-3">
+          <span
+            className={cn(
+              "rounded-sm px-1.5 py-0.5 font-mono text-[9px] font-bold tracking-wide",
+              source === "onchain"
+                ? "bg-signal/15 text-signal"
+                : "border border-white/10 text-[#6B6B6B]",
+            )}
+            title={source === "onchain" ? "Live on-chain data" : "Preview — mock data until the token is on-chain"}
+          >
+            {source === "onchain" ? "● LIVE" : "PREVIEW"}
+          </span>
           <span className="hidden font-mono text-[10px] text-[#6B6B6B] sm:inline">SOL/USD $164.20</span>
           {connected ? (
             <div className="flex items-center gap-1.5 rounded-sm border border-signal/40 bg-signal/[0.06] px-1 py-0.5">
