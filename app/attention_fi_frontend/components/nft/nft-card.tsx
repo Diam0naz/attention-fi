@@ -9,11 +9,11 @@ export type NftCardData =
 // Perk levels map to named tiers with their own palette (bronze → gold).
 // 3-stop gradients with a vivid mid band that sweeps via .af-nft-grad.
 const PERK_TIERS = [
-  { name: "Initiate", grad: "linear-gradient(120deg,#1c2530,#41556b,#222d3a)", accent: "#9fb2c6" },
-  { name: "Trader", grad: "linear-gradient(120deg,#0e1b2c,#2f6bff,#12233a)", accent: "#5b8fff" },
-  { name: "Pro", grad: "linear-gradient(120deg,#08241d,#0aa06a,#0b2b22)", accent: "#00ff85" },
-  { name: "Elite", grad: "linear-gradient(120deg,#05231a,#1dd688,#062a1c)", accent: "#3dffa0" },
-  { name: "Apex", grad: "linear-gradient(120deg,#1e1704,#d99a12,#241a06)", accent: "#f5b300" },
+  { name: "Initiate", grad: "linear-gradient(120deg,#1c2530,#41556b,#222d3a)", accent: "#9fb2c6" }, // steel
+  { name: "Trader", grad: "linear-gradient(120deg,#08241d,#0aa06a,#0b2b22)", accent: "#00ff85" }, // green
+  { name: "Pro", grad: "linear-gradient(120deg,#0a1428,#1e3f8f,#0c1a33)", accent: "#4a80ff" }, // dark blue
+  { name: "Elite", grad: "linear-gradient(120deg,#1a0f38,#7d3fd6,#20143f)", accent: "#b07cff" }, // violet
+  { name: "Apex", grad: "linear-gradient(120deg,#1e1704,#d99a12,#241a06)", accent: "#f5b300" }, // gold
 ];
 
 export interface NftVisual {
