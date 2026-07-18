@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, BadgeCheck, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { MOCK_TOKENS, VERTICALS, type Token, type Vertical } from "@/lib/mock-data";
+import { MOCK_TOKENS, VERTICALS, verticalSlug, type Token, type Vertical } from "@/lib/mock-data";
 import { Logo } from "@/components/brand/logo";
 import { Avatar } from "@/components/feed/avatar";
 import { WalletButton } from "@/components/wallet/wallet-button";
@@ -157,7 +157,12 @@ export function CuratedFeed() {
                     <h2 className="text-[15px] font-bold">{shelf.vertical}</h2>
                     <span className="font-mono text-[9px] uppercase tracking-[0.08em] text-[#6B6B6B]">curated by mindshare velocity</span>
                   </div>
-                  <button className="font-mono text-[10px] text-signal hover:underline">SEE ALL →</button>
+                  <Link
+                    href={`/discover/${verticalSlug(shelf.vertical)}`}
+                    className="font-mono text-[10px] text-signal hover:underline"
+                  >
+                    SEE ALL →
+                  </Link>
                 </div>
                 <div className="-mx-1 mt-3 flex gap-3 overflow-x-auto px-1 pb-2">
                   {shelf.tokens.map((t) => (

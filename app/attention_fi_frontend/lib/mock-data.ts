@@ -15,6 +15,15 @@ export const VERTICALS = [
 
 export type Vertical = (typeof VERTICALS)[number];
 
+/** URL-safe slug for a vertical (e.g. "AI/Tech" -> "ai-tech"). */
+export function verticalSlug(v: string): string {
+  return v.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+}
+
+export function verticalFromSlug(slug: string): Vertical | null {
+  return VERTICALS.find((v) => verticalSlug(v) === slug) ?? null;
+}
+
 /** Mindshare tiers mirror the on-chain `MindshareTier` seed model. */
 export type Tier = "Top 10" | "Top 100" | "Emerging" | "New";
 
