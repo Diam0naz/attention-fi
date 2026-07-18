@@ -62,8 +62,8 @@ export function getNftVisual(data: NftCardData): NftVisual {
   return {
     label: "Genesis",
     tag: "TRANSFERABLE",
-    grad: "linear-gradient(120deg,#1a1038,#5b3fd6,#22164a)",
-    accent: "#5b8fff",
+    grad: "linear-gradient(120deg,#05302a,#1fe0b8,#0a4038)",
+    accent: "#3fe9c4",
     tier: "Fee-share",
     stat: `${(data.shareBps / 100).toFixed(1)}%`,
     statLabel: "REVENUE SHARE",
