@@ -262,10 +262,16 @@ function TopBar({ shortAddress, onDisconnect }: { shortAddress?: string | null; 
       </Link>
       <span className="text-[#4b5563]">/</span>
       <span className="font-mono text-[12px]">Profile</span>
+      <Link
+        href="/discover"
+        className="ml-auto font-mono text-[11px] text-[#6B6B6B] transition-colors hover:text-signal"
+      >
+        Discover
+      </Link>
       {shortAddress && (
         <button
           onClick={onDisconnect}
-          className="ml-auto rounded-sm border border-white/10 px-2.5 py-1 font-mono text-[10px] text-[#6B6B6B] transition-colors hover:text-noise"
+          className="rounded-sm border border-white/10 px-2.5 py-1 font-mono text-[10px] text-[#6B6B6B] transition-colors hover:text-noise"
         >
           Disconnect
         </button>

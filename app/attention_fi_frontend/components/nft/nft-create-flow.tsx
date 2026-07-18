@@ -151,7 +151,7 @@ export function NftCreateFlow() {
         Step {step + 1} · {STEPS[step]}
       </div>
 
-      <div className="mt-4 min-h-[360px]">
+      <div className="mt-4">
         {/* 1 — type */}
         {step === 0 && (
           <div className="flex flex-col gap-2.5">
@@ -316,7 +316,11 @@ export function NftCreateFlow() {
         {step === 2 && (
           <div className="rounded-sm border border-white/[0.08] bg-[#0f1620] p-5">
             <div className="text-[13px] font-bold">Review</div>
-            <dl className="mt-4 flex flex-col gap-2.5 font-mono text-[12px]">
+            <div className="mt-4 flex flex-col items-center gap-5 sm:flex-row sm:items-start">
+              <div className="w-44 max-w-full shrink-0">
+                <NftCardFace data={previewData} />
+              </div>
+              <dl className="flex w-full flex-1 flex-col gap-2.5 font-mono text-[12px]">
               {(kind === "genesis"
                 ? [
                     ["Type", kindMeta.name],
@@ -345,7 +349,8 @@ export function NftCreateFlow() {
                   <span>{v}</span>
                 </div>
               ))}
-            </dl>
+              </dl>
+            </div>
           </div>
         )}
 
