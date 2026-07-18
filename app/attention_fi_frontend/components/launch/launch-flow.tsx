@@ -257,7 +257,7 @@ export function LaunchFlow() {
 
       {/* nav — Back on any step past the first; CONTINUE except while awaiting the signature */}
       {step < 3 && (
-        <div className="sticky bottom-0 mt-6 border-t border-white/[0.08] bg-[#0A0A0A]/70 py-4 backdrop-blur-md">
+        <div className="sticky bottom-0 mt-6 bg-gradient-to-t from-[#0A0A0A] via-[#0A0A0A] to-transparent pb-4 pt-10">
           <div className="flex gap-2">
             {step > 0 && (
               <button
