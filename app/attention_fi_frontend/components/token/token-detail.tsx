@@ -10,8 +10,13 @@ import { PriceChart } from "@/components/token/price-chart";
 import { MindshareView } from "@/components/token/mindshare-view";
 import { Footer } from "@/components/feed/footer";
 import { WalletConnectModal } from "@/components/wallet/wallet-connect-modal";
+import { PublicKey } from "@solana/web3.js";
 import { useWallet } from "@/components/wallet/wallet-provider";
 import { useLiveTokenDetail } from "@/components/token/use-live-token";
+import { useProgram } from "@/lib/solana/use-program";
+import { handleToMint } from "@/lib/solana/registry";
+import { buyTokens, sellTokens } from "@/lib/solana/trade";
+import { explorerTx } from "@/lib/solana/config";
 import { TxStatus, type TxState } from "@/components/wallet/tx-status";
 
 const TABS = ["chart", "trades", "holders", "about"] as const;
@@ -26,11 +31,14 @@ function usd(n: number): string {
 export function TokenDetailTerminal({ token: tokenProp }: { token: TokenDetail }) {
   // Mock now, upgraded to live on-chain curve state when the token is deployed.
   const { token, source } = useLiveTokenDetail(tokenProp);
-  const { connected, shortAddress, disconnect } = useWallet();
+  const { connected, address, shortAddress, disconnect } = useWallet();
+  const program = useProgram();
   const [side, setSide] = useState<"buy" | "sell">("buy");
   const [amount, setAmount] = useState("");
   const [walletOpen, setWalletOpen] = useState(false);
   const [tx, setTx] = useState<TxState | null>(null);
+  const [txSig, setTxSig] = useState<string | null>(null);
+  const [txErr, setTxErr] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>("chart");
   // 1a "Trading Terminal" (data-dense) vs 1b "Mindshare-First" (social proof).
   const [view, setView] = useState<"terminal" | "mindshare">("terminal");
@@ -43,11 +51,33 @@ export function TokenDetailTerminal({ token: tokenProp }: { token: TokenDetail }
   const amt = parseFloat(amount) || 0;
   const receive = side === "buy" ? amt * 24_000 : amt; // mock rate
 
-  function submit() {
+  async function submit() {
     if (!connected) return setWalletOpen(true);
     if (amt <= 0) return;
+
+    const mint = handleToMint(token.handle);
     setTx("pending");
-    setTimeout(() => setTx("confirmed"), 1600);
+    setTxSig(null);
+    setTxErr(null);
+
+    // Mock path for tokens that aren't on-chain (or no signer available).
+    if (!program || !mint || !address) {
+      setTimeout(() => setTx("confirmed"), 1600);
+      return;
+    }
+
+    try {
+      const wallet = new PublicKey(address);
+      const sig =
+        side === "buy"
+          ? await buyTokens(program, wallet, mint, amt)
+          : await sellTokens(program, wallet, mint, amt, 6);
+      setTxSig(sig);
+      setTx("confirmed");
+    } catch (e) {
+      setTxErr(e instanceof Error ? e.message : String(e));
+      setTx("failed");
+    }
   }
 
   return (
@@ -371,11 +401,23 @@ export function TokenDetailTerminal({ token: tokenProp }: { token: TokenDetail }
               <div className="mt-3">
                 <TxStatus
                   state={tx}
-                  title={tx === "pending" ? "Confirming trade…" : "Trade confirmed"}
-                  detail={`${amt} SOL → ${token.symbol}`}
-                  signature="5xРq…8kQ2"
-                  explorerUrl="#"
-                  onRetry={() => setTx("pending")}
+                  title={
+                    tx === "pending"
+                      ? "Confirming trade…"
+                      : tx === "confirmed"
+                        ? "Trade confirmed"
+                        : "Trade failed"
+                  }
+                  detail={
+                    tx === "failed" && txErr
+                      ? txErr.slice(0, 90)
+                      : side === "buy"
+                        ? `${amt} SOL → $${token.symbol}`
+                        : `${amt} $${token.symbol} → SOL`
+                  }
+                  signature={txSig ? `${txSig.slice(0, 4)}…${txSig.slice(-4)}` : undefined}
+                  explorerUrl={txSig ? explorerTx(txSig) : undefined}
+                  onRetry={submit}
                 />
               </div>
             )}

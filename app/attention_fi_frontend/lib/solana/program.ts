@@ -52,3 +52,13 @@ export const curvePda = (mint: PublicKey): PublicKey =>
 /** Verification is keyed by the subject wallet, not the handle. */
 export const verificationPda = (subject: PublicKey): PublicKey =>
   PublicKey.findProgramAddressSync([enc.encode("verify"), subject.toBytes()], PROGRAM_ID)[0];
+
+const TOKEN_PROGRAM_ID = new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
+const ASSOCIATED_TOKEN_PROGRAM_ID = new PublicKey("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
+
+/** Associated token account for (owner, mint). Works for PDA owners (off-curve). */
+export const ata = (owner: PublicKey, mint: PublicKey): PublicKey =>
+  PublicKey.findProgramAddressSync(
+    [owner.toBytes(), TOKEN_PROGRAM_ID.toBytes(), mint.toBytes()],
+    ASSOCIATED_TOKEN_PROGRAM_ID,
+  )[0];
