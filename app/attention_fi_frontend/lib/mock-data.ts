@@ -356,10 +356,12 @@ export function getNftState(address: string): NftState {
   const hasPerk = rand() > 0.3;
   const level = hasPerk ? 1 + Math.floor(rand() * 4) : 0; // 1..4 (cap 5%)
   const perk = hasPerk ? { level, discountBps: Math.min(500, level * 100) } : null;
-  const genesis: GenesisNft[] = Array.from({ length: Math.floor(rand() * 3) }, () => ({
+  // Always hold at least one genesis (demo previews the fee-share card); the
+  // first has non-zero claimable so the CLAIM action is exercised too.
+  const genesis: GenesisNft[] = Array.from({ length: 1 + Math.floor(rand() * 2) }, (_, i) => ({
     id: randWallet(rand),
     shareBps: 50 + Math.floor(rand() * 150),
-    claimableUsd: Math.round(rand() * 90),
+    claimableUsd: i === 0 ? 12 + Math.round(rand() * 80) : Math.round(rand() * 90),
   }));
   return { verified, handle: verified ? (MOCK_TOKENS[0]?.handle ?? null) : null, perk, genesis };
 }
