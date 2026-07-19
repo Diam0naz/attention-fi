@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { LogoMark } from "@/components/brand/logo";
 import { WalletButton } from "@/components/wallet/wallet-button";
 import { useWallet } from "@/components/wallet/wallet-provider";
 import { useSolBalance } from "@/lib/solana/use-sol-balance";
@@ -57,8 +58,9 @@ export function TopBar() {
       <Link
         href="/"
         title="Back to AttentionFi"
-        className="flex shrink-0 items-center gap-1.5 px-1 transition-opacity duration-150 hover:opacity-80"
+        className="flex shrink-0 items-center gap-2 px-1 transition-opacity duration-150 hover:opacity-80"
       >
+        <LogoMark size={16} />
         <span className="text-sm font-bold tracking-tight text-hi">
           ATTENTION<span style={{ color: "var(--tk-up-alert)" }}>FI</span>
         </span>
