@@ -10,6 +10,7 @@ import { TxStatus, type TxState } from "@/components/wallet/tx-status";
 import { Footer } from "@/components/feed/footer";
 import { NftCard, type NftCardData } from "@/components/nft/nft-card";
 import { NftLanyard } from "@/components/nft/nft-lanyard";
+import { useOwnedNfts } from "@/components/nft/use-owned-nfts";
 import { useSolBalance } from "@/lib/solana/use-sol-balance";
 import { useTokenBalance } from "@/lib/solana/use-token-balance";
 import { USDC_MINT } from "@/lib/solana/config";
@@ -32,6 +33,7 @@ export function ProfileView() {
 
   const solBalance = useSolBalance();
   const usdcBalance = useTokenBalance(USDC_MINT);
+  const ownedOnchain = useOwnedNfts();
   const portfolio = useMemo(() => (address ? getPortfolio(address) : null), [address]);
   const nft = useMemo(() => (address ? getNftState(address) : null), [address]);
 
@@ -90,10 +92,12 @@ export function ProfileView() {
     );
   }
 
-  const nftCollection: NftCardData[] = [];
-  if (nft.verified) nftCollection.push({ kind: "verification", handle: nft.handle ?? "you" });
-  if (nft.perk) nftCollection.push({ kind: "perk", level: nft.perk.level, discountBps: nft.perk.discountBps });
-  for (const g of nft.genesis) nftCollection.push({ kind: "genesis", shareBps: g.shareBps, id: g.id });
+  // Real on-chain NFTs when available; mock fallback otherwise.
+  const mockNftCollection: NftCardData[] = [];
+  if (nft.verified) mockNftCollection.push({ kind: "verification", handle: nft.handle ?? "you" });
+  if (nft.perk) mockNftCollection.push({ kind: "perk", level: nft.perk.level, discountBps: nft.perk.discountBps });
+  for (const g of nft.genesis) mockNftCollection.push({ kind: "genesis", shareBps: g.shareBps, id: g.id });
+  const nftCollection = ownedOnchain ?? mockNftCollection;
 
   return (
     <div className="flex min-h-screen flex-col">

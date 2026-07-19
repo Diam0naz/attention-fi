@@ -10,6 +10,7 @@ import { Footer } from "@/components/feed/footer";
 import { getNftState } from "@/lib/mock-data";
 import { NftCard, type NftCardData } from "@/components/nft/nft-card";
 import { NftLanyard } from "@/components/nft/nft-lanyard";
+import { useOwnedNfts } from "@/components/nft/use-owned-nfts";
 
 export function NftView() {
   const { connected, address, shortAddress, disconnect } = useWallet();
@@ -54,10 +55,13 @@ export function NftView() {
 
   const discountBps = Math.min(500, level * 100);
 
-  const collection: NftCardData[] = [];
-  if (verified) collection.push({ kind: "verification", handle: base.handle ?? "you" });
-  if (level > 0) collection.push({ kind: "perk", level, discountBps });
-  for (const g of base.genesis) collection.push({ kind: "genesis", shareBps: g.shareBps, id: g.id });
+  // Prefer the wallet's real on-chain NFTs; fall back to the mock demo state.
+  const ownedOnchain = useOwnedNfts();
+  const mockCollection: NftCardData[] = [];
+  if (verified) mockCollection.push({ kind: "verification", handle: base.handle ?? "you" });
+  if (level > 0) mockCollection.push({ kind: "perk", level, discountBps });
+  for (const g of base.genesis) mockCollection.push({ kind: "genesis", shareBps: g.shareBps, id: g.id });
+  const collection = ownedOnchain ?? mockCollection;
 
   const manage = [
     {

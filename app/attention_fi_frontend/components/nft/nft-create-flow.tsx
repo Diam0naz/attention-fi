@@ -13,6 +13,7 @@ import { getNftState, getPortfolio } from "@/lib/mock-data";
 import { Keypair, PublicKey } from "@solana/web3.js";
 import { BN } from "@anchor-lang/core";
 import { useProgram } from "@/lib/solana/use-program";
+import { useIsAdmin } from "@/lib/solana/use-admin";
 import { handleToMint } from "@/lib/solana/registry";
 import { explorerTx } from "@/lib/solana/config";
 
@@ -50,6 +51,7 @@ const DURATIONS = ["6h", "12h", "24h", "48h"];
 export function NftCreateFlow() {
   const { connected, address, shortAddress } = useWallet();
   const program = useProgram();
+  const isAdmin = useIsAdmin();
   const [walletOpen, setWalletOpen] = useState(false);
   const [step, setStep] = useState(0);
   const [kind, setKind] = useState<Kind>("genesis");
@@ -109,7 +111,7 @@ export function NftCreateFlow() {
           shareBps: nft?.genesis.find((g) => g.id === assetId)?.shareBps ?? 100,
           id: assetId || "GEN-0001",
         };
-  const validGenesis = tokenHandle !== "" && +sharePct > 0 && +supply > 0;
+  const validGenesis = isAdmin && tokenHandle !== "" && +sharePct > 0 && +supply > 0;
   const validAuction = assetId !== "" && +startUsd > +floorUsd && +floorUsd > 0;
   const canContinue =
     step !== 1 || (kind === "genesis" ? validGenesis : validAuction);
@@ -233,6 +235,13 @@ export function NftCreateFlow() {
               Each NFT earns its share of every fee your token collects, split
               pro-rata.
             </p>
+            {!isAdmin && (
+              <div className="mt-3 rounded-sm border border-noise/40 bg-noise/[0.06] px-3 py-2 text-[11px] leading-relaxed text-noise">
+                Genesis issuance is protocol-admin-only in this build — the
+                connected wallet isn&apos;t the program authority, so this
+                transaction would be rejected on-chain.
+              </div>
+            )}
             <Field label="Token you created">
               {created.length ? (
                 <select
