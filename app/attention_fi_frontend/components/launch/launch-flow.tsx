@@ -9,6 +9,10 @@ import { WalletConnectModal } from "@/components/wallet/wallet-connect-modal";
 import { useWallet } from "@/components/wallet/wallet-provider";
 import { TxStatus, type TxState } from "@/components/wallet/tx-status";
 import { PageBackground } from "@/components/reactbits/page-background";
+import { Keypair, PublicKey } from "@solana/web3.js";
+import { useProgram } from "@/lib/solana/use-program";
+import { registerToken } from "@/lib/solana/registry";
+import { explorerTx } from "@/lib/solana/config";
 
 type MechId = "bonding" | "dutch" | "conviction" | "revenue";
 
@@ -28,10 +32,19 @@ const TIERS = [
 ];
 const tierFor = (m: number) => TIERS.find((t) => m >= t.min) ?? TIERS[TIERS.length - 1];
 
+// UI tier label → on-chain MindshareTier enum arg.
+const TIER_ARG: Record<string, object> = {
+  "Top 10": { top10: {} },
+  "Top 100": { top100: {} },
+  Emerging: { emerging: {} },
+  New: { newEntrant: {} },
+};
+
 const STEPS = ["Mechanism", "Verify", "Seed & review", "Confirm"];
 
 export function LaunchFlow() {
-  const { connected, shortAddress } = useWallet();
+  const { connected, shortAddress, address } = useWallet();
+  const program = useProgram();
   const [step, setStep] = useState(0); // 0..3
   const [mech, setMech] = useState<MechId>("bonding");
   const [handle, setHandle] = useState("");
@@ -41,6 +54,8 @@ export function LaunchFlow() {
   // Wallet is connected (1); start on "awaiting signature" (2) so the SIGN button shows.
   const [verifyStep, setVerifyStep] = useState<2 | 3>(2);
   const [tx, setTx] = useState<TxState | null>(null);
+  const [txSig, setTxSig] = useState<string | null>(null);
+  const [txErr, setTxErr] = useState<string | null>(null);
 
   const mindshare = 0.98; // mock: fetched from Kaito for the handle
   const t = tierFor(mindshare);
@@ -54,9 +69,31 @@ export function LaunchFlow() {
     setStep((s) => Math.min(3, s + 1));
   }
 
-  function launch() {
+  async function launch() {
+    // Only the bonding curve is wired on-chain (launch_token). Other mechanisms
+    // stay a mock preview until their instructions are wired.
+    if (mech !== "bonding") {
+      setTx("pending");
+      setTimeout(() => setTx("confirmed"), 1500);
+      return;
+    }
+    if (!program || !address) return setWalletOpen(true);
+    setTxErr(null);
     setTx("pending");
-    setTimeout(() => setTx("confirmed"), 1800);
+    try {
+      const mint = Keypair.generate();
+      const sig = await program.methods
+        .launchToken(TIER_ARG[t.tier] as never)
+        .accounts({ creator: new PublicKey(address), mint: mint.publicKey })
+        .signers([mint])
+        .rpc();
+      registerToken(handle, mint.publicKey.toBase58());
+      setTxSig(sig);
+      setTx("confirmed");
+    } catch (e) {
+      setTxErr(e instanceof Error ? e.message : "Launch failed");
+      setTx("failed");
+    }
   }
 
   return (
@@ -229,10 +266,13 @@ export function LaunchFlow() {
               <div className="mt-4">
                 <TxStatus
                   state={tx}
-                  title={tx === "pending" ? "Launching…" : "Token launched"}
-                  detail={`$${ticker} · ${mechName}`}
-                  signature="3xРq…8kQ2"
-                  explorerUrl="#"
+                  title={
+                    tx === "pending" ? "Launching…" : tx === "failed" ? "Launch failed" : "Token launched"
+                  }
+                  detail={tx === "failed" && txErr ? txErr.slice(0, 90) : `$${ticker} · ${mechName}`}
+                  signature={txSig ? `${txSig.slice(0, 4)}…${txSig.slice(-4)}` : undefined}
+                  explorerUrl={txSig ? explorerTx(txSig) : undefined}
+                  onRetry={tx === "failed" ? launch : undefined}
                 />
                 {tx === "confirmed" && (
                   <Link
