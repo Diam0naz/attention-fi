@@ -10,6 +10,14 @@ import { TxStatus, type TxState } from "@/components/wallet/tx-status";
 import { PageBackground } from "@/components/reactbits/page-background";
 import { NftCardFace, type NftCardData } from "@/components/nft/nft-card";
 import { getNftState, getPortfolio } from "@/lib/mock-data";
+import { Keypair, PublicKey } from "@solana/web3.js";
+import { BN } from "@anchor-lang/core";
+import { useProgram } from "@/lib/solana/use-program";
+import { handleToMint } from "@/lib/solana/registry";
+import { explorerTx } from "@/lib/solana/config";
+
+const SOL_USD = 164.2;
+const DURATION_SEC: Record<string, number> = { "6h": 21_600, "12h": 43_200, "24h": 86_400, "48h": 172_800 };
 
 type Kind = "genesis" | "auction";
 
@@ -41,10 +49,13 @@ const DURATIONS = ["6h", "12h", "24h", "48h"];
 
 export function NftCreateFlow() {
   const { connected, address, shortAddress } = useWallet();
+  const program = useProgram();
   const [walletOpen, setWalletOpen] = useState(false);
   const [step, setStep] = useState(0);
   const [kind, setKind] = useState<Kind>("genesis");
   const [tx, setTx] = useState<TxState | null>(null);
+  const [txSig, setTxSig] = useState<string | null>(null);
+  const [txErr, setTxErr] = useState<string | null>(null);
 
   // genesis config
   const [tokenHandle, setTokenHandle] = useState("");
@@ -103,9 +114,43 @@ export function NftCreateFlow() {
   const canContinue =
     step !== 1 || (kind === "genesis" ? validGenesis : validAuction);
 
-  function mint() {
+  async function mint() {
+    if (!program || !address) return setWalletOpen(true);
+    setTxErr(null);
     setTx("pending");
-    setTimeout(() => setTx("confirmed"), 1700);
+    try {
+      const asset = Keypair.generate();
+      const me = new PublicKey(address);
+      let sig: string;
+      if (kind === "genesis") {
+        const subjectMint = handleToMint(tokenHandle);
+        if (!subjectMint) throw new Error("Launch this token on-chain first, then issue genesis NFTs.");
+        const shareBps = Math.max(1, Math.round((+sharePct || 0) * 100));
+        sig = await program.methods
+          .mintGenesis(shareBps, "")
+          .accounts({ authority: me, recipient: me, subjectMint, asset: asset.publicKey })
+          .signers([asset])
+          .rpc();
+      } else {
+        const toLamports = (usd: string) => new BN(Math.round(((+usd || 0) / SOL_USD) * 1e9));
+        sig = await program.methods
+          .startNftAuction(
+            toLamports(startUsd),
+            toLamports(floorUsd),
+            new BN(DURATION_SEC[duration] ?? 86_400),
+            assetId || "AttentionFi 1-of-1",
+            "",
+          )
+          .accounts({ creator: me, asset: asset.publicKey })
+          .signers([asset])
+          .rpc();
+      }
+      setTxSig(sig);
+      setTx("confirmed");
+    } catch (e) {
+      setTxErr(e instanceof Error ? e.message : "Transaction failed");
+      setTx("failed");
+    }
   }
 
   if (!connected) {
@@ -451,8 +496,8 @@ export function NftCreateFlow() {
             {/* what happens */}
             <div className="mt-4 rounded-sm border border-white/[0.06] bg-[#12181f] p-3 text-[11px] leading-relaxed text-[#6B6B6B]">
               {kind === "genesis"
-                ? `On confirm, ${supply} Metaplex Core assets mint to your wallet and a fee-share pool opens for @${tokenHandle}. Holders accrue their share of every trade fee and claim any time.`
-                : `On confirm, ${assetId} is escrowed by the auction PDA and the descending price starts. It transfers to the first buyer automatically; you can cancel before a sale.`}
+                ? `On confirm, a Metaplex Core genesis NFT mints to your wallet at ${sharePct}% and a fee-share pool opens for @${tokenHandle}. Holders accrue their share of every trade fee and claim any time. (Batch minting of ${supply} comes later.)`
+                : `On confirm, a Metaplex Core 1-of-1 is minted into the auction PDA and the descending price starts. It transfers to the first buyer automatically; you can cancel before a sale.`}
             </div>
 
             {tx ? (
@@ -464,17 +509,22 @@ export function NftCreateFlow() {
                       ? kind === "genesis"
                         ? "Minting genesis…"
                         : "Listing asset…"
-                      : kind === "genesis"
-                      ? "Genesis minted"
-                      : "Auction live"
+                      : tx === "failed"
+                        ? "Transaction failed"
+                        : kind === "genesis"
+                          ? "Genesis minted"
+                          : "Auction live"
                   }
                   detail={
-                    kind === "genesis"
-                      ? `@${tokenHandle} · ${supply} NFTs`
-                      : `${assetId} · ${duration}`
+                    tx === "failed" && txErr
+                      ? txErr.slice(0, 90)
+                      : kind === "genesis"
+                        ? `@${tokenHandle} · genesis`
+                        : `${assetId || "1-of-1"} · ${duration}`
                   }
-                  signature="8xРq…4kL7"
-                  explorerUrl="#"
+                  signature={txSig ? `${txSig.slice(0, 4)}…${txSig.slice(-4)}` : undefined}
+                  explorerUrl={txSig ? explorerTx(txSig) : undefined}
+                  onRetry={tx === "failed" ? mint : undefined}
                 />
                 {tx === "confirmed" && (
                   <Link
