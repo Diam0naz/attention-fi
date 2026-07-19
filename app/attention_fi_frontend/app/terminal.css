@@ -8,42 +8,46 @@
 /* ------------------------------------------------------------------ */
 
 :root {
-  --tk-bg-canvas: #0b0e11;
-  --tk-bg-panel: #12151b;
-  --tk-bg-elevated: #181d25;
-  --tk-bg-overlay: #1e242e;
-  --tk-bg-hover: rgba(255, 255, 255, 0.045);
-  --tk-bg-active: rgba(255, 255, 255, 0.08);
-  --tk-bg-input: #0e1116;
+  /* AttentionFi brand mapping: canvas matches the app shell (#0A0A0A),
+     up/down derive from --signal (#00ff85) / --noise (#ff3b5c) desaturated
+     for sustained viewing, accent from --pulse (#5b8fff). Full-saturation
+     signal/noise are reserved for the alert tokens. */
+  --tk-bg-canvas: #0a0a0a;
+  --tk-bg-panel: #111111;
+  --tk-bg-elevated: #181818;
+  --tk-bg-overlay: #1e1e1e;
+  --tk-bg-hover: rgba(255, 255, 255, 0.05);
+  --tk-bg-active: rgba(255, 255, 255, 0.085);
+  --tk-bg-input: #0d0d0d;
 
-  --tk-border: rgba(255, 255, 255, 0.065);
-  --tk-border-strong: rgba(255, 255, 255, 0.13);
-  --tk-border-focus: #4c8dff;
+  --tk-border: rgba(255, 255, 255, 0.07);
+  --tk-border-strong: rgba(255, 255, 255, 0.14);
+  --tk-border-focus: #5b8fff;
 
-  --tk-text-hi: #e8ecf2;
-  --tk-text-mid: #98a3b3;
-  --tk-text-low: #5b6572;
+  --tk-text-hi: #f5f4f0;
+  --tk-text-mid: #9d9d98;
+  --tk-text-low: #6b6b6b;
 
-  --tk-up: #2ebd85;
-  --tk-down: #e5484d;
-  --tk-up-muted: rgba(46, 189, 133, 0.14);
-  --tk-down-muted: rgba(229, 72, 77, 0.14);
-  --tk-up-alert: #00e5a0;
-  --tk-down-alert: #ff2e40;
+  --tk-up: #16c784;
+  --tk-down: #ea3d5e;
+  --tk-up-muted: rgba(0, 255, 133, 0.1);
+  --tk-down-muted: rgba(255, 59, 92, 0.12);
+  --tk-up-alert: #00ff85;
+  --tk-down-alert: #ff3b5c;
 
-  --tk-accent: #4c8dff;
-  --tk-accent-muted: rgba(76, 141, 255, 0.16);
+  --tk-accent: #5b8fff;
+  --tk-accent-muted: rgba(91, 143, 255, 0.16);
   --tk-warn: #e2b93b;
   --tk-warn-muted: rgba(226, 185, 59, 0.14);
 
   --tk-chart-grid: rgba(255, 255, 255, 0.04);
-  --tk-chart-crosshair: rgba(152, 163, 179, 0.55);
+  --tk-chart-crosshair: rgba(157, 157, 152, 0.55);
 
   --tk-scrollbar-thumb: rgba(255, 255, 255, 0.12);
   --tk-scrollbar-thumb-hover: rgba(255, 255, 255, 0.22);
 
-  --tk-flash-up: rgba(46, 189, 133, 0.22);
-  --tk-flash-down: rgba(229, 72, 77, 0.22);
+  --tk-flash-up: rgba(0, 255, 133, 0.16);
+  --tk-flash-down: rgba(255, 59, 92, 0.18);
 }
 
 .light {
@@ -114,9 +118,14 @@
   --color-warn: var(--tk-warn);
   --color-warn-muted: var(--tk-warn-muted);
 
-  --font-ui: "Inter Tight", "Inter", "Segoe UI", system-ui, sans-serif;
-  --font-num: "JetBrains Mono", "Geist Mono", ui-monospace, "SF Mono", Menlo,
-    monospace;
+  /* inherit the app's brand faces (Space Grotesk / Space Mono stacks) */
+  --font-ui: var(--font-sans, "Space Grotesk", system-ui, sans-serif);
+  --font-num: var(
+    --font-geist-mono,
+    "Space Mono",
+    ui-monospace,
+    monospace
+  );
 
   --text-2xs: 0.6875rem;
   --text-2xs--line-height: 1rem;

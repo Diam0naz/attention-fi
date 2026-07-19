@@ -1,6 +1,10 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
+import { WalletButton } from "@/components/wallet/wallet-button";
+import { useWallet } from "@/components/wallet/wallet-provider";
+import { useSolBalance } from "@/lib/solana/use-sol-balance";
 import { cn } from "@/lib/terminal-app/lib/cn";
 import { useProvider } from "@/lib/terminal-app/lib/providers";
 import { TIMEFRAMES, type ChartType, type ConnectionStatus } from "@/lib/terminal-app/lib/types";
@@ -50,9 +54,18 @@ export function TopBar() {
 
   return (
     <header className="flex h-12 shrink-0 items-center gap-2 border-b border-edge bg-panel px-2">
-      <span className="px-1 text-sm font-semibold tracking-tight text-hi">
-        TERMINAL
-      </span>
+      <Link
+        href="/"
+        title="Back to AttentionFi"
+        className="flex shrink-0 items-center gap-1.5 px-1 transition-opacity duration-150 hover:opacity-80"
+      >
+        <span className="text-sm font-bold tracking-tight text-hi">
+          ATTENTION<span style={{ color: "var(--tk-up-alert)" }}>FI</span>
+        </span>
+        <span className="rounded-sm border border-edge bg-elevated px-1 py-px text-2xs uppercase tracking-wider text-mid">
+          Terminal
+        </span>
+      </Link>
       <SymbolSearch />
 
       <div className="flex items-center rounded border border-edge bg-tinput p-0.5">
@@ -148,8 +161,28 @@ export function TopBar() {
         </button>
       </Tooltip>
 
+      <WalletCluster />
       <StatusLed />
     </header>
+  );
+}
+
+/** Wallet connect/menu plus the connected wallet's SOL balance. */
+function WalletCluster() {
+  const { connected } = useWallet();
+  const sol = useSolBalance();
+  return (
+    <div className="flex shrink-0 items-center gap-1.5">
+      {connected && sol !== null && (
+        <span
+          className="num rounded border border-edge bg-tinput px-2 py-1 text-2xs text-mid"
+          title="Wallet SOL balance (devnet)"
+        >
+          {sol.toFixed(3)} SOL
+        </span>
+      )}
+      <WalletButton />
+    </div>
   );
 }
 
