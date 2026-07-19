@@ -21,7 +21,8 @@ export default function RootLayout({
     <html
       lang="en"
       data-scroll-behavior="smooth"
-      className={cn("dark h-full antialiased font-sans")}>
+      className={cn("dark h-full antialiased font-sans")}
+      suppressHydrationWarning>
       <body className="min-h-full flex flex-col bg-[#0A0A0A] text-[#F5F4F0]">
         <WalletProvider>{children}</WalletProvider>
       </body>

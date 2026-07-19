@@ -45,6 +45,11 @@ export function handleToMint(handle: string): PublicKey | null {
   }
 }
 
+/** Every known handle (static + env + runtime-launched), for symbol listings. */
+export function allTokenHandles(): string[] {
+  return Object.keys({ ...staticRegistry(), ...launchedRegistry() });
+}
+
 /** Record a freshly-launched token so the rest of the app can read it on-chain. */
 export function registerToken(handle: string, mint: string): void {
   if (typeof window === "undefined") return;
