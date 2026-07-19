@@ -1,0 +1,353 @@
+@import "tailwindcss";
+
+/* ------------------------------------------------------------------ */
+/* Design tokens                                                       */
+/* Raw values live on :root (dark, the primary theme) and .light.      */
+/* Tailwind utilities are generated from the semantic aliases in       */
+/* @theme inline below, so classes read as bg-panel, text-up, etc.     */
+/* ------------------------------------------------------------------ */
+
+:root {
+  /* background hierarchy: canvas -> panel -> elevated -> overlay */
+  --tk-bg-canvas: #0b0e11;
+  --tk-bg-panel: #12151b;
+  --tk-bg-elevated: #181d25;
+  --tk-bg-overlay: #1e242e;
+  --tk-bg-hover: rgba(255, 255, 255, 0.045);
+  --tk-bg-active: rgba(255, 255, 255, 0.08);
+  --tk-bg-input: #0e1116;
+
+  --tk-border: rgba(255, 255, 255, 0.065);
+  --tk-border-strong: rgba(255, 255, 255, 0.13);
+  --tk-border-focus: #4c8dff;
+
+  --tk-text-hi: #e8ecf2;
+  --tk-text-mid: #98a3b3;
+  --tk-text-low: #5b6572;
+
+  /* direction: desaturated enough for 8-hour viewing */
+  --tk-up: #2ebd85;
+  --tk-down: #e5484d;
+  --tk-up-muted: rgba(46, 189, 133, 0.14);
+  --tk-down-muted: rgba(229, 72, 77, 0.14);
+  /* full saturation is reserved for alerts */
+  --tk-up-alert: #00e5a0;
+  --tk-down-alert: #ff2e40;
+
+  --tk-accent: #4c8dff;
+  --tk-accent-muted: rgba(76, 141, 255, 0.16);
+  --tk-warn: #e2b93b;
+  --tk-warn-muted: rgba(226, 185, 59, 0.14);
+
+  /* chart-specific */
+  --tk-chart-grid: rgba(255, 255, 255, 0.04);
+  --tk-chart-crosshair: rgba(152, 163, 179, 0.55);
+  --tk-chart-watermark: rgba(255, 255, 255, 0.03);
+
+  --tk-scrollbar-thumb: rgba(255, 255, 255, 0.12);
+  --tk-scrollbar-thumb-hover: rgba(255, 255, 255, 0.22);
+
+  --tk-flash-up: rgba(46, 189, 133, 0.22);
+  --tk-flash-down: rgba(229, 72, 77, 0.22);
+
+  color-scheme: dark;
+}
+
+.light {
+  --tk-bg-canvas: #eef0f3;
+  --tk-bg-panel: #f9fafb;
+  --tk-bg-elevated: #ffffff;
+  --tk-bg-overlay: #ffffff;
+  --tk-bg-hover: rgba(15, 23, 42, 0.045);
+  --tk-bg-active: rgba(15, 23, 42, 0.08);
+  --tk-bg-input: #ffffff;
+
+  --tk-border: rgba(15, 23, 42, 0.09);
+  --tk-border-strong: rgba(15, 23, 42, 0.18);
+  --tk-border-focus: #2f6fed;
+
+  --tk-text-hi: #161b22;
+  --tk-text-mid: #59636f;
+  --tk-text-low: #98a1ad;
+
+  --tk-up: #1e9e6d;
+  --tk-down: #d43f48;
+  --tk-up-muted: rgba(30, 158, 109, 0.12);
+  --tk-down-muted: rgba(212, 63, 72, 0.12);
+  --tk-up-alert: #00a86e;
+  --tk-down-alert: #e81324;
+
+  --tk-accent: #2f6fed;
+  --tk-accent-muted: rgba(47, 111, 237, 0.13);
+  --tk-warn: #b58a12;
+  --tk-warn-muted: rgba(181, 138, 18, 0.13);
+
+  --tk-chart-grid: rgba(15, 23, 42, 0.055);
+  --tk-chart-crosshair: rgba(89, 99, 111, 0.55);
+  --tk-chart-watermark: rgba(15, 23, 42, 0.035);
+
+  --tk-scrollbar-thumb: rgba(15, 23, 42, 0.16);
+  --tk-scrollbar-thumb-hover: rgba(15, 23, 42, 0.3);
+
+  --tk-flash-up: rgba(30, 158, 109, 0.2);
+  --tk-flash-down: rgba(212, 63, 72, 0.2);
+
+  color-scheme: light;
+}
+
+@theme inline {
+  /* colors */
+  --color-canvas: var(--tk-bg-canvas);
+  --color-panel: var(--tk-bg-panel);
+  --color-elevated: var(--tk-bg-elevated);
+  --color-overlay: var(--tk-bg-overlay);
+  --color-hover: var(--tk-bg-hover);
+  --color-active: var(--tk-bg-active);
+  --color-input: var(--tk-bg-input);
+
+  --color-edge: var(--tk-border);
+  --color-edge-strong: var(--tk-border-strong);
+  --color-focus: var(--tk-border-focus);
+
+  --color-hi: var(--tk-text-hi);
+  --color-mid: var(--tk-text-mid);
+  --color-low: var(--tk-text-low);
+
+  --color-up: var(--tk-up);
+  --color-down: var(--tk-down);
+  --color-up-muted: var(--tk-up-muted);
+  --color-down-muted: var(--tk-down-muted);
+  --color-up-alert: var(--tk-up-alert);
+  --color-down-alert: var(--tk-down-alert);
+
+  --color-accent: var(--tk-accent);
+  --color-accent-muted: var(--tk-accent-muted);
+  --color-warn: var(--tk-warn);
+  --color-warn-muted: var(--tk-warn-muted);
+
+  /* typography */
+  --font-ui: "Inter Tight", "Inter", "Segoe UI", system-ui, sans-serif;
+  --font-num: "JetBrains Mono", "Geist Mono", ui-monospace, "SF Mono", Menlo,
+    monospace;
+
+  --text-2xs: 0.6875rem; /* 11px — dense data rows */
+  --text-2xs--line-height: 1rem;
+  --text-xs: 0.75rem; /* 12px — default data size */
+  --text-xs--line-height: 1.0625rem;
+  --text-sm: 0.8125rem; /* 13px — labels, forms */
+  --text-sm--line-height: 1.125rem;
+
+  /* motion: restraint is the aesthetic */
+  --ease-terminal: cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+/* ------------------------------------------------------------------ */
+/* Base                                                                */
+/* ------------------------------------------------------------------ */
+
+* {
+  border-color: var(--tk-border);
+}
+
+html,
+body {
+  height: 100%;
+  overscroll-behavior: none;
+}
+
+body {
+  background: var(--tk-bg-canvas);
+  color: var(--tk-text-hi);
+  font-family: var(--font-ui);
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  user-select: none;
+}
+
+/* every number in the app: tabular, monospace, no horizontal shift */
+.num {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+/* ------------------------------------------------------------------ */
+/* Custom scrollbars — no native chrome                                */
+/* ------------------------------------------------------------------ */
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--tk-scrollbar-thumb) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--tk-scrollbar-thumb);
+  border-radius: 4px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--tk-scrollbar-thumb-hover);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* ------------------------------------------------------------------ */
+/* Focus + interaction states                                          */
+/* ------------------------------------------------------------------ */
+
+:focus-visible {
+  outline: 1px solid var(--tk-border-focus);
+  outline-offset: -1px;
+}
+
+button {
+  cursor: pointer;
+}
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+input::placeholder {
+  color: var(--tk-text-low);
+}
+
+/* number input spinners off — terminal inputs use their own steppers */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+/* ------------------------------------------------------------------ */
+/* Price flash: tint on change, decay over ~400ms                      */
+/* ------------------------------------------------------------------ */
+
+@keyframes flash-up {
+  0% {
+    background-color: var(--tk-flash-up);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+@keyframes flash-down {
+  0% {
+    background-color: var(--tk-flash-down);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+.flash-up {
+  animation: flash-up 420ms ease-out;
+}
+.flash-down {
+  animation: flash-down 420ms ease-out;
+}
+
+/* ------------------------------------------------------------------ */
+/* Panel resize handles                                                */
+/* ------------------------------------------------------------------ */
+
+.resize-handle {
+  position: relative;
+  background: transparent;
+  transition: background 140ms var(--ease-terminal);
+}
+.resize-handle::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+}
+.resize-handle[data-panel-group-direction="horizontal"] {
+  width: 3px;
+  margin: 0 -1px;
+  z-index: 10;
+}
+.resize-handle[data-panel-group-direction="vertical"] {
+  height: 3px;
+  margin: -1px 0;
+  z-index: 10;
+}
+.resize-handle:hover,
+.resize-handle[data-resize-handle-state="hover"],
+.resize-handle[data-resize-handle-state="drag"] {
+  background: var(--tk-accent);
+}
+
+/* ------------------------------------------------------------------ */
+/* Popover / menu entrance: 120-180ms, nothing bounces                 */
+/* ------------------------------------------------------------------ */
+
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(-3px) scale(0.99);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+.pop-in {
+  animation: pop-in 140ms var(--ease-terminal);
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.fade-in {
+  animation: fade-in 140ms var(--ease-terminal);
+}
+
+/* connection LED */
+.led {
+  width: 7px;
+  height: 7px;
+  border-radius: 9999px;
+  transition: background 180ms var(--ease-terminal),
+    box-shadow 180ms var(--ease-terminal);
+}
+.led-live {
+  background: var(--tk-up);
+  box-shadow: 0 0 5px var(--tk-up);
+}
+.led-connecting {
+  background: var(--tk-warn);
+  box-shadow: 0 0 5px var(--tk-warn);
+}
+.led-down {
+  background: var(--tk-down);
+  box-shadow: 0 0 5px var(--tk-down);
+}
