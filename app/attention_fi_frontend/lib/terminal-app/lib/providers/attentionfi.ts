@@ -197,9 +197,23 @@ export class AttentionFiProvider implements MarketDataProvider {
     }
   }
 
+  /**
+   * Opportunistic history recording: any open terminal pings the snapshot
+   * endpoint (server-side throttled + chain-read, so clients can't inject
+   * prices and concurrent tabs coalesce into one write).
+   */
+  private snapshotPingAt = 0;
+  private pingSnapshot() {
+    const now = Date.now();
+    if (now - this.snapshotPingAt < 60_000) return;
+    this.snapshotPingAt = now;
+    void fetch("/api/market/snapshot").catch(() => undefined);
+  }
+
   private async pollAll(): Promise<void> {
     if (this.polling) return;
     this.polling = true;
+    this.pingSnapshot();
     try {
       await this.ensureDecimals();
       await this.refreshSnapshot(true);
@@ -342,9 +356,41 @@ export class AttentionFiProvider implements MarketDataProvider {
     const w = this.watch(symbol);
     if (!w) return [];
     await this.primeWatch(w);
+    if (!this.series.has(this.seriesKey(symbol, tf))) {
+      await this.seedRealHistory(symbol, w, tf);
+    }
     const s = this.getSeries(symbol, tf, w.spot);
     this.extendBack(s, tf, from);
     return s.candles.filter((c) => c.time >= from && c.time <= to);
+  }
+
+  /**
+   * Seed a fresh series from recorded snapshots (the candles API) so history
+   * is real wherever snapshots exist; the synthetic walk only fills whatever
+   * lies before the first recorded candle. Falls back silently to fully
+   * synthetic when the API has nothing (no DB, or a brand-new token).
+   */
+  private async seedRealHistory(symbol: string, w: WatchState, tf: Timeframe): Promise<void> {
+    try {
+      const tfSec = TIMEFRAME_SECONDS[tf];
+      const now = Math.floor(Date.now() / 1000);
+      const from = now - tfSec * SYNTH_BACKFILL_BARS;
+      const res = await fetch(
+        `/api/market/candles?mint=${w.mint.toBase58()}&tf=${tfSec}&from=${from}&to=${now}`,
+      );
+      if (!res.ok) return;
+      const body = (await res.json()) as { candles?: Candle[] };
+      if (!body.candles || body.candles.length === 0) return;
+      const key = this.seriesKey(symbol, tf);
+      if (this.series.has(key)) return; // lost a seeding race — keep the winner
+      this.series.set(key, {
+        candles: body.candles.map((c) => ({ ...c })),
+        backRng: mulberry32(hashString(key) ^ 0xa77e17),
+        liveFrom: 0,
+      });
+    } catch {
+      // offline or API error — synthetic fallback
+    }
   }
 
   subscribeCandles(symbol: string, tf: Timeframe, cb: (c: Candle) => void): Unsubscribe {
