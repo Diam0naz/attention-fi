@@ -270,13 +270,34 @@ export function getHolders(handle: string): Holder[] {
   return holders;
 }
 
+/** Demo catalog handles are fictional — map them to real CT project accounts
+ *  so the feed shows real profile pictures. Launched tokens use the handle
+ *  itself (the on-chain subject IS an X handle). */
+const CT_HANDLE: Record<string, string> = {
+  solana_kol: "solana",
+  ai_narrative: "virtuals_io",
+  rwa_summer: "OndoFinance",
+  zk_builder: "zksync",
+  degen_pilled: "pumpdotfun",
+  gg_wagmi: "AxieInfinity",
+  onchain_beats: "audius",
+  mev_searcher: "jito_sol",
+  modular_max: "CelestiaOrg",
+  pixel_quest: "MagicEden",
+  base_degen: "base",
+  synth_wave: "soundxyz",
+};
+
 /**
- * Deterministic avatar image for a token/handle (Pump.fun-style thumbnails).
- * DiceBear generates a stable, colorful image per handle; loads client-side in
- * the user's browser. Components fall back to the gradient tile if it fails.
+ * Avatar image for a token/handle: the real X profile picture via unavatar,
+ * falling back to a deterministic DiceBear tile when the account has none or
+ * the fetch fails. Loads client-side; components also keep their own gradient
+ * fallback on <img> error.
  */
 export function tokenImage(handle: string): string {
-  return `https://api.dicebear.com/9.x/shapes/svg?seed=${encodeURIComponent(handle)}&size=96`;
+  const ct = CT_HANDLE[handle] ?? handle;
+  const fallback = `https://api.dicebear.com/9.x/shapes/svg?seed=${encodeURIComponent(handle)}&size=96`;
+  return `https://unavatar.io/x/${encodeURIComponent(ct)}?fallback=${encodeURIComponent(fallback)}`;
 }
 
 export interface Holding { handle: string; name: string; symbol: string; amount: number; valueUsd: number; delta24h: number }

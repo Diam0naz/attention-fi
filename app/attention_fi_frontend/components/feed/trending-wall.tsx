@@ -58,7 +58,7 @@ export function TrendingWall() {
   );
 }
 
-function Bg({ handle }: { handle: string }) {
+function Bg({ handle, up }: { handle: string; up: boolean }) {
   return (
     <>
       {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -69,6 +69,14 @@ function Bg({ handle }: { handle: string }) {
         className="absolute inset-0 h-full w-full object-cover opacity-80 transition-transform duration-500 group-hover:scale-110"
       />
       <div className="absolute inset-0 bg-gradient-to-t from-black via-black/45 to-black/10" />
+      <div
+        className={cn(
+          "pointer-events-none absolute inset-x-0 bottom-0 h-2/3 opacity-60 transition-opacity duration-500 group-hover:opacity-100",
+          up
+            ? "bg-[radial-gradient(ellipse_120%_80%_at_50%_100%,rgba(0,255,133,0.18),transparent_70%)]"
+            : "bg-[radial-gradient(ellipse_120%_80%_at_50%_100%,rgba(255,59,92,0.16),transparent_70%)]",
+        )}
+      />
       <div className="af-nft-sheen pointer-events-none absolute inset-y-0 left-0 w-1/3" />
     </>
   );
@@ -89,7 +97,7 @@ function FeaturedTile({ token, max }: { token: Token; max: number }) {
       href={`/token/${token.handle}`}
       className="group relative col-span-2 row-span-2 overflow-hidden rounded-lg border border-white/10 bg-[#0f1620] transition-colors hover:border-signal/40"
     >
-      <Bg handle={token.handle} />
+      <Bg handle={token.handle} up={token.delta24h >= 0} />
       <div className="relative flex h-full flex-col justify-between p-4">
         <div className="flex items-center justify-between">
           <span className="rounded-full bg-signal px-2 py-0.5 font-mono text-[9px] font-bold tracking-wide text-[#0A0A0A]">
@@ -129,7 +137,7 @@ function SmallTile({ token, rank, max }: { token: Token; rank: number; max: numb
       href={`/token/${token.handle}`}
       className="group relative overflow-hidden rounded-lg border border-white/10 bg-[#0f1620] transition-colors hover:border-signal/40"
     >
-      <Bg handle={token.handle} />
+      <Bg handle={token.handle} up={token.delta24h >= 0} />
       <div className="relative flex h-full flex-col justify-between p-2.5">
         <div className="flex items-center justify-between">
           <span className="font-mono text-[10px] text-[#9aa4af]">#{rank}</span>
