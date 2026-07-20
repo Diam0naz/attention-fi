@@ -2,15 +2,15 @@ use anchor_lang::prelude::*;
 use mpl_core::instructions::CreateV2CpiBuilder;
 use mpl_core::types::{Attribute, Attributes, DataState, Plugin, PluginAuthorityPair};
 
-use crate::constants::{GENESIS_SEED, GENPOOL_SEED, GLOBAL_SEED};
+use crate::constants::{CURVE_SEED, GENESIS_SEED, GENPOOL_SEED, GLOBAL_SEED};
 use crate::error::AttentionError;
 use crate::revenue::accrued;
-use crate::state::{GenesisNft, GenesisPool, Global};
+use crate::state::{BondingCurve, GenesisNft, GenesisPool, Global};
 
 #[derive(Accounts)]
 pub struct MintGenesis<'info> {
-    /// Protocol keeper minting the genesis share to an early participant.
-    #[account(mut, address = global.authority @ AttentionError::Unauthorized)]
+    /// The subject token's creator, issuing genesis fee-share NFTs for it.
+    #[account(mut)]
     pub authority: Signer<'info>,
 
     #[account(seeds = [GLOBAL_SEED], bump = global.bump)]
@@ -21,6 +21,14 @@ pub struct MintGenesis<'info> {
 
     /// CHECK: the token mint whose fee stream this NFT shares (reference only).
     pub subject_mint: UncheckedAccount<'info>,
+
+    /// The subject token's bonding curve — gates issuance to its creator.
+    #[account(
+        seeds = [CURVE_SEED, subject_mint.key().as_ref()],
+        bump = curve.bump,
+        constraint = authority.key() == curve.creator @ AttentionError::Unauthorized,
+    )]
+    pub curve: Account<'info, BondingCurve>,
 
     #[account(
         init,
