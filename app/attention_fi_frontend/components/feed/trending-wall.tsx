@@ -4,14 +4,21 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { BadgeCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { MOCK_TOKENS, jitter, tokenImage, type Token } from "@/lib/mock-data";
+import { jitter, tokenImage, type Token } from "@/lib/mock-data";
+import { useTokenIndex } from "@/lib/token-index";
 
 const byMindshare = (a: Token, b: Token) => b.mindshare - a.mindshare;
 
 /** Live "video wall": a large featured tile + four interlocking tiles, ordered
  *  by mindshare, with ticking numbers, pulse dots and a light sheen. */
 export function TrendingWall() {
-  const [tokens, setTokens] = useState<Token[]>(() => [...MOCK_TOKENS].sort(byMindshare).slice(0, 5));
+  const { tokens: indexed } = useTokenIndex();
+  const [tokens, setTokens] = useState<Token[]>(() => [...indexed].sort(byMindshare).slice(0, 5));
+
+  // re-seed whenever the on-chain snapshot upgrades entries
+  useEffect(() => {
+    setTokens([...indexed].sort(byMindshare).slice(0, 5));
+  }, [indexed]);
 
   // "Live" tick — jitter mindshare and re-rank every couple seconds (client-only
   // so SSR and first paint stay deterministic).

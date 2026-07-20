@@ -4,7 +4,8 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
-import { MOCK_TOKENS, type Vertical } from "@/lib/mock-data";
+import { type Vertical } from "@/lib/mock-data";
+import { useTokenIndex } from "@/lib/token-index";
 import { Footer } from "@/components/feed/footer";
 import {
   VerticalSeeAll,
@@ -18,9 +19,10 @@ export function VerticalDiscover({ vertical }: { vertical: Vertical }) {
   const router = useRouter();
   const [visible, setVisible] = useState(PAGE);
 
+  const { tokens: indexed } = useTokenIndex();
   const all = useMemo<VerticalTokenSummary[]>(
     () =>
-      MOCK_TOKENS.filter((t) => t.vertical === vertical).map((t) => ({
+      indexed.filter((t) => t.vertical === vertical).map((t) => ({
         handle: `@${t.handle}`,
         label: t.name,
         mindshare: `${t.mindshare.toFixed(2)}%`,
@@ -30,7 +32,7 @@ export function VerticalDiscover({ vertical }: { vertical: Vertical }) {
         marketCap: t.marketCap,
         tier: t.tier,
       })),
-    [vertical],
+    [indexed, vertical],
   );
 
   // Fall back to the component's DEFAULT_TOKENS when this vertical has no data.

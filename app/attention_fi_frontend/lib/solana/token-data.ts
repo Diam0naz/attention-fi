@@ -5,7 +5,8 @@ import type { TokenDetail } from "@/lib/mock-data";
 import { LAMPORTS_PER_SOL, fetchCurve, fetchGlobal, marketCapSol } from "./curve";
 
 // TODO: replace with a real SOL/USD oracle read. Mirrors the terminal's mock rate.
-const SOL_USD = 164.2;
+/** TODO: replace with a real oracle read; shared by every USD conversion. */
+export const SOL_USD = 164.2;
 
 /**
  * Build a TokenDetail from live on-chain curve state, keeping mock-only fields

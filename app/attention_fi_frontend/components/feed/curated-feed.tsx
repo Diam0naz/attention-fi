@@ -4,7 +4,8 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { BadgeCheck, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { MOCK_TOKENS, VERTICALS, verticalSlug, type Token, type Vertical } from "@/lib/mock-data";
+import { VERTICALS, verticalSlug, type Token, type Vertical } from "@/lib/mock-data";
+import { useTokenIndex } from "@/lib/token-index";
 import { Avatar } from "@/components/feed/avatar";
 import { Footer } from "@/components/feed/footer";
 
@@ -50,10 +51,11 @@ function TokenCard({ t, max }: { t: Token; max: number }) {
 }
 
 export function CuratedFeed() {
+  const { tokens: indexed } = useTokenIndex();
   const [filter, setFilter] = useState<Vertical>("All");
   const [query, setQuery] = useState("");
 
-  const editor = MOCK_TOKENS[0]!; // rank 1 = editor's pick
+  const editor = indexed[0]!; // rank 1 = editor's pick
   const q = query.trim().toLowerCase();
 
   // Tokens grouped per vertical (excluding the editor's pick), honoring search.
@@ -62,12 +64,12 @@ export function CuratedFeed() {
     return verticals
       .map((v) => ({
         vertical: v,
-        tokens: MOCK_TOKENS.filter(
+        tokens: indexed.filter(
           (t) => t.vertical === v && t.handle !== editor.handle && (!q || t.handle.includes(q) || t.name.toLowerCase().includes(q)),
         ),
       }))
       .filter((s) => s.tokens.length > 0);
-  }, [filter, q, editor.handle]);
+  }, [indexed, filter, q, editor.handle]);
 
   return (
     <div className="flex min-h-screen flex-col">

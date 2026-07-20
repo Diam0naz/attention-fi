@@ -5,12 +5,12 @@ import Link from "next/link";
 import { BadgeCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
-  MOCK_TOKENS,
   VERTICALS,
   jitter,
   type Token,
   type Vertical,
 } from "@/lib/mock-data";
+import { useTokenIndex } from "@/lib/token-index";
 import { Sparkline } from "./sparkline";
 import { Avatar } from "./avatar";
 
@@ -28,8 +28,14 @@ const TIER_STYLES: Record<Token["tier"], string> = {
 };
 
 export function SignalBoard() {
-  const [tokens, setTokens] = useState<Token[]>(MOCK_TOKENS);
+  const { tokens: indexed } = useTokenIndex();
+  const [tokens, setTokens] = useState<Token[]>(indexed);
   const [vertical, setVertical] = useState<Vertical>("All");
+
+  // re-seed whenever the on-chain snapshot upgrades entries
+  useEffect(() => {
+    setTokens(indexed);
+  }, [indexed]);
 
   // "Live" feel — client-only so server and first client render match.
   useEffect(() => {
