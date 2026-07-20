@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { WALLETS, useWallet } from "@/components/wallet/wallet-provider";
 import { useScrollLock } from "@/lib/use-scroll-lock";
@@ -25,7 +26,10 @@ export function WalletConnectModal({
     if (ok) onClose();
   }
 
-  return (
+  // Portal to <body>: ancestors with backdrop-filter/transform (e.g. the
+  // blurred sticky nav) become containing blocks for position:fixed and
+  // would clip the overlay to their own box.
+  return createPortal(
     <div
       className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
       onClick={onClose}
@@ -82,6 +86,7 @@ export function WalletConnectModal({
           </p>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

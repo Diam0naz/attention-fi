@@ -61,7 +61,7 @@ export function TopBar() {
         className="flex shrink-0 items-center gap-2 px-1 transition-opacity duration-150 hover:opacity-80"
       >
         <LogoMark size={16} />
-        <span className="text-sm font-bold tracking-tight text-hi">
+        <span style={{ color: "var(--tk-up-alert)" }} className="text-sm font-bold tracking-tight">
           ATTENTION<span style={{ color: "var(--tk-up-alert)" }}>FI</span>
         </span>
         <span className="rounded-sm border border-edge bg-elevated px-1 py-px text-2xs uppercase tracking-wider text-mid">
