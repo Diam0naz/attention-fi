@@ -139,7 +139,7 @@ export function NftCreateFlow() {
       if (kind === "nft") {
         sig = await program.methods
           .mintNft(nftName.slice(0, 64), nftImage.slice(0, 200))
-          .accounts({ payer: me, recipient: me, asset: asset.publicKey })
+          .accounts({ payer: me, recipient: me, asset: asset.publicKey, collection: null })
           .signers([asset])
           .rpc();
       } else if (kind === "genesis") {

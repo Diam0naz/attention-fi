@@ -14,6 +14,60 @@ export type AttentionFi = {
   },
   "instructions": [
     {
+      "name": "addToCollection",
+      "docs": [
+        "Move a Core asset the payer controls into one of their collections."
+      ],
+      "discriminator": [
+        30,
+        185,
+        207,
+        216,
+        58,
+        60,
+        98,
+        185
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "docs": [
+            "Update authority of the asset and authority of the destination collection."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "asset",
+          "writable": true
+        },
+        {
+          "name": "currentCollection",
+          "docs": [
+            "mpl-core validates it against the asset's update authority."
+          ],
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "newCollection",
+          "docs": [
+            "payer's authority over it."
+          ],
+          "writable": true
+        },
+        {
+          "name": "mplCoreProgram",
+          "address": "CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d"
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "bid",
       "docs": [
         "Bid on a Dutch auction at the current descending price (price-capped)."
@@ -1117,7 +1171,7 @@ export type AttentionFi = {
     {
       "name": "claimCreatorFee",
       "docs": [
-        "Claim a token's accrued creator fees — gated on the creator being",
+        "Claim a token's accrued creator fees \u2014 gated on the creator being",
         "SAS-verified (they must hold a `Verification` record)."
       ],
       "discriminator": [
@@ -1171,7 +1225,7 @@ export type AttentionFi = {
           "name": "verification",
           "docs": [
             "The creator's SAS verification record. Its existence at this PDA gates the",
-            "claim — an unverified creator cannot construct a valid transaction, which",
+            "claim \u2014 an unverified creator cannot construct a valid transaction, which",
             "is exactly the brief's \"claimable by the X account owner once they verify\"."
           ],
           "pda": {
@@ -1366,6 +1420,55 @@ export type AttentionFi = {
         }
       ],
       "args": []
+    },
+    {
+      "name": "createCollection",
+      "docs": [
+        "Create a Core collection whose update authority stays with the payer."
+      ],
+      "discriminator": [
+        156,
+        251,
+        92,
+        54,
+        233,
+        2,
+        16,
+        82
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "collection",
+          "docs": [
+            "The new Core collection (client-generated keypair, signs its creation)."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "mplCoreProgram",
+          "address": "CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d"
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "name",
+          "type": "string"
+        },
+        {
+          "name": "uri",
+          "type": "string"
+        }
+      ]
     },
     {
       "name": "depositGenesisFee",
@@ -2755,7 +2858,7 @@ export type AttentionFi = {
         {
           "name": "curve",
           "docs": [
-            "The subject token's bonding curve — gates issuance to its creator."
+            "The subject token's bonding curve \u2014 gates issuance to its creator."
           ],
           "pda": {
             "seeds": [
@@ -2855,7 +2958,8 @@ export type AttentionFi = {
     {
       "name": "mintNft",
       "docs": [
-        "Mint a plain standalone Core NFT (collectible with an optional image)."
+        "Mint a plain Core NFT (collectible with an optional image), standalone",
+        "or straight into one of the payer's collections."
       ],
       "discriminator": [
         211,
@@ -2883,6 +2987,14 @@ export type AttentionFi = {
           ],
           "writable": true,
           "signer": true
+        },
+        {
+          "name": "collection",
+          "docs": [
+            "the payer holds its update authority."
+          ],
+          "writable": true,
+          "optional": true
         },
         {
           "name": "mplCoreProgram",
@@ -4274,7 +4386,7 @@ export type AttentionFi = {
     {
       "name": "verifyHandle",
       "docs": [
-        "Verify an X handle↔wallet binding against a Solana Attestation Service",
+        "Verify an X handle\u2194wallet binding against a Solana Attestation Service",
         "attestation and mint a soulbound verification NFT (Metaplex Core)."
       ],
       "discriminator": [
@@ -4291,7 +4403,7 @@ export type AttentionFi = {
         {
           "name": "payer",
           "docs": [
-            "Pays for the credential accounts. Can be anyone (subject or a relayer) —",
+            "Pays for the credential accounts. Can be anyone (subject or a relayer) \u2014",
             "trust comes from the attestation, not from who submits the transaction."
           ],
           "writable": true,

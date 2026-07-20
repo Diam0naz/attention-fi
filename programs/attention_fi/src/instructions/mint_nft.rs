@@ -4,8 +4,9 @@ use mpl_core::types::DataState;
 
 use crate::error::AttentionError;
 
-/// Mint a plain, standalone Metaplex Core NFT (name + uri, no role/plugins) —
-/// a collectible with an optional image, minted directly to the owner.
+/// Mint a plain Metaplex Core NFT (name + uri, no role/plugins) — a
+/// collectible minted directly to the owner, standalone or straight into one
+/// of the payer's collections.
 #[derive(Accounts)]
 pub struct MintNft<'info> {
     #[account(mut)]
@@ -18,6 +19,11 @@ pub struct MintNft<'info> {
     #[account(mut)]
     pub asset: Signer<'info>,
 
+    /// CHECK: optional Core collection to mint into; mpl-core enforces that
+    /// the payer holds its update authority.
+    #[account(mut)]
+    pub collection: Option<UncheckedAccount<'info>>,
+
     /// CHECK: Metaplex Core program, validated by address.
     #[account(address = mpl_core::ID)]
     pub mpl_core_program: UncheckedAccount<'info>,
@@ -26,19 +32,41 @@ pub struct MintNft<'info> {
 }
 
 pub fn mint_nft_handler(ctx: Context<MintNft>, name: String, uri: String) -> Result<()> {
-    require!(!name.is_empty() && name.len() <= 64, AttentionError::InvalidAuctionParams);
+    require!(
+        !name.is_empty() && name.len() <= 64,
+        AttentionError::InvalidAuctionParams
+    );
     require!(uri.len() <= 200, AttentionError::InvalidAuctionParams);
 
-    CreateV2CpiBuilder::new(&ctx.accounts.mpl_core_program.to_account_info())
-        .asset(&ctx.accounts.asset.to_account_info())
-        .payer(&ctx.accounts.payer.to_account_info())
-        .owner(Some(&ctx.accounts.recipient.to_account_info()))
-        .update_authority(Some(&ctx.accounts.payer.to_account_info()))
-        .system_program(&ctx.accounts.system_program.to_account_info())
+    let mpl_core_program = ctx.accounts.mpl_core_program.to_account_info();
+    let payer = ctx.accounts.payer.to_account_info();
+    let asset = ctx.accounts.asset.to_account_info();
+    let recipient = ctx.accounts.recipient.to_account_info();
+    let system_program = ctx.accounts.system_program.to_account_info();
+    let collection = ctx
+        .accounts
+        .collection
+        .as_ref()
+        .map(|c| c.to_account_info());
+
+    let mut create = CreateV2CpiBuilder::new(&mpl_core_program);
+    create
+        .asset(&asset)
+        .payer(&payer)
+        .owner(Some(&recipient))
+        .system_program(&system_program)
         .data_state(DataState::AccountState)
         .name(name)
-        .uri(uri)
-        .invoke()?;
+        .uri(uri);
+
+    // Into a collection the asset inherits the collection's authority (the two
+    // are mutually exclusive in mpl-core); standalone, the payer keeps it so
+    // the asset can be gathered into a collection later.
+    match collection.as_ref() {
+        Some(col) => create.collection(Some(col)).authority(Some(&payer)),
+        None => create.update_authority(Some(&payer)),
+    };
+    create.invoke()?;
 
     Ok(())
 }

@@ -170,9 +170,24 @@ pub mod attention_fi {
         mint_genesis::mint_genesis_handler(ctx, share_bps, uri)
     }
 
-    /// Mint a plain standalone Core NFT (collectible with an optional image).
+    /// Mint a plain Core NFT (collectible with an optional image), standalone
+    /// or straight into one of the payer's collections.
     pub fn mint_nft(ctx: Context<MintNft>, name: String, uri: String) -> Result<()> {
         mint_nft::mint_nft_handler(ctx, name, uri)
+    }
+
+    /// Create a Core collection whose update authority stays with the payer.
+    pub fn create_collection(
+        ctx: Context<CreateCollection>,
+        name: String,
+        uri: String,
+    ) -> Result<()> {
+        create_collection::create_collection_handler(ctx, name, uri)
+    }
+
+    /// Move a Core asset the payer controls into one of their collections.
+    pub fn add_to_collection(ctx: Context<AddToCollection>) -> Result<()> {
+        add_to_collection::add_to_collection_handler(ctx)
     }
 
     /// Start a Dutch auction for a 1-of-1 Core NFT (escrowed under the auction PDA).

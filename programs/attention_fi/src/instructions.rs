@@ -1,3 +1,4 @@
+pub mod add_to_collection;
 pub mod bid;
 pub mod buy;
 pub mod buy_conviction;
@@ -6,6 +7,7 @@ pub mod buy_revenue;
 pub mod claim_creator_fee;
 pub mod claim_genesis_fee;
 pub mod claim_revenue;
+pub mod create_collection;
 pub mod deposit_genesis_fee;
 pub mod deposit_revenue;
 pub mod graduate;
@@ -29,6 +31,7 @@ pub mod verify_handle;
 // Glob re-export so the `#[derive(Accounts)]`-generated client/CPI helper modules
 // (e.g. `__client_accounts_*`) are reachable at the crate root, as Anchor's
 // `#[program]` macro requires. Handlers are uniquely named to avoid glob clashes.
+pub use add_to_collection::*;
 pub use bid::*;
 pub use buy::*;
 pub use buy_conviction::*;
@@ -37,6 +40,7 @@ pub use buy_revenue::*;
 pub use claim_creator_fee::*;
 pub use claim_genesis_fee::*;
 pub use claim_revenue::*;
+pub use create_collection::*;
 pub use deposit_genesis_fee::*;
 pub use deposit_revenue::*;
 pub use graduate::*;
