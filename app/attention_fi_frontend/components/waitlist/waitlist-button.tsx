@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { useScrollLock } from "@/lib/use-scroll-lock";
 import type { WaitlistStatus } from "@/lib/waitlist-tasks";
@@ -53,7 +54,10 @@ export function WaitlistButton() {
         <span className="sm:hidden">{status ? `#${status.position}` : "Waitlist"}</span>
       </button>
 
-      {open && (
+      {/* Portal to <body>: the nav's backdrop-blur is a containing block for
+          position:fixed and would clip the overlay to the nav's box. */}
+      {open &&
+        createPortal(
         <div
           className="fixed inset-0 z-[100] flex items-start justify-center overflow-y-auto bg-black/70 p-4 backdrop-blur-sm sm:items-center"
           onClick={() => setOpen(false)}
@@ -75,8 +79,9 @@ export function WaitlistButton() {
               <WaitlistForm onJoined={onJoined} />
             )}
           </div>
-        </div>
-      )}
+        </div>,
+          document.body,
+        )}
     </>
   );
 }
