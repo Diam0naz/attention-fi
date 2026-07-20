@@ -7,11 +7,12 @@ const PHRASES = [
   "GRADUATION TO AMM",
 ];
 
-/** The sticky signal-green marquee at the top of the app. */
+/** The signal-green marquee at the very top of the home page. Scrolls away
+ *  normally so the sticky nav beneath it takes over cleanly. */
 export function TickerTape() {
   const strip = [...PHRASES, ...PHRASES];
   return (
-    <div className="sticky top-0 z-50 overflow-hidden bg-signal py-[7px] text-[#0A0A0A]">
+    <div className="overflow-hidden bg-signal py-1.75 text-[#0A0A0A]">
       <div className="af-ticker-track font-mono text-[11px] font-bold tracking-[0.08em]">
         {[0, 1].map((dup) => (
           <span key={dup} className="inline-flex">

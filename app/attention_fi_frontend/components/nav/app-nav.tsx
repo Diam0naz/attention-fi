@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Logo } from "@/components/brand/logo";
+import { TickerTape } from "@/components/feed/ticker-tape";
 import { WaitlistButton } from "@/components/waitlist/waitlist-button";
 import { WalletButton } from "@/components/wallet/wallet-button";
 import { cn } from "@/lib/utils";
@@ -23,7 +24,10 @@ export function AppNav() {
   if (pathname.startsWith("/terminal")) return null;
 
   return (
-    <nav className="sticky top-0 z-40 border-b border-white/[0.08] bg-[#0A0A0A]/95 backdrop-blur-sm">
+    <>
+      {/* the price ticker rides above the nav on home, at the very top */}
+      {pathname === "/" && <TickerTape />}
+      <nav className="sticky top-0 z-40 border-b border-white/[0.08] bg-[#0A0A0A]/95 backdrop-blur-sm">
       <div className="mx-auto flex max-w-5xl items-center gap-2.5 px-4 py-3 sm:gap-4 sm:px-5">
         <Link href="/" aria-label="AttentionFi home">
           <Logo />
@@ -51,6 +55,7 @@ export function AppNav() {
           <WalletButton />
         </div>
       </div>
-    </nav>
+      </nav>
+    </>
   );
 }
