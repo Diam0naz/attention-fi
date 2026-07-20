@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { X } from "lucide-react";
+import { useScrollLock } from "@/lib/use-scroll-lock";
 import type { WaitlistStatus } from "@/lib/waitlist-tasks";
 import { WaitlistForm } from "./waitlist-form";
 import { WaitlistPanel } from "./waitlist-panel";
@@ -11,6 +12,7 @@ const LS_KEY = "af_waitlist_id";
 export function WaitlistButton() {
   const [open, setOpen] = useState(false);
   const [status, setStatus] = useState<WaitlistStatus | null>(null);
+  useScrollLock(open);
 
   // Restore a returning user's status from their saved id.
   useEffect(() => {
@@ -43,9 +45,12 @@ export function WaitlistButton() {
     <>
       <button
         onClick={() => setOpen(true)}
-        className="rounded-sm bg-signal px-3 py-1.5 font-mono text-[11px] font-bold tracking-wide text-[#0A0A0A] transition-opacity hover:opacity-90"
+        className="whitespace-nowrap rounded-sm bg-signal px-3 py-1.5 font-mono text-[11px] font-bold tracking-wide text-[#0A0A0A] transition-opacity hover:opacity-90"
       >
-        {status ? `#${status.position} · Waitlist` : "Join Waitlist →"}
+        <span className="hidden sm:inline">
+          {status ? `#${status.position} · Waitlist` : "Join Waitlist →"}
+        </span>
+        <span className="sm:hidden">{status ? `#${status.position}` : "Waitlist"}</span>
       </button>
 
       {open && (

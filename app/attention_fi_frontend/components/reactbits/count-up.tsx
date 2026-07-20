@@ -28,8 +28,10 @@ export function CountUp({
     started.current = true;
 
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      setDisplay(value);
-      return;
+      // jump straight to the value, but from a frame callback rather than
+      // synchronously in the effect body
+      const jump = requestAnimationFrame(() => setDisplay(value));
+      return () => cancelAnimationFrame(jump);
     }
     let raf = 0;
     const start = performance.now();

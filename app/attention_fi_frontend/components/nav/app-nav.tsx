@@ -1,0 +1,56 @@
+"use client";
+
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { Logo } from "@/components/brand/logo";
+import { WaitlistButton } from "@/components/waitlist/waitlist-button";
+import { WalletButton } from "@/components/wallet/wallet-button";
+import { cn } from "@/lib/utils";
+
+const LINKS = [
+  { label: "Discover", href: "/discover" },
+  { label: "Terminal", href: "/terminal" },
+  { label: "Launch", href: "/launch" },
+  { label: "NFT", href: "/nft" },
+] as const;
+
+/**
+ * Global navigation. Rendered from the root layout on every page except
+ * /terminal, which ships its own dense top bar (with a brand link back here).
+ */
+export function AppNav() {
+  const pathname = usePathname();
+  if (pathname.startsWith("/terminal")) return null;
+
+  return (
+    <nav className="sticky top-0 z-40 border-b border-white/[0.08] bg-[#0A0A0A]/95 backdrop-blur-sm">
+      <div className="mx-auto flex max-w-5xl items-center gap-2.5 px-4 py-3 sm:gap-4 sm:px-5">
+        <Link href="/" aria-label="AttentionFi home">
+          <Logo />
+        </Link>
+        <ul className="ml-2 flex items-center gap-3 sm:gap-5">
+          {LINKS.map((l) => {
+            const active = pathname === l.href || pathname.startsWith(`${l.href}/`);
+            return (
+              <li key={l.href}>
+                <Link
+                  href={l.href}
+                  className={cn(
+                    "font-mono text-[11px] tracking-wide transition-colors",
+                    active ? "font-bold text-signal" : "text-[#6B6B6B] hover:text-[#F5F4F0]",
+                  )}
+                >
+                  {l.label}
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+        <div className="ml-auto flex items-center gap-2.5">
+          {pathname === "/" && <WaitlistButton />}
+          <WalletButton />
+        </div>
+      </div>
+    </nav>
+  );
+}

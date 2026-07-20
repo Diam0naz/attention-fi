@@ -1,6 +1,13 @@
 import { X_HANDLE, X_URL } from "@/lib/config";
+import { Logo } from "@/components/brand/logo";
 
-const PRODUCT = ["Feed", "Thesis", "Mechanism", "Verticals"];
+const PRODUCT = [
+  { label: "Discover", href: "/discover" },
+  { label: "Terminal", href: "/terminal" },
+  { label: "Launch", href: "/launch" },
+  { label: "NFT", href: "/nft" },
+  { label: "Profile", href: "/profile" },
+];
 
 export function Footer() {
   return (
@@ -8,9 +15,7 @@ export function Footer() {
       <div className="mx-auto max-w-5xl px-5 py-10">
         <div className="flex flex-col gap-8 sm:flex-row sm:items-start sm:justify-between">
           <div className="max-w-xs">
-            <div className="font-mono text-[13px] font-bold tracking-[0.14em] text-signal">
-              ATTENTIONFI
-            </div>
+            <Logo size={20} />
             <p className="mt-2 text-[12px] leading-relaxed text-[#6B6B6B]">
               Pump.fun for X — mindshare is the asset. Trade the attention of the X
               social graph on bonding curves seeded by real data.
@@ -29,9 +34,9 @@ export function Footer() {
             <div className="flex flex-col gap-2 text-[#6B6B6B]">
               <span className="text-[9px] uppercase tracking-[0.1em] text-[#4b5563]">Product</span>
               {PRODUCT.map((l) => (
-                <span key={l} className="cursor-pointer transition-colors hover:text-[#F5F4F0]">
-                  {l}
-                </span>
+                <a key={l.href} href={l.href} className="transition-colors hover:text-[#F5F4F0]">
+                  {l.label}
+                </a>
               ))}
             </div>
             <div className="flex flex-col gap-2 text-[#6B6B6B]">

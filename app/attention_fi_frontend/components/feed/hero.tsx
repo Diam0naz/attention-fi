@@ -1,11 +1,8 @@
-import { Search } from "lucide-react";
-import { WaitlistButton } from "@/components/waitlist/waitlist-button";
+import Link from "next/link";
 import Strands from "@/components/reactbits/strands";
 import { MagicCircle } from "@/components/reactbits/magic-circle";
 import { GradientText, ShinyText } from "@/components/reactbits/text";
 import { CountUp } from "@/components/reactbits/count-up";
-
-const NAV = ["Feed", "Thesis", "Mechanism", "Verticals"];
 
 const STATS = [
   { value: 138, prefix: "$", suffix: "M", label: "Pump.fun peak / mo" },
@@ -16,33 +13,7 @@ const STATS = [
 export function Hero() {
   return (
     <>
-      {/* Tighter, full-bleed divider with a constrained inner row (phase0 style). */}
-      <nav className="border-b border-white/[0.08]">
-        <div className="mx-auto flex max-w-5xl items-center gap-4 px-5 py-3">
-          <span className="font-mono text-[12px] font-bold tracking-[0.14em] text-signal">
-            ATTENTIONFI
-          </span>
-          <span className="rounded-sm border border-white/10 px-1.5 py-0.5 font-mono text-[9px] tracking-[0.1em] text-[#6B6B6B]">
-            PHASE 0 · PREVIEW
-          </span>
-          <ul className="ml-2 hidden gap-5 text-[12px] text-[#6B6B6B] lg:flex">
-            {NAV.map((l) => (
-              <li key={l} className="cursor-pointer transition-colors hover:text-[#F5F4F0]">
-                {l}
-              </li>
-            ))}
-          </ul>
-
-          <label className="ml-auto hidden items-center gap-2 rounded-sm border border-white/10 bg-[#12181f] px-2.5 py-1.5 md:flex">
-            <Search className="h-3.5 w-3.5 text-[#6B6B6B]" />
-            <input
-              placeholder="Search handles, narratives…"
-              className="w-48 bg-transparent text-[12px] text-[#F5F4F0] outline-none placeholder:text-[#4b5563]"
-            />
-          </label>
-          <WaitlistButton />
-        </div>
-      </nav>
+      {/* Global chrome lives in AppNav (app/layout.tsx); the hero starts at the content. */}
 
       <header className="relative overflow-hidden border-b border-white/[0.06]">
         <div className="pointer-events-none absolute inset-0 opacity-60">

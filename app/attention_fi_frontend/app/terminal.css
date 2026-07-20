@@ -1,0 +1,298 @@
+/* ------------------------------------------------------------------ */
+/* Trading terminal design tokens (lib/terminal-app).                  */
+/* All raw values are namespaced --tk-*; generated utilities use       */
+/* terminal-specific names (bg-panel, text-up, bg-tinput, text-tacc)   */
+/* chosen to avoid colliding with the app's shadcn theme tokens.       */
+/* Element-level styling is scoped under .tt-root so nothing leaks     */
+/* into the rest of the app.                                           */
+/* ------------------------------------------------------------------ */
+
+:root {
+  /* AttentionFi brand mapping: canvas matches the app shell (#0A0A0A),
+     up/down derive from --signal (#00ff85) / --noise (#ff3b5c) desaturated
+     for sustained viewing, accent from --pulse (#5b8fff). Full-saturation
+     signal/noise are reserved for the alert tokens. */
+  --tk-bg-canvas: #0a0a0a;
+  --tk-bg-panel: #111111;
+  --tk-bg-elevated: #181818;
+  --tk-bg-overlay: #1e1e1e;
+  --tk-bg-hover: rgba(255, 255, 255, 0.05);
+  --tk-bg-active: rgba(255, 255, 255, 0.085);
+  --tk-bg-input: #0d0d0d;
+
+  --tk-border: rgba(255, 255, 255, 0.07);
+  --tk-border-strong: rgba(255, 255, 255, 0.14);
+  --tk-border-focus: #5b8fff;
+
+  --tk-text-hi: #f5f4f0;
+  --tk-text-mid: #9d9d98;
+  --tk-text-low: #6b6b6b;
+
+  --tk-up: #16c784;
+  --tk-down: #ea3d5e;
+  --tk-up-muted: rgba(0, 255, 133, 0.1);
+  --tk-down-muted: rgba(255, 59, 92, 0.12);
+  --tk-up-alert: #00ff85;
+  --tk-down-alert: #ff3b5c;
+
+  --tk-accent: #5b8fff;
+  --tk-accent-muted: rgba(91, 143, 255, 0.16);
+  --tk-warn: #e2b93b;
+  --tk-warn-muted: rgba(226, 185, 59, 0.14);
+
+  --tk-chart-grid: rgba(255, 255, 255, 0.04);
+  --tk-chart-crosshair: rgba(157, 157, 152, 0.55);
+
+  --tk-scrollbar-thumb: rgba(255, 255, 255, 0.12);
+  --tk-scrollbar-thumb-hover: rgba(255, 255, 255, 0.22);
+
+  --tk-flash-up: rgba(0, 255, 133, 0.16);
+  --tk-flash-down: rgba(255, 59, 92, 0.18);
+}
+
+.light {
+  --tk-bg-canvas: #eef0f3;
+  --tk-bg-panel: #f9fafb;
+  --tk-bg-elevated: #ffffff;
+  --tk-bg-overlay: #ffffff;
+  --tk-bg-hover: rgba(15, 23, 42, 0.045);
+  --tk-bg-active: rgba(15, 23, 42, 0.08);
+  --tk-bg-input: #ffffff;
+
+  --tk-border: rgba(15, 23, 42, 0.09);
+  --tk-border-strong: rgba(15, 23, 42, 0.18);
+  --tk-border-focus: #2f6fed;
+
+  --tk-text-hi: #161b22;
+  --tk-text-mid: #59636f;
+  --tk-text-low: #98a1ad;
+
+  --tk-up: #1e9e6d;
+  --tk-down: #d43f48;
+  --tk-up-muted: rgba(30, 158, 109, 0.12);
+  --tk-down-muted: rgba(212, 63, 72, 0.12);
+  --tk-up-alert: #00a86e;
+  --tk-down-alert: #e81324;
+
+  --tk-accent: #2f6fed;
+  --tk-accent-muted: rgba(47, 111, 237, 0.13);
+  --tk-warn: #b58a12;
+  --tk-warn-muted: rgba(181, 138, 18, 0.13);
+
+  --tk-chart-grid: rgba(15, 23, 42, 0.055);
+  --tk-chart-crosshair: rgba(89, 99, 111, 0.55);
+
+  --tk-scrollbar-thumb: rgba(15, 23, 42, 0.16);
+  --tk-scrollbar-thumb-hover: rgba(15, 23, 42, 0.3);
+
+  --tk-flash-up: rgba(30, 158, 109, 0.2);
+  --tk-flash-down: rgba(212, 63, 72, 0.2);
+}
+
+@theme inline {
+  --color-canvas: var(--tk-bg-canvas);
+  --color-panel: var(--tk-bg-panel);
+  --color-elevated: var(--tk-bg-elevated);
+  --color-overlay: var(--tk-bg-overlay);
+  --color-hover: var(--tk-bg-hover);
+  --color-active: var(--tk-bg-active);
+  --color-tinput: var(--tk-bg-input);
+
+  --color-edge: var(--tk-border);
+  --color-edge-strong: var(--tk-border-strong);
+  --color-focus: var(--tk-border-focus);
+
+  --color-hi: var(--tk-text-hi);
+  --color-mid: var(--tk-text-mid);
+  --color-low: var(--tk-text-low);
+
+  --color-up: var(--tk-up);
+  --color-down: var(--tk-down);
+  --color-up-muted: var(--tk-up-muted);
+  --color-down-muted: var(--tk-down-muted);
+  --color-up-alert: var(--tk-up-alert);
+  --color-down-alert: var(--tk-down-alert);
+
+  --color-tacc: var(--tk-accent);
+  --color-tacc-muted: var(--tk-accent-muted);
+  --color-warn: var(--tk-warn);
+  --color-warn-muted: var(--tk-warn-muted);
+
+  /* inherit the app's brand faces (Space Grotesk / Space Mono stacks) */
+  --font-ui: var(--font-sans, "Space Grotesk", system-ui, sans-serif);
+  --font-num: var(
+    --font-geist-mono,
+    "Space Mono",
+    ui-monospace,
+    monospace
+  );
+
+  --text-2xs: 0.6875rem;
+  --text-2xs--line-height: 1rem;
+
+  --ease-terminal: cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+/* ----- terminal root scope ---------------------------------------- */
+
+.tt-root {
+  background: var(--tk-bg-canvas);
+  color: var(--tk-text-hi);
+  font-family: var(--font-ui);
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+}
+
+.tt-root *,
+.tt-root ::before,
+.tt-root ::after {
+  border-color: var(--tk-border);
+}
+
+.tt-root :focus-visible {
+  outline: 1px solid var(--tk-border-focus);
+  outline-offset: -1px;
+}
+
+.tt-root button {
+  cursor: pointer;
+}
+.tt-root button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.tt-root input::placeholder {
+  color: var(--tk-text-low);
+}
+
+.tt-root input[type="number"]::-webkit-outer-spin-button,
+.tt-root input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.tt-root input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+.tt-root * {
+  scrollbar-width: thin;
+  scrollbar-color: var(--tk-scrollbar-thumb) transparent;
+}
+.tt-root ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.tt-root ::-webkit-scrollbar-track {
+  background: transparent;
+}
+.tt-root ::-webkit-scrollbar-thumb {
+  background: var(--tk-scrollbar-thumb);
+  border-radius: 4px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+.tt-root ::-webkit-scrollbar-thumb:hover {
+  background: var(--tk-scrollbar-thumb-hover);
+}
+
+/* ----- opt-in helper classes (safe globally) ----------------------- */
+
+.num {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+@keyframes tt-flash-up {
+  0% {
+    background-color: var(--tk-flash-up);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+@keyframes tt-flash-down {
+  0% {
+    background-color: var(--tk-flash-down);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+.flash-up {
+  animation: tt-flash-up 420ms ease-out;
+}
+.flash-down {
+  animation: tt-flash-down 420ms ease-out;
+}
+
+.resize-handle {
+  position: relative;
+  background: transparent;
+  transition: background 140ms var(--ease-terminal);
+}
+.resize-handle[data-panel-group-direction="horizontal"] {
+  width: 3px;
+  margin: 0 -1px;
+  z-index: 10;
+}
+.resize-handle[data-panel-group-direction="vertical"] {
+  height: 3px;
+  margin: -1px 0;
+  z-index: 10;
+}
+.resize-handle:hover,
+.resize-handle[data-resize-handle-state="hover"],
+.resize-handle[data-resize-handle-state="drag"] {
+  background: var(--tk-accent);
+}
+
+@keyframes tt-pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(-3px) scale(0.99);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+.pop-in {
+  animation: tt-pop-in 140ms var(--ease-terminal);
+}
+
+@keyframes tt-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.fade-in {
+  animation: tt-fade-in 140ms var(--ease-terminal);
+}
+
+.led {
+  width: 7px;
+  height: 7px;
+  border-radius: 9999px;
+  transition: background 180ms var(--ease-terminal),
+    box-shadow 180ms var(--ease-terminal);
+}
+.led-live {
+  background: var(--tk-up);
+  box-shadow: 0 0 5px var(--tk-up);
+}
+.led-connecting {
+  background: var(--tk-warn);
+  box-shadow: 0 0 5px var(--tk-warn);
+}
+.led-down {
+  background: var(--tk-down);
+  box-shadow: 0 0 5px var(--tk-down);
+}

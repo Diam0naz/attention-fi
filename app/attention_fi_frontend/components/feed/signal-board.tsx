@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { BadgeCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -11,6 +12,7 @@ import {
   type Vertical,
 } from "@/lib/mock-data";
 import { Sparkline } from "./sparkline";
+import { Avatar } from "./avatar";
 
 function usd(n: number): string {
   if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
@@ -46,7 +48,7 @@ export function SignalBoard() {
   );
 
   return (
-    <section className="mx-auto mt-10 w-full max-w-5xl px-5">
+    <section id="feed" className="mx-auto mt-10 w-full max-w-5xl scroll-mt-16 px-5">
       <div className="mb-3 flex flex-wrap gap-1.5">
         {VERTICALS.map((v) => (
           <button
@@ -69,10 +71,18 @@ export function SignalBoard() {
           <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-[#6B6B6B]">
             Live Mindshare Feed
           </span>
-          <span className="inline-flex items-center gap-1.5 font-mono text-[10px] tracking-[0.1em] text-signal">
-            <span className="af-pulse-dot inline-block h-1.5 w-1.5 rounded-full bg-signal" />
-            LIVE
-          </span>
+          <div className="flex items-center gap-4">
+            <Link
+              href="/discover"
+              className="font-mono text-[10px] tracking-[0.1em] text-[#6B6B6B] transition-colors hover:text-signal"
+            >
+              Browse by vertical →
+            </Link>
+            <span className="inline-flex items-center gap-1.5 font-mono text-[10px] tracking-[0.1em] text-signal">
+              <span className="af-pulse-dot inline-block h-1.5 w-1.5 rounded-full bg-signal" />
+              LIVE
+            </span>
+          </div>
         </div>
 
         <div className="grid grid-cols-[24px_1fr_64px_48px] items-center gap-2 border-b border-white/[0.06] px-4 py-2 font-mono text-[9px] uppercase tracking-wider text-[#6B6B6B] sm:grid-cols-[28px_1fr_72px_72px_56px_64px] sm:px-5">
@@ -87,8 +97,9 @@ export function SignalBoard() {
         {rows.map((t) => {
           const up = t.delta24h >= 0;
           return (
-            <div
+            <Link
               key={t.handle}
+              href={`/token/${t.handle}`}
               className="grid grid-cols-[24px_1fr_64px_48px] items-center gap-2 border-b border-white/[0.06] px-4 py-3 text-[13px] transition-colors last:border-b-0 hover:bg-white/[0.03] sm:grid-cols-[28px_1fr_72px_72px_56px_64px] sm:px-5"
             >
               <span className="font-mono text-[11px] text-[#6B6B6B]">
@@ -96,6 +107,7 @@ export function SignalBoard() {
               </span>
 
               <div className="flex min-w-0 items-center gap-2">
+                <Avatar handle={t.handle} className="h-5 w-5" />
                 <span className="truncate font-semibold">@{t.handle}</span>
                 {t.verified && (
                   <BadgeCheck className="h-3.5 w-3.5 shrink-0 text-signal" aria-label="verified" />
@@ -126,7 +138,7 @@ export function SignalBoard() {
               <div className="hidden justify-end sm:flex">
                 <Sparkline points={t.spark} up={up} />
               </div>
-            </div>
+            </Link>
           );
         })}
       </div>

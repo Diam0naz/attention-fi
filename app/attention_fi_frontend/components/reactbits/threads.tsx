@@ -48,17 +48,20 @@ export function Threads({ className, count = 6, color = "0, 255, 133" }: Threads
         const baseY = h * (0.15 + 0.7 * p);
         const amp = 14 + 10 * Math.sin(p * 6.28);
         const speed = 0.25 + p * 0.35;
-        const opacity = 0.05 + 0.12 * (1 - Math.abs(p - 0.5) * 2);
+        const opacity = 0.08 + 0.18 * (1 - Math.abs(p - 0.5) * 2);
         ctx.beginPath();
         for (let x = 0; x <= w; x += 8) {
           const y =
             baseY +
             Math.sin(x * 0.006 + t * speed + p * 3) * amp +
             Math.sin(x * 0.013 - t * speed * 0.6) * (amp * 0.4);
-          x === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+          if (x === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
         }
         ctx.strokeStyle = `rgba(${color}, ${opacity})`;
-        ctx.lineWidth = 1;
+        ctx.lineWidth = 1.2;
+        ctx.shadowColor = `rgba(${color}, 0.5)`;
+        ctx.shadowBlur = 6;
         ctx.stroke();
       }
       raf = requestAnimationFrame(draw);

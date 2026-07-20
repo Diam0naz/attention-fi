@@ -18,7 +18,7 @@ export function TickerTape() {
             {strip.map((p, i) => (
               <span key={`${dup}-${i}`} className="px-6">
                 {p}
-                <span className="px-6 opacity-40">///</span>
+                <span className="px-6 opacity-40">{"///"}</span>
               </span>
             ))}
           </span>
