@@ -116,6 +116,13 @@ export function TokenDetailTerminal({ token: tokenProp }: { token: TokenDetail }
           >
             {source === "onchain" ? "● LIVE" : "PREVIEW"}
           </span>
+          <Link
+            href={`/terminal?symbol=${token.handle}`}
+            title="Open in the pro terminal: full chart, indicators, order book"
+            className="hidden items-center gap-1 rounded-sm border border-white/10 px-2 py-1 font-mono text-[10px] font-bold text-[#9aa4af] transition-colors hover:border-signal/40 hover:text-signal sm:inline-flex"
+          >
+            TERMINAL ↗
+          </Link>
           <span className="hidden font-mono text-[10px] text-[#6B6B6B] sm:inline">SOL/USD $164.20</span>
           {connected ? (
             <div className="flex items-center gap-1.5 rounded-sm border border-signal/40 bg-signal/[0.06] px-1 py-0.5">

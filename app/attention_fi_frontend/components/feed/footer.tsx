@@ -2,10 +2,11 @@ import { X_HANDLE, X_URL } from "@/lib/config";
 import { Logo } from "@/components/brand/logo";
 
 const PRODUCT = [
-  { label: "Feed", href: "/#feed" },
-  { label: "Thesis", href: "/#thesis" },
-  { label: "Mechanism", href: "/#mechanism" },
-  { label: "Verticals", href: "/#verticals" },
+  { label: "Discover", href: "/discover" },
+  { label: "Terminal", href: "/terminal" },
+  { label: "Launch", href: "/launch" },
+  { label: "NFT", href: "/nft" },
+  { label: "Profile", href: "/profile" },
 ];
 
 export function Footer() {

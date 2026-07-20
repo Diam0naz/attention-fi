@@ -16,6 +16,6 @@ const Terminal = dynamic(() => import("./Terminal").then((m) => m.Terminal), {
   ),
 });
 
-export function ClientTerminal() {
-  return <Terminal />;
+export function ClientTerminal({ initialSymbol }: { initialSymbol?: string }) {
+  return <Terminal {...(initialSymbol !== undefined ? { initialSymbol } : {})} />;
 }

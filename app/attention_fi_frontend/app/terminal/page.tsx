@@ -7,6 +7,11 @@ export const metadata: Metadata = {
     "Pro trading terminal for attention markets: live bonding-curve data, indicators, drawings, and on-chain trading.",
 };
 
-export default function TerminalPage() {
-  return <ClientTerminal />;
+export default async function TerminalPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ symbol?: string }>;
+}) {
+  const { symbol } = await searchParams;
+  return <ClientTerminal initialSymbol={symbol} />;
 }

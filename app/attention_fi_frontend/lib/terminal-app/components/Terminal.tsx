@@ -19,6 +19,7 @@ import { WatchlistPanel } from "@/lib/terminal-app/components/watchlist/Watchlis
 import { useKeyboard } from "@/lib/terminal-app/hooks/useKeyboard";
 import { useMarketFeeds } from "@/lib/terminal-app/hooks/useMarketFeeds";
 import { useLayout } from "@/lib/terminal-app/stores/layout";
+import { useSettings } from "@/lib/terminal-app/stores/settings";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -30,15 +31,24 @@ const queryClient = new QueryClient({
   },
 });
 
-export function Terminal() {
+export function Terminal({ initialSymbol }: { initialSymbol?: string }) {
   return (
     <QueryClientProvider client={queryClient}>
-      <Workspace />
+      <Workspace {...(initialSymbol !== undefined ? { initialSymbol } : {})} />
     </QueryClientProvider>
   );
 }
 
-function Workspace() {
+function Workspace({ initialSymbol }: { initialSymbol?: string }) {
+  // deep link from the token page: /terminal?symbol=<handle> selects the
+  // AttentionFi source with that symbol active
+  useEffect(() => {
+    if (!initialSymbol) return;
+    const settings = useSettings.getState();
+    settings.setProvider("attentionfi");
+    settings.setSymbol(initialSymbol);
+  }, [initialSymbol]);
+
   useMarketFeeds();
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);

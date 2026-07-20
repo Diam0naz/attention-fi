@@ -2,12 +2,10 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, BadgeCheck, Search } from "lucide-react";
+import { BadgeCheck, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { MOCK_TOKENS, VERTICALS, verticalSlug, type Token, type Vertical } from "@/lib/mock-data";
-import { Logo } from "@/components/brand/logo";
 import { Avatar } from "@/components/feed/avatar";
-import { WalletButton } from "@/components/wallet/wallet-button";
 import { Footer } from "@/components/feed/footer";
 
 function blurb(t: Token): string {
@@ -73,18 +71,6 @@ export function CuratedFeed() {
 
   return (
     <div className="flex min-h-screen flex-col">
-      {/* nav */}
-      <nav className="border-b border-white/[0.08]">
-        <div className="mx-auto flex max-w-5xl items-center gap-2.5 px-4 py-3 sm:gap-4 sm:px-5">
-          <Link href="/" className="inline-flex items-center gap-1.5 text-[#6B6B6B] hover:text-[#F5F4F0]">
-            <ArrowLeft className="h-3.5 w-3.5" />
-          </Link>
-          <Logo />
-          <span className="ml-auto" />
-          <WalletButton />
-        </div>
-      </nav>
-
       <div className="mx-auto w-full max-w-5xl flex-1 px-5 py-6">
         <h1 className="text-[20px] font-bold">Discover</h1>
         <p className="mt-1 text-[13px] text-[#6B6B6B]">Browse tradeable attention by vertical, curated by mindshare velocity.</p>

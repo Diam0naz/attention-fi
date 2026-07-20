@@ -1,19 +1,8 @@
 import Link from "next/link";
-import { Search } from "lucide-react";
-import { Logo } from "@/components/brand/logo";
-import { WalletButton } from "@/components/wallet/wallet-button";
-import { WaitlistButton } from "@/components/waitlist/waitlist-button";
 import Strands from "@/components/reactbits/strands";
 import { MagicCircle } from "@/components/reactbits/magic-circle";
 import { GradientText, ShinyText } from "@/components/reactbits/text";
 import { CountUp } from "@/components/reactbits/count-up";
-
-const NAV = [
-  { label: "Feed", href: "#feed" },
-  { label: "Thesis", href: "#thesis" },
-  { label: "Mechanism", href: "#mechanism" },
-  { label: "Verticals", href: "#verticals" },
-];
 
 const STATS = [
   { value: 138, prefix: "$", suffix: "M", label: "Pump.fun peak / mo" },
@@ -24,39 +13,7 @@ const STATS = [
 export function Hero() {
   return (
     <>
-      {/* Tighter, full-bleed divider with a constrained inner row (phase0 style). */}
-      <nav className="border-b border-white/[0.08]">
-        <div className="mx-auto flex max-w-5xl items-center gap-2.5 px-4 py-3 sm:gap-4 sm:px-5">
-          <a href="#feed" aria-label="AttentionFi home">
-            <Logo />
-          </a>
-          <ul className="ml-2 hidden gap-5 text-[12px] text-[#6B6B6B] lg:flex">
-            {NAV.map((l) => (
-              <li key={l.href}>
-                <a href={l.href} className="transition-colors hover:text-[#F5F4F0]">
-                  {l.label}
-                </a>
-              </li>
-            ))}
-          </ul>
-
-          <label className="ml-auto hidden items-center gap-2 rounded-sm border border-white/10 bg-[#12181f] px-2.5 py-1.5 md:flex">
-            <Search className="h-3.5 w-3.5 text-[#6B6B6B]" />
-            <input
-              placeholder="Search handles, narratives…"
-              className="w-48 bg-transparent text-[12px] text-[#F5F4F0] outline-none placeholder:text-[#4b5563]"
-            />
-          </label>
-          <Link
-            href="/launch"
-            className="ml-auto font-mono text-[11px] font-bold text-[#F5F4F0] transition-colors hover:text-signal md:ml-0"
-          >
-            Launch →
-          </Link>
-          <WalletButton />
-          <WaitlistButton />
-        </div>
-      </nav>
+      {/* Global chrome lives in AppNav (app/layout.tsx); the hero starts at the content. */}
 
       <header className="relative overflow-hidden border-b border-white/[0.06]">
         <div className="pointer-events-none absolute inset-0 opacity-60">

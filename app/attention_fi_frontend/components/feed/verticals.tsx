@@ -1,4 +1,6 @@
+import Link from "next/link";
 import { Reveal } from "@/components/brand/reveal";
+import { verticalSlug } from "@/lib/mock-data";
 
 // Copy sourced from components/attentionfi-strategy.html (competitive-moat, vertical curation).
 const VERTICALS = [
@@ -29,16 +31,20 @@ export function Verticals() {
 
       <Reveal delay={100} className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {VERTICALS.map((v) => (
-          <div
+          <Link
             key={v.name}
-            className="rounded-sm border border-white/[0.08] bg-[#0f1620] p-4 transition-colors hover:border-signal/30"
+            href={`/discover/${verticalSlug(v.name)}`}
+            className="group rounded-sm border border-white/[0.08] bg-[#0f1620] p-4 transition-colors hover:border-signal/30"
           >
             <div className="flex items-center gap-2">
               <span className="h-1.5 w-1.5 rounded-full bg-signal" />
               <span className="text-[13px] font-bold">{v.name}</span>
+              <span className="ml-auto font-mono text-[10px] text-[#4b5563] transition-colors group-hover:text-signal">
+                →
+              </span>
             </div>
             <p className="mt-2 text-[12px] leading-relaxed text-[#6B6B6B]">{v.blurb}</p>
-          </div>
+          </Link>
         ))}
       </Reveal>
 

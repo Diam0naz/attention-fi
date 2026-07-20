@@ -5,8 +5,6 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { MOCK_TOKENS, type Vertical } from "@/lib/mock-data";
-import { Logo } from "@/components/brand/logo";
-import { WalletButton } from "@/components/wallet/wallet-button";
 import { Footer } from "@/components/feed/footer";
 import {
   VerticalSeeAll,
@@ -43,18 +41,15 @@ export function VerticalDiscover({ vertical }: { vertical: Vertical }) {
 
   return (
     <div className="flex min-h-screen flex-col">
-      <nav className="border-b border-white/[0.08]">
-        <div className="mx-auto flex max-w-5xl items-center gap-2.5 px-4 py-3 sm:gap-4 sm:px-5">
-          <Link href="/discover" className="inline-flex items-center gap-1.5 text-[#6B6B6B] hover:text-[#F5F4F0]">
-            <ArrowLeft className="h-3.5 w-3.5" />
-          </Link>
-          <Logo />
-          <span className="ml-auto" />
-          <WalletButton />
-        </div>
-      </nav>
-
       <div className="mx-auto w-full max-w-5xl flex-1">
+        <div className="px-5 pt-4">
+          <Link
+            href="/discover"
+            className="inline-flex items-center gap-1.5 font-mono text-[11px] text-[#6B6B6B] transition-colors hover:text-[#F5F4F0]"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" /> All verticals
+          </Link>
+        </div>
         <VerticalSeeAll
           vertical={vertical}
           totalCount={totalCount}
