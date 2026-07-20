@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Check, Gift, Gavel } from "lucide-react";
+import { ArrowLeft, Check, Gift, Gavel, Image as ImageIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useWallet } from "@/components/wallet/wallet-provider";
 import { WalletConnectModal } from "@/components/wallet/wallet-connect-modal";
@@ -19,7 +19,7 @@ import { explorerTx } from "@/lib/solana/config";
 const SOL_USD = 164.2;
 const DURATION_SEC: Record<string, number> = { "6h": 21_600, "12h": 43_200, "24h": 86_400, "48h": 172_800 };
 
-type Kind = "genesis" | "auction";
+type Kind = "genesis" | "auction" | "nft";
 
 const KINDS: {
   id: Kind;
@@ -28,6 +28,13 @@ const KINDS: {
   desc: string;
   icon: React.ReactNode;
 }[] = [
+  {
+    id: "nft",
+    name: "Standalone NFT",
+    tag: "COLLECTIBLE",
+    desc: "Mint a plain collectible with its own artwork — no auction, no fee-share. A pure 1-of-1 minted straight to your wallet.",
+    icon: <ImageIcon className="h-4 w-4" />,
+  },
   {
     id: "genesis",
     name: "Genesis (fee-share)",
@@ -58,7 +65,7 @@ export function NftCreateFlow() {
   }, []);
   const [walletOpen, setWalletOpen] = useState(false);
   const [step, setStep] = useState(0);
-  const [kind, setKind] = useState<Kind>("genesis");
+  const [kind, setKind] = useState<Kind>("nft");
   const [tx, setTx] = useState<TxState | null>(null);
   const [txSig, setTxSig] = useState<string | null>(null);
   const [txErr, setTxErr] = useState<string | null>(null);
@@ -72,6 +79,9 @@ export function NftCreateFlow() {
   const [startUsd, setStartUsd] = useState("10000");
   const [floorUsd, setFloorUsd] = useState("2500");
   const [duration, setDuration] = useState("24h");
+  // standalone nft config
+  const [nftName, setNftName] = useState("");
+  const [nftImage, setNftImage] = useState("");
 
   const nft = useMemo(() => (address ? getNftState(address) : null), [address]);
   const ownedAssets = useMemo(() => {
@@ -91,9 +101,11 @@ export function NftCreateFlow() {
 
   const kindMeta = KINDS.find((k) => k.id === kind)!;
 
-  // What the confirm step previews: the genesis being minted, or the asset listed.
+  // What the confirm step previews.
   const previewData: NftCardData =
-    kind === "genesis"
+    kind === "nft"
+      ? { kind: "custom", name: nftName, image: nftImage || undefined }
+      : kind === "genesis"
       ? {
           kind: "genesis",
           shareBps: Math.max(1, Math.round(+sharePct * 100)),
@@ -110,10 +122,11 @@ export function NftCreateFlow() {
           shareBps: nft?.genesis.find((g) => g.id === assetId)?.shareBps ?? 100,
           id: assetId || "GEN-0001",
         };
+  const validNft = nftName.trim() !== "";
   const validGenesis = tokenHandle !== "" && +sharePct > 0 && +supply > 0;
   const validAuction = assetId !== "" && +startUsd > +floorUsd && +floorUsd > 0;
   const canContinue =
-    step !== 1 || (kind === "genesis" ? validGenesis : validAuction);
+    step !== 1 || (kind === "nft" ? validNft : kind === "genesis" ? validGenesis : validAuction);
 
   async function mint() {
     if (!program || !address) return setWalletOpen(true);
@@ -123,7 +136,13 @@ export function NftCreateFlow() {
       const asset = Keypair.generate();
       const me = new PublicKey(address);
       let sig: string;
-      if (kind === "genesis") {
+      if (kind === "nft") {
+        sig = await program.methods
+          .mintNft(nftName.slice(0, 64), nftImage.slice(0, 200))
+          .accounts({ payer: me, recipient: me, asset: asset.publicKey })
+          .signers([asset])
+          .rpc();
+      } else if (kind === "genesis") {
         const subjectMint = handleToMint(tokenHandle);
         if (!subjectMint) throw new Error("Launch this token on-chain first, then issue genesis NFTs.");
         const shareBps = Math.max(1, Math.round((+sharePct || 0) * 100));
@@ -227,6 +246,37 @@ export function NftCreateFlow() {
         )}
 
         {/* 2 — configure */}
+        {step === 1 && kind === "nft" && (
+          <div className="rounded-sm border border-white/[0.08] bg-[#0f1620] p-5">
+            <div className="text-[13px] font-bold">Configure NFT</div>
+            <p className="mt-1 text-[11px] text-[#6B6B6B]">
+              A plain 1-of-1 collectible minted straight to your wallet.
+            </p>
+            <Field label="Name">
+              <input
+                value={nftName}
+                onChange={(e) => setNftName(e.target.value.slice(0, 64))}
+                placeholder="e.g. Founder Badge #1"
+                className="w-full rounded-sm border border-white/10 bg-[#12181f] px-3 py-2.5 text-[13px] outline-none placeholder:text-[#4b5563]"
+              />
+            </Field>
+            <Field label="Image URL (optional)">
+              <input
+                value={nftImage}
+                onChange={(e) => setNftImage(e.target.value.slice(0, 200))}
+                placeholder="https://…/art.png"
+                className="w-full rounded-sm border border-white/10 bg-[#12181f] px-3 py-2.5 font-mono text-[12px] outline-none placeholder:text-[#4b5563]"
+              />
+            </Field>
+            {nftImage && (
+              <div className="mt-3 flex justify-center">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={nftImage} alt="preview" className="h-28 w-28 rounded-md border border-white/10 object-cover" />
+              </div>
+            )}
+          </div>
+        )}
+
         {step === 1 && kind === "genesis" && (
           <div className="rounded-sm border border-white/[0.08] bg-[#0f1620] p-5">
             <div className="text-[13px] font-bold">Configure genesis</div>
@@ -367,7 +417,14 @@ export function NftCreateFlow() {
                 <NftCardFace data={previewData} />
               </div>
               <dl className="flex w-full flex-1 flex-col gap-2.5 font-mono text-[12px]">
-              {(kind === "genesis"
+              {(kind === "nft"
+                ? [
+                    ["Type", kindMeta.name],
+                    ["Name", nftName],
+                    ["Artwork", nftImage ? "provided" : "none"],
+                    ["Standard", "Metaplex Core"],
+                  ]
+                : kind === "genesis"
                 ? [
                     ["Type", kindMeta.name],
                     ["Token", `@${tokenHandle}`],

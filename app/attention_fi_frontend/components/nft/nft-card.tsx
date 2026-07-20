@@ -1,10 +1,11 @@
-import { BadgeCheck, TrendingUp, Gift } from "lucide-react";
+import { BadgeCheck, TrendingUp, Gift, Image as ImageIcon } from "lucide-react";
 import { TiltCard } from "@/components/reactbits/tilt-card";
 
 export type NftCardData =
   | { kind: "verification"; handle: string; id?: string }
   | { kind: "perk"; level: number; discountBps: number; id?: string }
-  | { kind: "genesis"; shareBps: number; id: string };
+  | { kind: "genesis"; shareBps: number; id: string }
+  | { kind: "custom"; name: string; image?: string; id?: string };
 
 // Perk levels map to named tiers with their own palette (bronze → gold).
 // 3-stop gradients with a vivid mid band that sweeps via .af-nft-grad.
@@ -27,6 +28,8 @@ export interface NftVisual {
   icon: React.ReactNode;
   id: string;
   blurb: string;
+  /** Optional full-bleed artwork (standalone collectibles / skins). */
+  image?: string;
 }
 
 export function getNftVisual(data: NftCardData): NftVisual {
@@ -59,17 +62,32 @@ export function getNftVisual(data: NftCardData): NftVisual {
       blurb: "An upgradeable trading perk. Each level rewrites its on-chain Attributes for +1% fee discount, capped at 5%.",
     };
   }
+  if (data.kind === "genesis") {
+    return {
+      label: "Genesis",
+      tag: "TRANSFERABLE",
+      grad: "linear-gradient(120deg,#05302a,#1fe0b8,#0a4038)",
+      accent: "#3fe9c4",
+      tier: "Fee-share",
+      stat: `${(data.shareBps / 100).toFixed(1)}%`,
+      statLabel: "REVENUE SHARE",
+      icon: <Gift className="h-6 w-6" />,
+      id: data.id,
+      blurb: "A transferable fee-share NFT earning a pro-rata cut of the subject's fee stream, forever. Trade it or hold to accrue.",
+    };
+  }
   return {
-    label: "Genesis",
-    tag: "TRANSFERABLE",
-    grad: "linear-gradient(120deg,#05302a,#1fe0b8,#0a4038)",
-    accent: "#3fe9c4",
-    tier: "Fee-share",
-    stat: `${(data.shareBps / 100).toFixed(1)}%`,
-    statLabel: "REVENUE SHARE",
-    icon: <Gift className="h-6 w-6" />,
-    id: data.id,
-    blurb: "A transferable fee-share NFT earning a pro-rata cut of the subject's fee stream, forever. Trade it or hold to accrue.",
+    label: "NFT",
+    tag: "COLLECTIBLE",
+    grad: "linear-gradient(120deg,#1a1230,#5b3fd6,#241a45)",
+    accent: "#b07cff",
+    tier: data.name || "Untitled",
+    stat: "1 of 1",
+    statLabel: "EDITION",
+    icon: <ImageIcon className="h-6 w-6" />,
+    id: data.id ?? "NFT-0001",
+    blurb: "A standalone Metaplex Core collectible — freely transferable, with its own artwork.",
+    image: data.image,
   };
 }
 
@@ -81,6 +99,11 @@ export function NftCardFace({ data }: { data: NftCardData }) {
       className="af-nft-grad relative aspect-[3/4] w-full overflow-hidden rounded-xl border p-4 shadow-xl"
       style={{ background: v.grad, borderColor: `${v.accent}77` }}
     >
+      {/* full-bleed artwork (standalone collectibles / skins) */}
+      {v.image && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={v.image} alt={v.tier} className="absolute inset-0 h-full w-full object-cover" />
+      )}
       {/* grid texture */}
       <div
         className="pointer-events-none absolute inset-0 opacity-[0.14]"
@@ -106,15 +129,18 @@ export function NftCardFace({ data }: { data: NftCardData }) {
           {v.tag}
         </span>
       </div>
-      <div className="relative mt-7 flex flex-col items-center" style={{ transform: "translateZ(40px)" }}>
-        <div
-          className="flex h-16 w-16 items-center justify-center rounded-full border-2"
-          style={{ borderColor: v.accent, color: v.accent, boxShadow: `0 0 24px ${v.accent}44` }}
-        >
-          {v.icon}
+      {/* center emblem — hidden when full-bleed artwork is present */}
+      {!v.image && (
+        <div className="relative mt-7 flex flex-col items-center" style={{ transform: "translateZ(40px)" }}>
+          <div
+            className="flex h-16 w-16 items-center justify-center rounded-full border-2"
+            style={{ borderColor: v.accent, color: v.accent, boxShadow: `0 0 24px ${v.accent}44` }}
+          >
+            {v.icon}
+          </div>
+          <div className="mt-3 text-center text-[16px] font-bold text-[#F5F4F0]">{v.tier}</div>
         </div>
-        <div className="mt-3 text-center text-[16px] font-bold text-[#F5F4F0]">{v.tier}</div>
-      </div>
+      )}
       <div className="absolute inset-x-4 bottom-4">
         <div className="font-mono text-[8px] uppercase tracking-[0.1em] text-white/45">{v.statLabel}</div>
         <div className="truncate font-mono text-[15px] font-bold" style={{ color: v.accent }}>

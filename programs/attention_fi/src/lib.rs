@@ -170,6 +170,11 @@ pub mod attention_fi {
         mint_genesis::mint_genesis_handler(ctx, share_bps, uri)
     }
 
+    /// Mint a plain standalone Core NFT (collectible with an optional image).
+    pub fn mint_nft(ctx: Context<MintNft>, name: String, uri: String) -> Result<()> {
+        mint_nft::mint_nft_handler(ctx, name, uri)
+    }
+
     /// Start a Dutch auction for a 1-of-1 Core NFT (escrowed under the auction PDA).
     pub fn start_nft_auction(
         ctx: Context<StartNftAuction>,

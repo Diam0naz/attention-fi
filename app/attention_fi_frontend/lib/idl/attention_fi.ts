@@ -2853,6 +2853,58 @@ export type AttentionFi = {
       ]
     },
     {
+      "name": "mintNft",
+      "docs": [
+        "Mint a plain standalone Core NFT (collectible with an optional image)."
+      ],
+      "discriminator": [
+        211,
+        57,
+        6,
+        167,
+        15,
+        219,
+        35,
+        251
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "recipient"
+        },
+        {
+          "name": "asset",
+          "docs": [
+            "The new Core asset (client-generated keypair, signs its creation)."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "mplCoreProgram",
+          "address": "CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d"
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "name",
+          "type": "string"
+        },
+        {
+          "name": "uri",
+          "type": "string"
+        }
+      ]
+    },
+    {
       "name": "mintPerk",
       "docs": [
         "Mint an upgradeable perk NFT (Metaplex Core) granting platform fee",
