@@ -2723,7 +2723,7 @@ export type AttentionFi = {
         {
           "name": "authority",
           "docs": [
-            "Protocol keeper minting the genesis share to an early participant."
+            "The subject token's creator, issuing genesis fee-share NFTs for it."
           ],
           "writable": true,
           "signer": true
@@ -2751,6 +2751,30 @@ export type AttentionFi = {
         },
         {
           "name": "subjectMint"
+        },
+        {
+          "name": "curve",
+          "docs": [
+            "The subject token's bonding curve — gates issuance to its creator."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  117,
+                  114,
+                  118,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "subjectMint"
+              }
+            ]
+          }
         },
         {
           "name": "genesis",

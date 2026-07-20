@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, Check, Gift, Gavel } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -9,12 +9,11 @@ import { WalletConnectModal } from "@/components/wallet/wallet-connect-modal";
 import { TxStatus, type TxState } from "@/components/wallet/tx-status";
 import { PageBackground } from "@/components/reactbits/page-background";
 import { NftCardFace, type NftCardData } from "@/components/nft/nft-card";
-import { getNftState, getPortfolio } from "@/lib/mock-data";
+import { getNftState } from "@/lib/mock-data";
 import { Keypair, PublicKey } from "@solana/web3.js";
 import { BN } from "@anchor-lang/core";
 import { useProgram } from "@/lib/solana/use-program";
-import { useIsAdmin } from "@/lib/solana/use-admin";
-import { handleToMint } from "@/lib/solana/registry";
+import { handleToMint, launchedHandles } from "@/lib/solana/registry";
 import { explorerTx } from "@/lib/solana/config";
 
 const SOL_USD = 164.2;
@@ -51,7 +50,12 @@ const DURATIONS = ["6h", "12h", "24h", "48h"];
 export function NftCreateFlow() {
   const { connected, address, shortAddress } = useWallet();
   const program = useProgram();
-  const isAdmin = useIsAdmin();
+  // Tokens this wallet launched (client-only; localStorage) — the ones it can
+  // issue genesis fee-share NFTs for, now that genesis is creator-gated on-chain.
+  const [myTokens, setMyTokens] = useState<{ handle: string; symbol: string }[]>([]);
+  useEffect(() => {
+    setMyTokens(launchedHandles().map((h) => ({ handle: h, symbol: h.slice(0, 4).toUpperCase() })));
+  }, []);
   const [walletOpen, setWalletOpen] = useState(false);
   const [step, setStep] = useState(0);
   const [kind, setKind] = useState<Kind>("genesis");
@@ -69,12 +73,7 @@ export function NftCreateFlow() {
   const [floorUsd, setFloorUsd] = useState("2500");
   const [duration, setDuration] = useState("24h");
 
-  const portfolio = useMemo(
-    () => (address ? getPortfolio(address) : null),
-    [address],
-  );
   const nft = useMemo(() => (address ? getNftState(address) : null), [address]);
-  const created = portfolio?.created ?? [];
   const ownedAssets = useMemo(() => {
     const out: { id: string; label: string }[] = [];
     if (nft?.perk)
@@ -111,7 +110,7 @@ export function NftCreateFlow() {
           shareBps: nft?.genesis.find((g) => g.id === assetId)?.shareBps ?? 100,
           id: assetId || "GEN-0001",
         };
-  const validGenesis = isAdmin && tokenHandle !== "" && +sharePct > 0 && +supply > 0;
+  const validGenesis = tokenHandle !== "" && +sharePct > 0 && +supply > 0;
   const validAuction = assetId !== "" && +startUsd > +floorUsd && +floorUsd > 0;
   const canContinue =
     step !== 1 || (kind === "genesis" ? validGenesis : validAuction);
@@ -235,21 +234,14 @@ export function NftCreateFlow() {
               Each NFT earns its share of every fee your token collects, split
               pro-rata.
             </p>
-            {!isAdmin && (
-              <div className="mt-3 rounded-sm border border-noise/40 bg-noise/[0.06] px-3 py-2 text-[11px] leading-relaxed text-noise">
-                Genesis issuance is protocol-admin-only in this build — the
-                connected wallet isn&apos;t the program authority, so this
-                transaction would be rejected on-chain.
-              </div>
-            )}
             <Field label="Token you created">
-              {created.length ? (
+              {myTokens.length ? (
                 <select
                   value={tokenHandle}
                   onChange={(e) => setTokenHandle(e.target.value)}
                   className="w-full rounded-sm border border-white/10 bg-[#12181f] px-3 py-2.5 text-[13px] outline-none">
                   <option value="">Select a token…</option>
-                  {created.map((c) => (
+                  {myTokens.map((c) => (
                     <option key={c.handle} value={c.handle}>
                       @{c.handle} (${c.symbol})
                     </option>
@@ -257,7 +249,7 @@ export function NftCreateFlow() {
                 </select>
               ) : (
                 <p className="text-[11px] text-noise">
-                  You haven&apos;t launched a token yet.
+                  You haven&apos;t launched a token yet — launch one, then issue its genesis shares.
                 </p>
               )}
             </Field>

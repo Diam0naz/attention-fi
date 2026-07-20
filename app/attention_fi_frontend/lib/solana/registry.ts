@@ -50,6 +50,11 @@ export function allTokenHandles(): string[] {
   return Object.keys({ ...staticRegistry(), ...launchedRegistry() });
 }
 
+/** Handles launched from this browser (i.e. tokens the user created). */
+export function launchedHandles(): string[] {
+  return Object.keys(launchedRegistry());
+}
+
 /** Record a freshly-launched token so the rest of the app can read it on-chain. */
 export function registerToken(handle: string, mint: string): void {
   if (typeof window === "undefined") return;
