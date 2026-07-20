@@ -1,5 +1,5 @@
 import type { PublicKey } from "@solana/web3.js";
-import { fetchCurve, fetchGlobal, spotPriceSol, LAMPORTS_PER_SOL, type CurveState } from "@/lib/solana/curve";
+import { fetchAllCurves, fetchGlobal, spotPriceSol, LAMPORTS_PER_SOL, type CurveState } from "@/lib/solana/curve";
 import { getReadonlyProgram } from "@/lib/solana/program";
 import { allTokenHandles, handleToMint } from "@/lib/solana/registry";
 import {
@@ -33,7 +33,7 @@ import {
  * Prices are denominated in SOL per whole token.
  */
 
-const POLL_MS = 4000;
+const POLL_MS = 8000;
 const SYNTH_BACKFILL_BARS = 500;
 
 function hashString(s: string): number {
@@ -93,6 +93,51 @@ export class AttentionFiProvider implements MarketDataProvider {
   private statusListeners = new Set<(s: ConnectionStatus) => void>();
   private status: ConnectionStatus = "down";
   private polling = false;
+
+  /**
+   * All curves in one shot: `bondingCurve.all()` is a single
+   * getProgramAccounts request, so every consumer (chart, book, watchlist,
+   * screener, ticket) shares one RPC call per wave instead of one per symbol.
+   * The public devnet endpoint rate-limits hard; this keeps us under it.
+   */
+  private snapshot = new Map<string, CurveState>(); // key: mint base58
+  private snapshotAt = 0;
+  private snapshotInflight: Promise<void> | null = null;
+
+  private refreshSnapshot(force = false): Promise<void> {
+    if (!force && Date.now() - this.snapshotAt < POLL_MS / 2) {
+      return Promise.resolve();
+    }
+    if (this.snapshotInflight) return this.snapshotInflight;
+    this.snapshotInflight = (async () => {
+      const curves = await fetchAllCurves(this.program);
+      // fetchAllCurves returns [] on RPC errors — keep the last good snapshot
+      if (curves.length > 0) {
+        this.snapshot = new Map(curves.map((c) => [c.mint, c]));
+      }
+      this.snapshotAt = Date.now();
+    })().finally(() => {
+      this.snapshotInflight = null;
+    });
+    return this.snapshotInflight;
+  }
+
+  private curveFor(w: WatchState): CurveState | null {
+    return this.snapshot.get(w.mint.toBase58()) ?? null;
+  }
+
+  /** refresh the snapshot (deduped) and prime a watch's spot from it */
+  private async primeWatch(w: WatchState): Promise<CurveState | null> {
+    await this.ensureDecimals();
+    await this.refreshSnapshot();
+    const curve = this.curveFor(w);
+    if (curve && w.spot === 0) {
+      w.curve = curve;
+      w.spot = spotPriceSol(curve, this.decimals);
+      w.lastRealSol = curve.realSolReserves;
+    }
+    return curve;
+  }
 
   private get program() {
     return getReadonlyProgram();
@@ -157,10 +202,11 @@ export class AttentionFiProvider implements MarketDataProvider {
     this.polling = true;
     try {
       await this.ensureDecimals();
+      await this.refreshSnapshot(true);
       let anyOk = false;
       for (const [key, w] of this.watches) {
         if (w.refs <= 0) continue;
-        const curve = await fetchCurve(this.program, w.mint);
+        const curve = this.curveFor(w);
         if (!curve) continue;
         anyOk = true;
         const prevSpot = w.spot;
@@ -295,15 +341,7 @@ export class AttentionFiProvider implements MarketDataProvider {
   ): Promise<Candle[]> {
     const w = this.watch(symbol);
     if (!w) return [];
-    await this.ensureDecimals();
-    if (w.spot === 0) {
-      const curve = await fetchCurve(this.program, w.mint);
-      if (curve) {
-        w.curve = curve;
-        w.spot = spotPriceSol(curve, this.decimals);
-        w.lastRealSol = curve.realSolReserves;
-      }
-    }
+    await this.primeWatch(w);
     const s = this.getSeries(symbol, tf, w.spot);
     this.extendBack(s, tf, from);
     return s.candles.filter((c) => c.time >= from && c.time <= to);
@@ -377,8 +415,7 @@ export class AttentionFiProvider implements MarketDataProvider {
   async getOrderBook(symbol: string, depth: number): Promise<OrderBook> {
     const w = this.watch(symbol);
     if (!w) return { symbol, bids: [], asks: [], time: Date.now() };
-    await this.ensureDecimals();
-    const curve = w.curve ?? (await fetchCurve(this.program, w.mint));
+    const curve = w.curve ?? (await this.primeWatch(w));
     if (!curve) return { symbol, bids: [], asks: [], time: Date.now() };
     return this.buildBook(symbol, curve, depth);
   }
@@ -416,14 +453,15 @@ export class AttentionFiProvider implements MarketDataProvider {
 
   async getTickerStats(symbols?: string[]): Promise<TickerStats[]> {
     await this.ensureDecimals();
+    await this.refreshSnapshot();
     const targets = (symbols ?? allTokenHandles()).map((s) => s.toLowerCase());
     const out: TickerStats[] = [];
     for (const sym of targets) {
       const w = this.watch(sym);
       if (!w) continue;
+      const curve = this.curveFor(w);
+      if (!curve) continue;
       if (w.spot === 0) {
-        const curve = await fetchCurve(this.program, w.mint);
-        if (!curve) continue;
         w.curve = curve;
         w.spot = spotPriceSol(curve, this.decimals);
         w.lastRealSol = curve.realSolReserves;

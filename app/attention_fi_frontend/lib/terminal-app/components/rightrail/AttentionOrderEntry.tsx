@@ -29,6 +29,14 @@ type TxState =
 
 const SLIPPAGE_OPTIONS = [50, 100, 200] as const;
 
+// Global config (fees, decimals) never changes after init — fetch it once per
+// session instead of on every quote poll; the public devnet RPC rate-limits.
+let globalOnce: ReturnType<typeof fetchGlobal> | null = null;
+function getGlobalOnce(program: Parameters<typeof fetchGlobal>[0]) {
+  globalOnce ??= fetchGlobal(program);
+  return globalOnce;
+}
+
 /**
  * Real order ticket against the AttentionFi bonding curve on devnet.
  * Buys are denominated in SOL in, sells in tokens in — mirroring the
@@ -58,13 +66,13 @@ export function AttentionOrderEntry() {
     if (!mint) return;
     let cancelled = false;
     const load = async () => {
-      const [c, g] = await Promise.all([fetchCurve(readonly, mint), fetchGlobal(readonly)]);
+      const [c, g] = await Promise.all([fetchCurve(readonly, mint), getGlobalOnce(readonly)]);
       if (cancelled) return;
       if (c) setCurve(c);
       if (g) setDecimals(g.tokenDecimals);
     };
     void load();
-    const timer = setInterval(() => void load(), 5000);
+    const timer = setInterval(() => void load(), 10_000);
     return () => {
       cancelled = true;
       clearInterval(timer);

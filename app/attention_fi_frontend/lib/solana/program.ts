@@ -14,7 +14,12 @@ export interface AnchorWalletLike {
 let cached: Connection | null = null;
 
 export function getConnection(): Connection {
-  cached ??= new Connection(RPC_ENDPOINT, "confirmed");
+  // Fail fast on 429s instead of web3.js's internal retry loop spamming the
+  // console — callers poll anyway, so the next wave picks up the data.
+  cached ??= new Connection(RPC_ENDPOINT, {
+    commitment: "confirmed",
+    disableRetryOnRateLimit: true,
+  });
   return cached;
 }
 
