@@ -30,11 +30,11 @@ export function AppNav() {
       {pathname === "/" && <TickerTape />}
       <nav className="sticky top-0 z-40 border-b border-white/[0.08] bg-[#0A0A0A]/95 backdrop-blur-sm">
       {/* three-region bar: logo left, links centered, actions right */}
-      <div className="mx-auto flex max-w-5xl items-center px-4 py-3 sm:px-5">
+      <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3 sm:px-5">
         <Link href="/" aria-label="AttentionFi home" className="shrink-0">
           <Logo />
         </Link>
-        <ul className="flex flex-1 items-center justify-center gap-3 px-2 sm:gap-6">
+        <ul className="hidden md:flex flex-1 items-center justify-center gap-3 px-2 sm:gap-6">
           {LINKS.map((l) => {
             const active = pathname === l.href || pathname.startsWith(`${l.href}/`);
             return (
