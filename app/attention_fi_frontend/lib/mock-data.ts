@@ -271,12 +271,29 @@ export function getHolders(handle: string): Holder[] {
 }
 
 /**
- * Deterministic avatar image for a token/handle (Pump.fun-style thumbnails).
- * DiceBear generates a stable, colorful image per handle; loads client-side in
- * the user's browser. Components fall back to the gradient tile if it fails.
+ * Deterministic avatar image for a token/handle.
+ *
+ * The top tokens ship local assets (PNGs for the trending wall, SVGs for the
+ * rest) so v0 loads without any external dependency. Unknown handles fall back
+ * to DiceBear so the system still works for fresh/unknown tokens.
  */
+const LOCAL_TOKENS: Record<string, string> = {
+  solana_kol:   "/tokens/solana_kol.png",
+  ai_narrative: "/tokens/ai_narrative.png",
+  rwa_summer:   "/tokens/rwa_summer.png",
+  zk_builder:   "/tokens/zk_builder.png",
+  degen_pilled: "/tokens/degen_pilled.png",
+  gg_wagmi:     "/tokens/gg_wagmi.png",
+  onchain_beats: "/tokens/onchain_beats.svg",
+  mev_searcher:  "/tokens/mev_searcher.svg",
+  modular_max:   "/tokens/modular_max.svg",
+  pixel_quest:   "/tokens/pixel_quest.svg",
+  base_degen:    "/tokens/base_degen.svg",
+  synth_wave:    "/tokens/synth_wave.svg",
+};
+
 export function tokenImage(handle: string): string {
-  return `https://api.dicebear.com/9.x/shapes/svg?seed=${encodeURIComponent(handle)}&size=96`;
+  return LOCAL_TOKENS[handle] ?? `https://api.dicebear.com/9.x/shapes/svg?seed=${encodeURIComponent(handle)}&size=96`;
 }
 
 export interface Holding { handle: string; name: string; symbol: string; amount: number; valueUsd: number; delta24h: number }
