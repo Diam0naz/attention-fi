@@ -36,7 +36,7 @@ export function TrendingWall() {
             LIVE
           </span>
         </div>
-        <Link href="/discover" className="font-mono text-[10px] text-[#6B6B6B] transition-colors hover:text-signal">
+        <Link href="/#verticals" className="font-mono text-[10px] text-[#6B6B6B] transition-colors hover:text-signal">
           See all →
         </Link>
       </div>
@@ -79,7 +79,7 @@ function Delta({ v, className }: { v: number; className?: string }) {
 function FeaturedTile({ token, max }: { token: Token; max: number }) {
   return (
     <Link
-      href={`/token/${token.handle}`}
+      href="#"
       className="group relative col-span-2 row-span-2 overflow-hidden rounded-lg border border-white/10 bg-[#0f1620] transition-colors hover:border-signal/40"
     >
       <Bg handle={token.handle} />
@@ -119,7 +119,7 @@ function FeaturedTile({ token, max }: { token: Token; max: number }) {
 function SmallTile({ token, rank, max }: { token: Token; rank: number; max: number }) {
   return (
     <Link
-      href={`/token/${token.handle}`}
+      href="#"
       className="group relative overflow-hidden rounded-lg border border-white/10 bg-[#0f1620] transition-colors hover:border-signal/40"
     >
       <Bg handle={token.handle} />

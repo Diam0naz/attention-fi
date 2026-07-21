@@ -73,7 +73,7 @@ export function SignalBoard() {
           </span>
           <div className="flex items-center gap-4">
             <Link
-              href="/discover"
+              href="/#verticals"
               className="font-mono text-[10px] tracking-[0.1em] text-[#6B6B6B] transition-colors hover:text-signal"
             >
               Browse by vertical →
@@ -99,7 +99,7 @@ export function SignalBoard() {
           return (
             <Link
               key={t.handle}
-              href={`/token/${t.handle}`}
+              href="#"
               className="grid grid-cols-[24px_1fr_64px_48px] items-center gap-2 border-b border-white/[0.06] px-4 py-3 text-[13px] transition-colors last:border-b-0 hover:bg-white/[0.03] sm:grid-cols-[28px_1fr_72px_72px_56px_64px] sm:px-5"
             >
               <span className="font-mono text-[11px] text-[#6B6B6B]">

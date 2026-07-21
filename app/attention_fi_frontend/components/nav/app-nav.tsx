@@ -8,11 +8,12 @@ import { WaitlistButton } from "@/components/waitlist/waitlist-button";
 import { WalletButton } from "@/components/wallet/wallet-button";
 import { cn } from "@/lib/utils";
 
+// v0 gates v1: first visitors get the educational story (sections on the
+// landing page), not the app surfaces — those stay reachable by URL only.
 const LINKS = [
-  { label: "Discover", href: "/discover" },
-  { label: "Terminal", href: "/terminal" },
-  { label: "Launch", href: "/launch" },
-  { label: "NFT", href: "/nft" },
+  { label: "Thesis", href: "/#thesis" },
+  { label: "Mechanism Design", href: "/#mechanism" },
+  { label: "Verticals", href: "/#verticals" },
 ] as const;
 
 /**

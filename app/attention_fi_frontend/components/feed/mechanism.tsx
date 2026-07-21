@@ -97,11 +97,11 @@ export function Mechanism() {
       </div>
 
       <Link
-        href="/launch"
+        href="/#thesis"
         className="mt-8 inline-flex rounded-sm bg-signal px-5 py-3 font-mono text-[12px] font-bold text-[#0A0A0A]"
       >
-        Launch a token →
-        </Link>
+        Join the waitlist →
+      </Link>
       </Reveal>
     </section>
   );

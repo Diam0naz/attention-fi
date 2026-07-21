@@ -1,12 +1,11 @@
 import { X_HANDLE, X_URL } from "@/lib/config";
 import { Logo } from "@/components/brand/logo";
 
+// v0 gates v1: footer links point to landing-page sections, not app surfaces.
 const PRODUCT = [
-  { label: "Discover", href: "/discover" },
-  { label: "Terminal", href: "/terminal" },
-  { label: "Launch", href: "/launch" },
-  { label: "NFT", href: "/nft" },
-  { label: "Profile", href: "/profile" },
+  { label: "Thesis", href: "/#thesis" },
+  { label: "Mechanism Design", href: "/#mechanism" },
+  { label: "Verticals", href: "/#verticals" },
 ];
 
 export function Footer() {
