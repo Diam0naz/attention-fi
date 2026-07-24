@@ -10,6 +10,7 @@ pub const POSITION_SEED: &[u8] = b"position";
 pub const REVENUE_SEED: &[u8] = b"revenue";
 pub const REVSTAKE_SEED: &[u8] = b"revstake";
 pub const VERIFY_SEED: &[u8] = b"verify";
+pub const ISSUER_SEED: &[u8] = b"issuer";
 pub const PERK_SEED: &[u8] = b"perk";
 pub const PERK_AUTH_SEED: &[u8] = b"perkauth";
 pub const GENESIS_SEED: &[u8] = b"genesis";

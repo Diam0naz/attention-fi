@@ -172,6 +172,18 @@ pub struct Verification {
     pub bump: u8,
 }
 
+/// The dedicated key authorized to sign SAS attestations for `verify_handle`,
+/// separate from `Global.authority` so the attestation issuer (a hot key held
+/// by the `/api/verify` service) can rotate without touching the protocol's
+/// admin key. Singleton PDA; absent until `set_issuer` is called for the
+/// first time, in which case `verify_handle` still trusts `Global.authority`.
+#[account]
+#[derive(InitSpace)]
+pub struct IssuerConfig {
+    pub issuer: Pubkey,
+    pub bump: u8,
+}
+
 /// An upgradeable perk NFT record. The Metaplex Core asset's Attributes carry
 /// the level/discount for display; this PDA is the on-chain source of truth that
 /// trading instructions read to apply the holder's fee discount. One per asset.

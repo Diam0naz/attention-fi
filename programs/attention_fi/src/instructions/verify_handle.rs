@@ -6,9 +6,9 @@ use mpl_core::types::{
 use solana_attestation_service_client::accounts::Attestation;
 use solana_attestation_service_client::programs::SOLANA_ATTESTATION_SERVICE_ID;
 
-use crate::constants::{GLOBAL_SEED, VERIFY_SEED};
+use crate::constants::{GLOBAL_SEED, ISSUER_SEED, VERIFY_SEED};
 use crate::error::AttentionError;
-use crate::state::{Global, Verification};
+use crate::state::{Global, IssuerConfig, Verification};
 
 /// Max handle length that fits the `Verification` account and the NFT name.
 const MAX_HANDLE_LEN: usize = 32;
@@ -22,6 +22,11 @@ pub struct VerifyHandle<'info> {
 
     #[account(seeds = [GLOBAL_SEED], bump = global.bump)]
     pub global: Account<'info, Global>,
+
+    /// The dedicated attestation issuer, if one has been configured via
+    /// `set_issuer`. Absent (pre-migration) falls back to `global.authority`.
+    #[account(seeds = [ISSUER_SEED], bump = issuer_config.bump)]
+    pub issuer_config: Option<Account<'info, IssuerConfig>>,
 
     /// CHECK: the wallet being verified; must equal the attestation's nonce.
     pub subject: UncheckedAccount<'info>,
@@ -66,9 +71,13 @@ pub fn verify_handle_handler(
     // rather than on the keeper co-signing every verification transaction.
     let attestation = Attestation::from_bytes(&ctx.accounts.attestation.try_borrow_data()?)
         .map_err(|_| error!(AttentionError::InvalidAttestation))?;
+    let required_signer = match &ctx.accounts.issuer_config {
+        Some(config) => config.issuer,
+        None => ctx.accounts.global.authority,
+    };
     require_keys_eq!(
         attestation.signer,
-        ctx.accounts.global.authority,
+        required_signer,
         AttentionError::Unauthorized
     );
     require_keys_eq!(

@@ -152,6 +152,12 @@ pub mod attention_fi {
         verify_handle::verify_handle_handler(ctx, handle, uri)
     }
 
+    /// Set or rotate the dedicated key authorized to sign SAS attestations
+    /// (admin-gated by `Global.authority`).
+    pub fn set_issuer(ctx: Context<SetIssuer>, issuer: Pubkey) -> Result<()> {
+        set_issuer::set_issuer_handler(ctx, issuer)
+    }
+
     /// Mint an upgradeable perk NFT (Metaplex Core) granting platform fee
     /// discounts; starts at level 1.
     pub fn mint_perk(ctx: Context<MintPerk>, uri: String) -> Result<()> {

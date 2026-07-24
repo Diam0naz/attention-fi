@@ -3728,6 +3728,77 @@ export type AttentionFi = {
       ]
     },
     {
+      "name": "setIssuer",
+      "docs": [
+        "Set or rotate the dedicated key authorized to sign SAS attestations",
+        "(admin-gated by `Global.authority`)."
+      ],
+      "discriminator": [
+        122,
+        240,
+        209,
+        127,
+        179,
+        164,
+        175,
+        206
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "global",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  108,
+                  111,
+                  98,
+                  97,
+                  108
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "issuerConfig",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  115,
+                  115,
+                  117,
+                  101,
+                  114
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "issuer",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
       "name": "settleAuction",
       "docs": [
         "Finalize a Dutch auction once it has ended."
@@ -4428,6 +4499,29 @@ export type AttentionFi = {
           }
         },
         {
+          "name": "issuerConfig",
+          "docs": [
+            "The dedicated attestation issuer, if one has been configured via",
+            "`set_issuer`. Absent (pre-migration) falls back to `global.authority`."
+          ],
+          "optional": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  115,
+                  115,
+                  117,
+                  101,
+                  114
+                ]
+              }
+            ]
+          }
+        },
+        {
           "name": "subject"
         },
         {
@@ -4591,6 +4685,19 @@ export type AttentionFi = {
         108,
         114,
         127
+      ]
+    },
+    {
+      "name": "issuerConfig",
+      "discriminator": [
+        238,
+        244,
+        71,
+        221,
+        254,
+        169,
+        247,
+        237
       ]
     },
     {
@@ -5435,6 +5542,29 @@ export type AttentionFi = {
           {
             "name": "timestamp",
             "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "issuerConfig",
+      "docs": [
+        "The dedicated key authorized to sign SAS attestations for `verify_handle`,",
+        "separate from `Global.authority` so the attestation issuer (a hot key held",
+        "by the `/api/verify` service) can rotate without touching the protocol's",
+        "admin key. Singleton PDA; absent until `set_issuer` is called for the",
+        "first time, in which case `verify_handle` still trusts `Global.authority`."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "issuer",
+            "type": "pubkey"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
           }
         ]
       }
