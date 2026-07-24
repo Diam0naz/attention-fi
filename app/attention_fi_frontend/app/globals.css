@@ -252,6 +252,20 @@
 .af-orbit-rev { animation: af-spin-rev 64s linear infinite; transform-box: fill-box; transform-origin: center; }
 .af-orbit-fast { animation: af-spin 26s linear infinite; transform-box: fill-box; transform-origin: center; }
 
+/* Themed scrollbar for horizontal shelves (curated feed rows, etc.) —
+   replaces the default OS scrollbar that clashes with the dark canvas. */
+.af-scrollbar-x {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+}
+.af-scrollbar-x::-webkit-scrollbar { height: 6px; }
+.af-scrollbar-x::-webkit-scrollbar-track { background: transparent; }
+.af-scrollbar-x::-webkit-scrollbar-thumb {
+  background-color: rgba(255, 255, 255, 0.18);
+  border-radius: 9999px;
+}
+.af-scrollbar-x::-webkit-scrollbar-thumb:hover { background-color: rgba(0, 255, 133, 0.35); }
+
 @media (prefers-reduced-motion: reduce) {
   .af-gradient-text, .af-shiny-text, .af-pulse-dot, .af-ticker-track,
   .af-orbit, .af-orbit-rev, .af-orbit-fast { animation: none; }

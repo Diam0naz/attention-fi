@@ -88,7 +88,7 @@ export function CuratedFeed() {
               className="w-full bg-transparent text-[13px] outline-none placeholder:text-[#4b5563]"
             />
           </label>
-          <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1">
+          <div className="af-scrollbar-x -mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1">
             {VERTICALS.map((v) => (
               <button
                 key={v}
@@ -152,7 +152,7 @@ export function CuratedFeed() {
                     SEE ALL →
                   </Link>
                 </div>
-                <div className="-mx-1 mt-3 flex gap-3 overflow-x-auto px-1 pb-2">
+                <div className="af-scrollbar-x -mx-1 mt-3 flex gap-3 overflow-x-auto px-1 pb-2">
                   {shelf.tokens.map((t) => (
                     <TokenCard key={t.handle} t={t} max={max} />
                   ))}
