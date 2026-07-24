@@ -392,11 +392,25 @@ function AuctionCard({
   const fallen = span > 0n ? auction.startPrice - price : 0n;
   const pct = span > 0n ? Number((fallen * 100n) / span) : 0;
   return (
-    <div className="overflow-hidden rounded-sm border border-white/[0.08] bg-[#0f1620]">
-      <div className="flex h-20 items-center justify-center bg-[repeating-linear-gradient(45deg,#12202b,#12202b_8px,#152531_8px,#152531_16px)] font-mono text-[11px] text-signal">
-        {short(auction.asset)}
+    <div className="group relative z-0 flex flex-col hover:z-10">
+      {/* deck: the real NFT face up front, two ghost cards behind it that fan
+          out on hover — no TiltCard here, this is the marketplace-only treatment */}
+      <div className="relative">
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 translate-x-1 translate-y-1 -rotate-2 rounded-xl border border-white/[0.08] bg-[#101820] opacity-60 transition-transform duration-300 ease-out group-hover:translate-x-2.5 group-hover:translate-y-2 group-hover:-rotate-6"
+        />
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 translate-x-2 translate-y-2 rotate-1 rounded-xl border border-white/[0.05] bg-[#0c1219] opacity-35 transition-transform duration-300 ease-out group-hover:translate-x-5 group-hover:translate-y-4 group-hover:rotate-5"
+        />
+        <div className="relative transition-transform duration-300 ease-out group-hover:-translate-y-1">
+          <NftCardFace data={{ kind: "custom", name: short(auction.asset) }} />
+        </div>
       </div>
-      <div className="p-3.5">
+
+      {/* details card below the deck */}
+      <div className="mt-3 rounded-sm border border-white/[0.08] bg-[#0f1620] p-3.5">
         <div className="flex items-center justify-between">
           <span className="font-mono text-[12px] font-bold">{short(auction.asset)}</span>
           <span className="font-mono text-[10px] text-[#6B6B6B]">by {short(auction.creator)}</span>
