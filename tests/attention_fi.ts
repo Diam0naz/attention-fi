@@ -672,6 +672,7 @@ describe("attention_fi verification NFT (SAS-gated)", () => {
       .accountsStrict({
         payer: wallet,
         global: globalPda,
+        issuerConfig: null,
         subject,
         attestation: attValid,
         verification: verifyPda(subject),
@@ -704,6 +705,7 @@ describe("attention_fi verification NFT (SAS-gated)", () => {
         .accountsStrict({
           payer: wallet,
           global: globalPda,
+          issuerConfig: null,
           subject: subject2,
           attestation: attInvalid,
           verification: verifyPda(subject2),
@@ -1336,6 +1338,7 @@ describe("attention_fi creator fees (SAS-gated claim)", () => {
         .accountsStrict({
           payer: wallet,
           global: globalPda,
+          issuerConfig: null,
           subject: wallet,
           attestation: attWallet,
           verification: verifyPda,
