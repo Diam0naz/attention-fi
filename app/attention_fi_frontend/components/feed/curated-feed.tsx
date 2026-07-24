@@ -33,7 +33,7 @@ function TokenCard({ t, max }: { t: Token; max: number }) {
       className="group flex w-[220px] shrink-0 flex-col rounded-sm border border-white/[0.08] bg-[#0f1620] p-4 transition-colors hover:border-signal/30"
     >
       <div className="flex items-center gap-2">
-        <Avatar handle={t.handle} className="h-7 w-7" />
+        <Avatar handle={t.handle} image={t.image} className="h-7 w-7" />
         <span className="truncate text-[13px] font-bold">@{t.handle}</span>
         {t.verified && <BadgeCheck className="h-3.5 w-3.5 shrink-0 text-signal" />}
       </div>
@@ -108,7 +108,7 @@ export function CuratedFeed() {
         <div className="mt-6 overflow-hidden rounded-sm border border-signal/30 bg-[linear-gradient(90deg,rgba(0,255,133,0.12),transparent)] p-5">
           <div className="font-mono text-[9px] uppercase tracking-[0.15em] text-signal">Editor&apos;s Pick · Today</div>
           <div className="mt-3 flex flex-col gap-4 sm:flex-row sm:items-center">
-            <Avatar handle={editor.handle} className="h-14 w-14 ring-2 ring-signal/30" />
+            <Avatar handle={editor.handle} image={editor.image} className="h-14 w-14 ring-2 ring-signal/30" />
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
                 <span className="text-[18px] font-bold">@{editor.handle}</span>

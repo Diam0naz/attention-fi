@@ -113,7 +113,7 @@ export function SignalBoard() {
               </span>
 
               <div className="flex min-w-0 items-center gap-2">
-                <Avatar handle={t.handle} className="h-5 w-5" />
+                <Avatar handle={t.handle} image={t.image} className="h-5 w-5" />
                 <span className="truncate font-semibold">@{t.handle}</span>
                 {t.verified && (
                   <BadgeCheck className="h-3.5 w-3.5 shrink-0 text-signal" aria-label="verified" />

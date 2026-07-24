@@ -58,12 +58,12 @@ export function TrendingWall() {
   );
 }
 
-function Bg({ handle, up }: { handle: string; up: boolean }) {
+function Bg({ handle, image, up }: { handle: string; image?: string; up: boolean }) {
   return (
     <>
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
-        src={tokenImage(handle)}
+        src={tokenImage(handle, image)}
         alt=""
         aria-hidden
         className="absolute inset-0 h-full w-full object-cover opacity-80 transition-transform duration-500 group-hover:scale-110"
@@ -97,7 +97,7 @@ function FeaturedTile({ token, max }: { token: Token; max: number }) {
       href={`/token/${token.handle}`}
       className="group relative col-span-2 row-span-2 overflow-hidden rounded-lg border border-white/10 bg-[#0f1620] transition-colors hover:border-signal/40"
     >
-      <Bg handle={token.handle} up={token.delta24h >= 0} />
+      <Bg handle={token.handle} image={token.image} up={token.delta24h >= 0} />
       <div className="relative flex h-full flex-col justify-between p-4">
         <div className="flex items-center justify-between">
           <span className="rounded-full bg-signal px-2 py-0.5 font-mono text-[9px] font-bold tracking-wide text-[#0A0A0A]">
@@ -137,7 +137,7 @@ function SmallTile({ token, rank, max }: { token: Token; rank: number; max: numb
       href={`/token/${token.handle}`}
       className="group relative overflow-hidden rounded-lg border border-white/10 bg-[#0f1620] transition-colors hover:border-signal/40"
     >
-      <Bg handle={token.handle} up={token.delta24h >= 0} />
+      <Bg handle={token.handle} image={token.image} up={token.delta24h >= 0} />
       <div className="relative flex h-full flex-col justify-between p-2.5">
         <div className="flex items-center justify-between">
           <span className="font-mono text-[10px] text-[#9aa4af]">#{rank}</span>

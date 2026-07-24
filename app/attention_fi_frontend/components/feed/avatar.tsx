@@ -6,15 +6,16 @@ import { tokenImage } from "@/lib/mock-data";
 
 const GRADIENT = "bg-[repeating-linear-gradient(45deg,#1c2733,#1c2733_4px,#222f3d_4px,#222f3d_8px)]";
 
-/** Token avatar: a generated image with a graceful fallback to the gradient tile. */
-export function Avatar({ handle, className }: { handle: string; className?: string }) {
+/** Token avatar: a generated image (or the creator's own, if launched with one)
+ *  with a graceful fallback to the gradient tile. */
+export function Avatar({ handle, image, className }: { handle: string; image?: string; className?: string }) {
   const [failed, setFailed] = useState(false);
   return (
     <span className={cn("inline-block shrink-0 overflow-hidden rounded-full", GRADIENT, className)}>
       {!failed && (
         // eslint-disable-next-line @next/next/no-img-element
         <img
-          src={tokenImage(handle)}
+          src={tokenImage(handle, image)}
           alt={`@${handle}`}
           loading="lazy"
           onError={() => setFailed(true)}

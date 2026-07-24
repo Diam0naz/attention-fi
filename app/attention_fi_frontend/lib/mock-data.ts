@@ -43,6 +43,8 @@ export interface Token {
   verified: boolean;
   /** Recent mindshare trail for the sparkline (oldest → newest). */
   spark: number[];
+  /** Creator-supplied image URL (launched tokens only) — overrides tokenImage's default. */
+  image?: string;
 }
 
 /** Tier from mindshare share, mirroring the seed tiers in the program. */
@@ -294,7 +296,8 @@ const CT_HANDLE: Record<string, string> = {
  * the fetch fails. Loads client-side; components also keep their own gradient
  * fallback on <img> error.
  */
-export function tokenImage(handle: string): string {
+export function tokenImage(handle: string, custom?: string): string {
+  if (custom) return custom;
   const ct = CT_HANDLE[handle] ?? handle;
   const fallback = `https://api.dicebear.com/9.x/shapes/svg?seed=${encodeURIComponent(handle)}&size=96`;
   return `https://unavatar.io/x/${encodeURIComponent(ct)}?fallback=${encodeURIComponent(fallback)}`;

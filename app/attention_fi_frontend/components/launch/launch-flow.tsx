@@ -69,6 +69,7 @@ export function LaunchFlow() {
   const [handle, setHandle] = useState("");
   const [name, setName] = useState("");
   const [symbol, setSymbol] = useState("");
+  const [image, setImage] = useState("");
   const [walletOpen, setWalletOpen] = useState(false);
   // Wallet is connected (1); start on "awaiting signature" (2) so the SIGN button shows.
   const [verifyStep, setVerifyStep] = useState<2 | 3>(2);
@@ -125,7 +126,7 @@ export function LaunchFlow() {
           .signers([mint])
           .rpc();
       }
-      registerToken(handle, mint.publicKey.toBase58());
+      registerToken(handle, mint.publicKey.toBase58(), { name, symbol: ticker, image: image || undefined });
       setTxSig(sig);
       setTx("confirmed");
     } catch (e) {
@@ -282,6 +283,24 @@ export function LaunchFlow() {
                   />
                 </div>
               </div>
+            </div>
+
+            <div className="mt-1">
+              <label className="font-mono text-[10px] uppercase tracking-[0.1em] text-[#6B6B6B]">
+                Image URL (optional)
+              </label>
+              <input
+                value={image}
+                onChange={(e) => setImage(e.target.value.slice(0, 300))}
+                placeholder="https://…/art.png"
+                className="mt-1 w-full rounded-sm border border-white/10 bg-[#12181f] px-3 py-2.5 font-mono text-[12px] outline-none placeholder:text-[#4b5563]"
+              />
+              {image && (
+                <div className="mt-3 flex justify-center">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={image} alt="preview" className="h-20 w-20 rounded-full border border-white/10 object-cover" />
+                </div>
+              )}
             </div>
           </div>
         )}

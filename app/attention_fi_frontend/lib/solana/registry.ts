@@ -12,6 +12,17 @@ const DEFAULTS: Record<string, string> = {
   solana_kol: "FmYyWGtpvBEpyrY5JJhLkhWH1aiWdnVxzivJcBcfis4B",
 };
 
+/** Display metadata a launcher can attach — there's no on-chain metadata
+ *  account for launched tokens (bare SPL mints), so this rides alongside the
+ *  mint in the same per-browser record. */
+export interface LaunchedTokenMeta {
+  name?: string;
+  symbol?: string;
+  image?: string;
+}
+
+type RegistryEntry = string | ({ mint: string } & LaunchedTokenMeta);
+
 const LS_KEY = "af.registry";
 
 function staticRegistry(): Record<string, string> {
@@ -23,10 +34,10 @@ function staticRegistry(): Record<string, string> {
   }
 }
 
-function launchedRegistry(): Record<string, string> {
+function launchedRegistry(): Record<string, RegistryEntry> {
   if (typeof window === "undefined") return {};
   try {
-    return JSON.parse(window.localStorage.getItem(LS_KEY) ?? "{}") as Record<string, string>;
+    return JSON.parse(window.localStorage.getItem(LS_KEY) ?? "{}") as Record<string, RegistryEntry>;
   } catch {
     return {};
   }
@@ -34,15 +45,28 @@ function launchedRegistry(): Record<string, string> {
 
 const norm = (handle: string) => handle.replace(/^@/, "").toLowerCase();
 
+function mintOf(entry: RegistryEntry): string {
+  return typeof entry === "string" ? entry : entry.mint;
+}
+
 export function handleToMint(handle: string): PublicKey | null {
   const key = norm(handle);
-  const mint = launchedRegistry()[key] ?? staticRegistry()[key];
+  const entry = launchedRegistry()[key];
+  const mint = (entry && mintOf(entry)) ?? staticRegistry()[key];
   if (!mint) return null;
   try {
     return new PublicKey(mint);
   } catch {
     return null;
   }
+}
+
+/** Name/symbol/image a launcher attached at launch time, if any (this browser only). */
+export function launchedMeta(handle: string): LaunchedTokenMeta | null {
+  const entry = launchedRegistry()[norm(handle)];
+  if (!entry || typeof entry === "string") return null;
+  const { name, symbol, image } = entry;
+  return { name, symbol, image };
 }
 
 /** Every known handle (static + env + runtime-launched), for symbol listings. */
@@ -55,10 +79,12 @@ export function launchedHandles(): string[] {
   return Object.keys(launchedRegistry());
 }
 
-/** Record a freshly-launched token so the rest of the app can read it on-chain. */
-export function registerToken(handle: string, mint: string): void {
+/** Record a freshly-launched token so the rest of the app can read it on-chain,
+ *  plus whatever display metadata the creator gave it — there's no on-chain
+ *  metadata account for bare SPL mints, so this is the only place it lives. */
+export function registerToken(handle: string, mint: string, meta?: LaunchedTokenMeta): void {
   if (typeof window === "undefined") return;
   const current = launchedRegistry();
-  current[norm(handle)] = mint;
+  current[norm(handle)] = meta ? { mint, ...meta } : mint;
   window.localStorage.setItem(LS_KEY, JSON.stringify(current));
 }
