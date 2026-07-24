@@ -3,6 +3,7 @@ import type { PublicKey } from "@solana/web3.js";
 import type { AttentionFi } from "@/lib/idl/attention_fi";
 import type { TokenDetail } from "@/lib/mock-data";
 import { LAMPORTS_PER_SOL, fetchCurve, fetchGlobal, marketCapSol } from "./curve";
+import { launchedMeta } from "./registry";
 
 // TODO: replace with a real SOL/USD oracle read. Mirrors the terminal's mock rate.
 /** TODO: replace with a real oracle read; shared by every USD conversion. */
@@ -23,9 +24,16 @@ export async function fetchOnchainDetail(
 
   const decimals = global?.tokenDecimals ?? 6;
   const realSol = Number(curve.realSolReserves) / LAMPORTS_PER_SOL;
+  // The creator's own name/symbol/image, if this token was launched from the
+  // UI — there's no on-chain metadata account for a bare SPL mint, so the
+  // generic mock (handle title-cased) is all `base` has otherwise.
+  const meta = launchedMeta(base.handle);
 
   return {
     ...base,
+    name: meta?.name || base.name,
+    symbol: meta?.symbol || base.symbol,
+    image: meta?.image ?? base.image,
     marketCap: Math.round(marketCapSol(curve, decimals) * SOL_USD),
     raisedUsd: Math.round(realSol * SOL_USD),
     targetUsd: global
