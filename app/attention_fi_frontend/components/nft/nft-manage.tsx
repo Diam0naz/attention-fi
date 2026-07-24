@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { PublicKey } from "@solana/web3.js";
+import { BN } from "@anchor-lang/core";
 import { ArrowLeft, BadgeCheck, Check, Gavel, Gift, Lock, Plus, TrendingUp, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useWallet } from "@/components/wallet/wallet-provider";
@@ -11,7 +13,20 @@ import { Footer } from "@/components/feed/footer";
 import { NftCard, NftCardFace, type NftCardData } from "@/components/nft/nft-card";
 import { NftLanyard } from "@/components/nft/nft-lanyard";
 import { useScrollLock } from "@/lib/use-scroll-lock";
-import { getNftAuctions, getNftState } from "@/lib/mock-data";
+import { getNftState } from "@/lib/mock-data";
+import { useProgram, useReadonlyProgram } from "@/lib/solana/use-program";
+import { fetchGlobal } from "@/lib/solana/curve";
+import { explorerTx } from "@/lib/solana/config";
+import {
+  auctionEnded,
+  currentAuctionPrice,
+  fetchNftAuctions,
+  type NftAuctionData,
+} from "@/lib/solana/nft-data";
+
+const LAMPORTS_PER_SOL = 1_000_000_000;
+const short = (a: string) => `${a.slice(0, 4)}…${a.slice(-4)}`;
+const sol = (lamports: bigint): string => (Number(lamports) / LAMPORTS_PER_SOL).toFixed(3);
 
 export type Section = "verification" | "perk" | "genesis" | "auctions";
 
@@ -34,10 +49,85 @@ export function NftManage({ section }: { section: Section }) {
   const [walletOpen, setWalletOpen] = useState(false);
   const [selected, setSelected] = useState<NftCardData | null>(null);
   const [perkModal, setPerkModal] = useState(false);
-  const [tx, setTx] = useState<{ state: TxState; title: string; detail: string } | null>(null);
+  const [tx, setTx] = useState<{
+    state: TxState;
+    title: string;
+    detail: string;
+    signature?: string;
+    explorerUrl?: string;
+  } | null>(null);
 
   const base = useMemo(() => (address ? getNftState(address) : null), [address]);
-  const auctions = useMemo(() => getNftAuctions(), []);
+
+  const readProgram = useReadonlyProgram();
+  const signProgram = useProgram();
+  const [auctions, setAuctions] = useState<NftAuctionData[]>([]);
+  const [auctionsStatus, setAuctionsStatus] = useState<"loading" | "ready" | "error">("loading");
+  const [treasury, setTreasury] = useState<string | null>(null);
+  const [now, setNow] = useState(() => Date.now());
+
+  // Real 1-of-1 auctions from the chain — only while this section is open.
+  useEffect(() => {
+    if (section !== "auctions") return;
+    let cancelled = false;
+    setAuctionsStatus("loading");
+    Promise.all([fetchNftAuctions(readProgram), fetchGlobal(readProgram)])
+      .then(([list, global]) => {
+        if (cancelled) return;
+        setAuctions(list);
+        setTreasury(global?.treasury ?? null);
+        setAuctionsStatus("ready");
+      })
+      .catch(() => {
+        if (!cancelled) setAuctionsStatus("error");
+      });
+    const poll = setInterval(() => {
+      fetchNftAuctions(readProgram).then((list) => {
+        if (!cancelled) setAuctions(list);
+      }).catch(() => undefined);
+    }, 10_000);
+    const tick = setInterval(() => setNow(Date.now()), 1_000);
+    return () => {
+      cancelled = true;
+      clearInterval(poll);
+      clearInterval(tick);
+    };
+  }, [section, readProgram]);
+
+  async function buyNow(a: NftAuctionData) {
+    if (!signProgram || !address) return setWalletOpen(true);
+    if (!treasury) return;
+    const price = currentAuctionPrice(a, now);
+    // Price only falls before the auction ends, so a small cushion above the
+    // client-observed price absorbs clock drift without ever overpaying.
+    const maxPrice = (price * 102n) / 100n;
+    setTx({ state: "pending", title: "Buying asset…", detail: short(a.asset) });
+    try {
+      const sig = await signProgram.methods
+        .buyNft(new BN(maxPrice.toString()))
+        .accountsPartial({
+          buyer: new PublicKey(address),
+          treasury: new PublicKey(treasury),
+          creator: new PublicKey(a.creator),
+          asset: new PublicKey(a.asset),
+        })
+        .rpc();
+      setTx({
+        state: "confirmed",
+        title: "Bought",
+        detail: `${short(a.asset)} · ${sol(price)} SOL`,
+        signature: short(sig),
+        explorerUrl: explorerTx(sig),
+      });
+      setAuctions((prev) => prev.map((x) => (x.asset === a.asset ? { ...x, complete: true } : x)));
+    } catch (e) {
+      setTx({
+        state: "failed",
+        title: "Buy failed",
+        detail: e instanceof Error ? e.message : "Transaction failed",
+      });
+    }
+  }
 
   // Local demo state so mint / verify / level-up feel live.
   const [verified, setVerified] = useState(false);
@@ -82,7 +172,13 @@ export function NftManage({ section }: { section: Section }) {
     <Shell title={META[section].title} icon={META[section].icon} shortAddress={shortAddress} onDisconnect={disconnect}>
       {tx && (
         <div className="mb-4">
-          <TxStatus state={tx.state} title={tx.title} detail={tx.detail} signature="4xРq…9nP2" explorerUrl="#" />
+          <TxStatus
+            state={tx.state}
+            title={tx.title}
+            detail={tx.detail}
+            signature={tx.signature ?? "4xРq…9nP2"}
+            explorerUrl={tx.explorerUrl ?? "#"}
+          />
         </div>
       )}
 
@@ -218,49 +314,53 @@ export function NftManage({ section }: { section: Section }) {
         ))}
 
       {/* AUCTIONS */}
-      {section === "auctions" && (
-        <div>
-          <div className="flex items-center justify-between">
-            <h2 className="text-[13px] font-bold">Your listings</h2>
-            <Link href="/nft/create" className="inline-flex items-center gap-1 font-mono text-[11px] font-bold text-signal">
-              <Plus className="h-3 w-3" /> List a 1-of-1
-            </Link>
-          </div>
-          <p className="mt-2 rounded-sm border border-dashed border-white/12 p-5 text-center font-mono text-[11px] text-[#6B6B6B]">
-            No active listings — list a rare asset to start a descending Dutch auction.
-          </p>
+      {section === "auctions" && (() => {
+        const live = auctions.filter((a) => !a.complete && !auctionEnded(a, now));
+        const mine = address ? live.filter((a) => a.creator === address) : [];
+        const market = address ? live.filter((a) => a.creator !== address) : live;
+        return (
+          <div>
+            <div className="flex items-center justify-between">
+              <h2 className="text-[13px] font-bold">Your listings</h2>
+              <Link href="/nft/create" className="inline-flex items-center gap-1 font-mono text-[11px] font-bold text-signal">
+                <Plus className="h-3 w-3" /> List a 1-of-1
+              </Link>
+            </div>
+            {auctionsStatus === "loading" ? (
+              <p className="mt-2 rounded-sm border border-dashed border-white/12 p-5 text-center font-mono text-[11px] text-[#6B6B6B]">
+                Loading listings…
+              </p>
+            ) : auctionsStatus === "error" ? (
+              <p className="mt-2 rounded-sm border border-dashed border-noise/30 p-5 text-center font-mono text-[11px] text-noise">
+                Couldn&apos;t reach the chain to load auctions.
+              </p>
+            ) : mine.length === 0 ? (
+              <p className="mt-2 rounded-sm border border-dashed border-white/12 p-5 text-center font-mono text-[11px] text-[#6B6B6B]">
+                No active listings — list a rare asset to start a descending Dutch auction.
+              </p>
+            ) : (
+              <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                {mine.map((a) => (
+                  <AuctionCard key={a.asset} auction={a} now={now} mine onBuy={buyNow} />
+                ))}
+              </div>
+            )}
 
-          <h2 className="mt-8 text-[13px] font-bold">Live market</h2>
-          <div className="mt-3 grid gap-3 sm:grid-cols-3">
-            {auctions.map((a) => {
-              const pct = Math.round(((a.currentUsd - a.floorUsd) / (a.startUsd - a.floorUsd)) * 100);
-              return (
-                <div key={a.id} className="overflow-hidden rounded-sm border border-white/[0.08] bg-[#0f1620]">
-                  <div className="flex h-20 items-center justify-center bg-[repeating-linear-gradient(45deg,#12202b,#12202b_8px,#152531_8px,#152531_16px)] font-mono text-[11px] text-signal">
-                    {a.name}
-                  </div>
-                  <div className="p-3.5">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[12px] font-bold">{a.name}</span>
-                      <span className="font-mono text-[10px] text-[#6B6B6B]">@{a.handle}</span>
-                    </div>
-                    <div className="mt-1.5 font-mono text-[18px] font-bold text-signal">{usd(a.currentUsd)}</div>
-                    <div className="mt-1 h-1 overflow-hidden rounded-full bg-white/[0.06]">
-                      <div className="h-full rounded-full bg-signal/70" style={{ width: `${Math.max(4, pct)}%` }} />
-                    </div>
-                    <button
-                      onClick={() => run("Buying asset…", `${a.name} · ${usd(a.currentUsd)}`)}
-                      className="mt-3 w-full rounded-sm bg-signal py-2 font-mono text-[11px] font-bold text-[#0A0A0A]"
-                    >
-                      BUY NOW
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
+            <h2 className="mt-8 text-[13px] font-bold">Live market</h2>
+            {auctionsStatus === "ready" && market.length === 0 ? (
+              <p className="mt-2 rounded-sm border border-dashed border-white/12 p-5 text-center font-mono text-[11px] text-[#6B6B6B]">
+                No open auctions right now — check back soon.
+              </p>
+            ) : (
+              <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                {market.map((a) => (
+                  <AuctionCard key={a.asset} auction={a} now={now} onBuy={buyNow} />
+                ))}
+              </div>
+            )}
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       <NftLanyard data={selected} onClose={() => setSelected(null)} />
       {perkModal && (
@@ -273,6 +373,52 @@ export function NftManage({ section }: { section: Section }) {
       )}
       <WalletConnectModal open={walletOpen} onClose={() => setWalletOpen(false)} />
     </Shell>
+  );
+}
+
+function AuctionCard({
+  auction,
+  now,
+  mine,
+  onBuy,
+}: {
+  auction: NftAuctionData;
+  now: number;
+  mine?: boolean;
+  onBuy: (a: NftAuctionData) => void;
+}) {
+  const price = currentAuctionPrice(auction, now);
+  const span = auction.startPrice - auction.floorPrice;
+  const fallen = span > 0n ? auction.startPrice - price : 0n;
+  const pct = span > 0n ? Number((fallen * 100n) / span) : 0;
+  return (
+    <div className="overflow-hidden rounded-sm border border-white/[0.08] bg-[#0f1620]">
+      <div className="flex h-20 items-center justify-center bg-[repeating-linear-gradient(45deg,#12202b,#12202b_8px,#152531_8px,#152531_16px)] font-mono text-[11px] text-signal">
+        {short(auction.asset)}
+      </div>
+      <div className="p-3.5">
+        <div className="flex items-center justify-between">
+          <span className="font-mono text-[12px] font-bold">{short(auction.asset)}</span>
+          <span className="font-mono text-[10px] text-[#6B6B6B]">by {short(auction.creator)}</span>
+        </div>
+        <div className="mt-1.5 font-mono text-[18px] font-bold text-signal">{sol(price)} SOL</div>
+        <div className="mt-1 h-1 overflow-hidden rounded-full bg-white/[0.06]">
+          <div className="h-full rounded-full bg-signal/70" style={{ width: `${Math.max(4, pct)}%` }} />
+        </div>
+        {mine ? (
+          <div className="mt-3 w-full rounded-sm border border-white/10 py-2 text-center font-mono text-[11px] text-[#6B6B6B]">
+            LISTED BY YOU
+          </div>
+        ) : (
+          <button
+            onClick={() => onBuy(auction)}
+            className="mt-3 w-full rounded-sm bg-signal py-2 font-mono text-[11px] font-bold text-[#0A0A0A]"
+          >
+            BUY NOW
+          </button>
+        )}
+      </div>
+    </div>
   );
 }
 

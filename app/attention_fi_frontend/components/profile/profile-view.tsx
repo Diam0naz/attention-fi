@@ -92,12 +92,8 @@ export function ProfileView() {
     );
   }
 
-  // Real on-chain NFTs when available; mock fallback otherwise.
-  const mockNftCollection: NftCardData[] = [];
-  if (nft.verified) mockNftCollection.push({ kind: "verification", handle: nft.handle ?? "you" });
-  if (nft.perk) mockNftCollection.push({ kind: "perk", level: nft.perk.level, discountBps: nft.perk.discountBps });
-  for (const g of nft.genesis) mockNftCollection.push({ kind: "genesis", shareBps: g.shareBps, id: g.id });
-  const nftCollection = ownedOnchain ?? mockNftCollection;
+  // Real on-chain NFTs once connected — never masked with mock data.
+  const nftCollection = ownedOnchain.data;
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -237,7 +233,17 @@ export function ProfileView() {
 
         {/* NFTs — the actual issued assets */}
         <Section title="Your NFTs">
-          {nftCollection.length > 0 ? (
+          {ownedOnchain.status === "loading" ? (
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+              {Array.from({ length: 4 }, (_, i) => (
+                <div key={i} className="aspect-3/4 animate-pulse rounded-sm bg-white/4" />
+              ))}
+            </div>
+          ) : ownedOnchain.status === "error" ? (
+            <p className="text-[12px] text-noise">
+              Couldn&apos;t reach the chain to load your NFTs — check your connection and reload.
+            </p>
+          ) : nftCollection.length > 0 ? (
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
               {nftCollection.map((d, i) => (
                 <NftCard key={i} data={d} onClick={() => setSelectedNft(d)} />

@@ -7,34 +7,41 @@ import { useWallet } from "@/components/wallet/wallet-provider";
 import { useReadonlyProgram } from "@/lib/solana/use-program";
 import { fetchOwnedNfts } from "@/lib/solana/nft-data";
 
+export interface OwnedNfts {
+  /** "idle" (no wallet), "loading", "ready" (real data, possibly empty), "error" (RPC failed). */
+  status: "idle" | "loading" | "ready" | "error";
+  data: NftCardData[];
+}
+
 /**
- * The connected wallet's on-chain AttentionFi NFTs.
- * - null  → not connected / RPC error → callers fall back to mock.
- * - []    → connected, none held (real empty).
- * - [...] → real owned NFTs.
+ * The connected wallet's on-chain AttentionFi NFTs. Callers must not silently
+ * substitute mock data for "error" — that shows a real wallet fake NFTs it
+ * doesn't hold. Only "idle" (not connected) is a legitimate place to fall
+ * back to a demo collection.
  */
-export function useOwnedNfts(): NftCardData[] | null {
+export function useOwnedNfts(): OwnedNfts {
   const { address } = useWallet();
   const program = useReadonlyProgram();
-  const [data, setData] = useState<NftCardData[] | null>(null);
+  const [state, setState] = useState<OwnedNfts>({ status: "idle", data: [] });
 
   useEffect(() => {
     if (!address) {
-      setData(null);
+      setState({ status: "idle", data: [] });
       return;
     }
     let cancelled = false;
+    setState((s) => ({ status: "loading", data: s.data }));
     fetchOwnedNfts(program, new PublicKey(address))
-      .then((r) => {
-        if (!cancelled) setData(r);
+      .then((data) => {
+        if (!cancelled) setState({ status: "ready", data });
       })
       .catch(() => {
-        if (!cancelled) setData(null);
+        if (!cancelled) setState({ status: "error", data: [] });
       });
     return () => {
       cancelled = true;
     };
   }, [address, program]);
 
-  return data;
+  return state;
 }

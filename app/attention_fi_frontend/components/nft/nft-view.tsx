@@ -18,6 +18,9 @@ export function NftView() {
   const [selected, setSelected] = useState<NftCardData | null>(null);
 
   const base = useMemo(() => (address ? getNftState(address) : null), [address]);
+  // Real on-chain NFTs once connected — never masked with mock data, so an
+  // RPC hiccup reads as "couldn't load", not as a fake collection.
+  const owned = useOwnedNfts();
 
   // Local demo state synced from mock on connect (adjust-state-on-prop-change).
   const [verified, setVerified] = useState(false);
@@ -54,14 +57,7 @@ export function NftView() {
   }
 
   const discountBps = Math.min(500, level * 100);
-
-  // Prefer the wallet's real on-chain NFTs; fall back to the mock demo state.
-  const ownedOnchain = useOwnedNfts();
-  const mockCollection: NftCardData[] = [];
-  if (verified) mockCollection.push({ kind: "verification", handle: base.handle ?? "you" });
-  if (level > 0) mockCollection.push({ kind: "perk", level, discountBps });
-  for (const g of base.genesis) mockCollection.push({ kind: "genesis", shareBps: g.shareBps, id: g.id });
-  const collection = ownedOnchain ?? mockCollection;
+  const collection = owned.data;
 
   const manage = [
     {
@@ -122,7 +118,17 @@ export function NftView() {
         {/* your collection — the actually-issued NFTs */}
         <div className="mt-6">
           <h2 className="text-[14px] font-bold">Your collection</h2>
-          {collection.length > 0 ? (
+          {owned.status === "loading" ? (
+            <div className="mt-3 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+              {Array.from({ length: 4 }, (_, i) => (
+                <div key={i} className="aspect-3/4 animate-pulse rounded-sm bg-white/4" />
+              ))}
+            </div>
+          ) : owned.status === "error" ? (
+            <p className="mt-2 text-[12px] text-noise">
+              Couldn&apos;t reach the chain to load your NFTs — check your connection and reload.
+            </p>
+          ) : collection.length > 0 ? (
             <div className="mt-3 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
               {collection.map((d, i) => (
                 <NftCard key={i} data={d} onClick={() => setSelected(d)} />
