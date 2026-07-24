@@ -82,6 +82,7 @@ export function NftCreateFlow() {
   // standalone nft config
   const [nftName, setNftName] = useState("");
   const [nftImage, setNftImage] = useState("");
+  const [listForSale, setListForSale] = useState(false);
 
   const nft = useMemo(() => (address ? getNftState(address) : null), [address]);
   const ownedAssets = useMemo(() => {
@@ -122,9 +123,14 @@ export function NftCreateFlow() {
           shareBps: nft?.genesis.find((g) => g.id === assetId)?.shareBps ?? 100,
           id: assetId || "GEN-0001",
         };
-  const validNft = nftName.trim() !== "";
+  // Standalone NFTs can optionally list into the same Dutch-auction escrow
+  // the "1-of-1 auction" kind uses — same start_nft_auction call, since it
+  // already mints-and-escrows in one instruction.
+  const willList = kind === "auction" || (kind === "nft" && listForSale);
+  const validPricing = +startUsd > +floorUsd && +floorUsd > 0;
+  const validNft = nftName.trim() !== "" && (!listForSale || validPricing);
   const validGenesis = tokenHandle !== "" && +sharePct > 0 && +supply > 0;
-  const validAuction = assetId !== "" && +startUsd > +floorUsd && +floorUsd > 0;
+  const validAuction = assetId !== "" && validPricing;
   const canContinue =
     step !== 1 || (kind === "nft" ? validNft : kind === "genesis" ? validGenesis : validAuction);
 
@@ -136,7 +142,20 @@ export function NftCreateFlow() {
       const asset = Keypair.generate();
       const me = new PublicKey(address);
       let sig: string;
-      if (kind === "nft") {
+      if (kind === "nft" && listForSale) {
+        const toLamports = (usd: string) => new BN(Math.round(((+usd || 0) / SOL_USD) * 1e9));
+        sig = await program.methods
+          .startNftAuction(
+            toLamports(startUsd),
+            toLamports(floorUsd),
+            new BN(DURATION_SEC[duration] ?? 86_400),
+            nftName.slice(0, 64),
+            nftImage.slice(0, 200),
+          )
+          .accounts({ creator: me, asset: asset.publicKey })
+          .signers([asset])
+          .rpc();
+      } else if (kind === "nft") {
         sig = await program.methods
           .mintNft(nftName.slice(0, 64), nftImage.slice(0, 200))
           .accounts({ payer: me, recipient: me, asset: asset.publicKey, collection: null })
@@ -274,6 +293,76 @@ export function NftCreateFlow() {
                 <img src={nftImage} alt="preview" className="h-28 w-28 rounded-md border border-white/10 object-cover" />
               </div>
             )}
+
+            <div className="mt-4 border-t border-white/[0.08] pt-4">
+              <label className="flex items-center justify-between">
+                <span className="text-[12px] font-bold">List for sale</span>
+                <button
+                  type="button"
+                  onClick={() => setListForSale((v) => !v)}
+                  className={cn(
+                    "relative h-5 w-9 shrink-0 rounded-full transition-colors",
+                    listForSale ? "bg-signal" : "bg-white/15",
+                  )}>
+                  <span
+                    className={cn(
+                      "absolute top-0.5 h-4 w-4 rounded-full bg-[#0A0A0A] transition-transform",
+                      listForSale ? "translate-x-4" : "translate-x-0.5",
+                    )}
+                  />
+                </button>
+              </label>
+              <p className="mt-1 text-[11px] leading-relaxed text-[#6B6B6B]">
+                {listForSale
+                  ? "Mints straight into a descending Dutch auction — live in the marketplace immediately."
+                  : "Off: mints straight to your wallet. Turn on to set a standard and floor price and list it now."}
+              </p>
+
+              {listForSale && (
+                <>
+                  <div className="mt-3 grid grid-cols-2 gap-3">
+                    <Field label="Standard price ($)">
+                      <input
+                        value={startUsd}
+                        onChange={(e) => setStartUsd(e.target.value.replace(/[^0-9]/g, ""))}
+                        inputMode="numeric"
+                        className="w-full rounded-sm border border-white/10 bg-[#12181f] px-3 py-2.5 font-mono text-[13px] outline-none"
+                      />
+                    </Field>
+                    <Field label="Floor price ($)">
+                      <input
+                        value={floorUsd}
+                        onChange={(e) => setFloorUsd(e.target.value.replace(/[^0-9]/g, ""))}
+                        inputMode="numeric"
+                        className="w-full rounded-sm border border-white/10 bg-[#12181f] px-3 py-2.5 font-mono text-[13px] outline-none"
+                      />
+                    </Field>
+                  </div>
+                  {+floorUsd >= +startUsd && (
+                    <div className="mt-1 font-mono text-[10px] text-noise">
+                      Floor must be below the standard price.
+                    </div>
+                  )}
+                  <Field label="Duration">
+                    <div className="flex gap-1.5">
+                      {DURATIONS.map((d) => (
+                        <button
+                          key={d}
+                          onClick={() => setDuration(d)}
+                          className={cn(
+                            "rounded-sm border px-3 py-1.5 font-mono text-[11px]",
+                            duration === d
+                              ? "border-signal text-signal"
+                              : "border-white/10 text-[#9aa4af]",
+                          )}>
+                          {d}
+                        </button>
+                      ))}
+                    </div>
+                  </Field>
+                </>
+              )}
+            </div>
           </div>
         )}
 
@@ -422,6 +511,13 @@ export function NftCreateFlow() {
                     ["Type", kindMeta.name],
                     ["Name", nftName],
                     ["Artwork", nftImage ? "provided" : "none"],
+                    ...(listForSale
+                      ? ([
+                          ["Standard price", `$${(+startUsd).toLocaleString()}`],
+                          ["Floor price", `$${(+floorUsd).toLocaleString()}`],
+                          ["Duration", duration],
+                        ] as const)
+                      : []),
                     ["Standard", "Metaplex Core"],
                   ]
                 : kind === "genesis"
@@ -464,7 +560,9 @@ export function NftCreateFlow() {
             <p className="mt-1 text-[11px] text-[#6B6B6B]">
               {kind === "genesis"
                 ? `Minting ${supply} genesis NFTs at ${sharePct}% each for @${tokenHandle}.`
-                : `Listing ${assetId} from $${(+startUsd).toLocaleString()} down to $${(+floorUsd).toLocaleString()} over ${duration}.`}
+                : willList
+                  ? `Listing ${kind === "nft" ? nftName || "your NFT" : assetId} from $${(+startUsd).toLocaleString()} down to $${(+floorUsd).toLocaleString()} over ${duration}.`
+                  : `Minting ${nftName || "your NFT"} straight to your wallet.`}
             </p>
 
             {/* preview + params */}
@@ -483,12 +581,23 @@ export function NftCreateFlow() {
                         `${(+sharePct * +supply || 0).toFixed(1)}%`,
                       ],
                     ]
-                  : [
-                      ["Asset", assetId],
-                      ["Start", `$${(+startUsd).toLocaleString()}`],
-                      ["Floor", `$${(+floorUsd).toLocaleString()}`],
-                      ["Duration", duration],
-                    ]
+                  : kind === "nft"
+                    ? [
+                        ["Name", nftName],
+                        ...(willList
+                          ? ([
+                              ["Standard", `$${(+startUsd).toLocaleString()}`],
+                              ["Floor", `$${(+floorUsd).toLocaleString()}`],
+                              ["Duration", duration],
+                            ] as const)
+                          : ([["Destination", "Your wallet"]] as const)),
+                      ]
+                    : [
+                        ["Asset", assetId],
+                        ["Start", `$${(+startUsd).toLocaleString()}`],
+                        ["Floor", `$${(+floorUsd).toLocaleString()}`],
+                        ["Duration", duration],
+                      ]
                 ).map(([k, v]) => (
                   <div
                     key={k}
@@ -505,7 +614,7 @@ export function NftCreateFlow() {
             </div>
 
             {/* auction price decay preview */}
-            {kind === "auction" && (
+            {willList && (
               <div className="mt-4 rounded-sm border border-white/[0.06] bg-[#12181f] p-3">
                 <div className="flex justify-between font-mono text-[9px] text-[#6B6B6B]">
                   <span>${(+startUsd).toLocaleString()} now</span>
@@ -555,7 +664,9 @@ export function NftCreateFlow() {
             <div className="mt-4 rounded-sm border border-white/[0.06] bg-[#12181f] p-3 text-[11px] leading-relaxed text-[#6B6B6B]">
               {kind === "genesis"
                 ? `On confirm, a Metaplex Core genesis NFT mints to your wallet at ${sharePct}% and a fee-share pool opens for @${tokenHandle}. Holders accrue their share of every trade fee and claim any time. (Batch minting of ${supply} comes later.)`
-                : `On confirm, a Metaplex Core 1-of-1 is minted into the auction PDA and the descending price starts. It transfers to the first buyer automatically; you can cancel before a sale.`}
+                : willList
+                  ? `On confirm, a Metaplex Core 1-of-1 is minted into the auction PDA and the descending price starts. It transfers to the first buyer automatically; you can cancel before a sale.`
+                  : `On confirm, a Metaplex Core 1-of-1 mints straight to your wallet — no escrow, no listing. List it for sale any time from the marketplace.`}
             </div>
 
             {tx ? (
@@ -566,19 +677,25 @@ export function NftCreateFlow() {
                     tx === "pending"
                       ? kind === "genesis"
                         ? "Minting genesis…"
-                        : "Listing asset…"
+                        : willList
+                          ? "Listing asset…"
+                          : "Minting…"
                       : tx === "failed"
                         ? "Transaction failed"
                         : kind === "genesis"
                           ? "Genesis minted"
-                          : "Auction live"
+                          : willList
+                            ? "Auction live"
+                            : "NFT minted"
                   }
                   detail={
                     tx === "failed" && txErr
                       ? txErr.slice(0, 90)
                       : kind === "genesis"
                         ? `@${tokenHandle} · genesis`
-                        : `${assetId || "1-of-1"} · ${duration}`
+                        : willList
+                          ? `${kind === "nft" ? nftName || "1-of-1" : assetId || "1-of-1"} · ${duration}`
+                          : `${nftName || "1-of-1"} · your wallet`
                   }
                   signature={txSig ? `${txSig.slice(0, 4)}…${txSig.slice(-4)}` : undefined}
                   explorerUrl={txSig ? explorerTx(txSig) : undefined}
@@ -596,7 +713,7 @@ export function NftCreateFlow() {
               <button
                 onClick={mint}
                 className="mt-4 w-full rounded-sm bg-signal py-3 font-mono text-[13px] font-bold text-[#0A0A0A]">
-                {kind === "genesis" ? "MINT GENESIS" : "START AUCTION"}
+                {kind === "genesis" ? "MINT GENESIS" : willList ? "START AUCTION" : "MINT NFT"}
               </button>
             )}
           </div>
