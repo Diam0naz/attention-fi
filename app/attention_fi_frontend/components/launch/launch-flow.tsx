@@ -10,6 +10,7 @@ import { useWallet } from "@/components/wallet/wallet-provider";
 import { TxStatus, type TxState } from "@/components/wallet/tx-status";
 import { PageBackground } from "@/components/reactbits/page-background";
 import { Keypair, PublicKey } from "@solana/web3.js";
+import { BN } from "@anchor-lang/core";
 import { useProgram } from "@/lib/solana/use-program";
 import { registerToken } from "@/lib/solana/registry";
 import { explorerTx } from "@/lib/solana/config";
@@ -40,6 +41,23 @@ const TIER_ARG: Record<string, object> = {
   Emerging: { emerging: {} },
   New: { newEntrant: {} },
 };
+
+// Seed virtual SOL reserves per tier, in lamports (mirrors constants.rs) —
+// used to derive a fair per-token starting price for the non-bonding
+// mechanisms, the same way the bonding curve's own tier seeding works.
+const TIER_SEED_LAMPORTS: Record<string, number> = {
+  "Top 10": 100_000_000_000,
+  "Top 100": 26_700_000_000,
+  Emerging: 5_330_000_000,
+  New: 500_000_000,
+};
+const TOKEN_TOTAL_SUPPLY_WHOLE = 1_000_000_000; // mirrors constants.rs TOKEN_TOTAL_SUPPLY
+const pricePerTokenLamports = (tier: string) =>
+  Math.max(1, Math.round((TIER_SEED_LAMPORTS[tier] ?? TIER_SEED_LAMPORTS.New!) / TOKEN_TOTAL_SUPPLY_WHOLE));
+
+const DEFAULT_AUCTION_DURATION_S = 24 * 60 * 60;
+const DEFAULT_LOCK_PERIOD_S = 7 * 24 * 60 * 60;
+const DEFAULT_EARLY_EXIT_PENALTY_BPS = 1_000;
 
 const STEPS = ["Mechanism", "Verify", "Seed & review", "Confirm"];
 
@@ -73,23 +91,40 @@ export function LaunchFlow() {
   }
 
   async function launch() {
-    // Only the bonding curve is wired on-chain (launch_token). Other mechanisms
-    // stay a mock preview until their instructions are wired.
-    if (mech !== "bonding") {
-      setTx("pending");
-      setTimeout(() => setTx("confirmed"), 1500);
-      return;
-    }
     if (!program || !address) return setWalletOpen(true);
     setTxErr(null);
     setTx("pending");
     try {
       const mint = Keypair.generate();
-      const sig = await program.methods
-        .launchToken(TIER_ARG[t.tier] as never)
-        .accounts({ creator: new PublicKey(address), mint: mint.publicKey })
-        .signers([mint])
-        .rpc();
+      const creator = new PublicKey(address);
+      const tierArg = TIER_ARG[t.tier] as never;
+      const price = pricePerTokenLamports(t.tier);
+      let sig: string;
+      if (mech === "bonding") {
+        sig = await program.methods
+          .launchToken(tierArg)
+          .accounts({ creator, mint: mint.publicKey })
+          .signers([mint])
+          .rpc();
+      } else if (mech === "dutch") {
+        sig = await program.methods
+          .startAuction(tierArg, new BN(price * 3), new BN(price), new BN(DEFAULT_AUCTION_DURATION_S))
+          .accounts({ creator, mint: mint.publicKey })
+          .signers([mint])
+          .rpc();
+      } else if (mech === "conviction") {
+        sig = await program.methods
+          .launchConviction(tierArg, new BN(DEFAULT_LOCK_PERIOD_S), DEFAULT_EARLY_EXIT_PENALTY_BPS)
+          .accounts({ creator, mint: mint.publicKey })
+          .signers([mint])
+          .rpc();
+      } else {
+        sig = await program.methods
+          .launchRevenue(tierArg, new BN(price))
+          .accounts({ creator, mint: mint.publicKey })
+          .signers([mint])
+          .rpc();
+      }
       registerToken(handle, mint.publicKey.toBase58());
       setTxSig(sig);
       setTx("confirmed");
