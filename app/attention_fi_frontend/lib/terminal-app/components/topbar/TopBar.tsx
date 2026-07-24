@@ -6,7 +6,10 @@ import { LogoMark } from "@/components/brand/logo";
 import { WalletButton } from "@/components/wallet/wallet-button";
 import { useWallet } from "@/components/wallet/wallet-provider";
 import { useSolBalance } from "@/lib/solana/use-sol-balance";
+import { useTokenBalance } from "@/lib/solana/use-token-balance";
+import { handleToMint } from "@/lib/solana/registry";
 import { cn } from "@/lib/terminal-app/lib/cn";
+import { fmtCompact } from "@/lib/terminal-app/lib/format";
 import { useProvider } from "@/lib/terminal-app/lib/providers";
 import { TIMEFRAMES, type ChartType, type ConnectionStatus } from "@/lib/terminal-app/lib/types";
 import { useLayout } from "@/lib/terminal-app/stores/layout";
@@ -169,12 +172,27 @@ export function TopBar() {
   );
 }
 
-/** Wallet connect/menu plus the connected wallet's SOL balance. */
+/** Wallet connect/menu plus balances for both sides of the active pair — the
+ *  quote (SOL) and the base token being charted, since every AttentionFi
+ *  market trades against SOL on a bonding curve. */
 function WalletCluster() {
   const { connected } = useWallet();
   const sol = useSolBalance();
+  const symbol = useSettings((s) => s.symbol);
+  const providerKind = useSettings((s) => s.provider);
+  const mint = providerKind === "attentionfi" ? handleToMint(symbol) : null;
+  const tokenBalance = useTokenBalance(mint?.toBase58() ?? "");
+
   return (
     <div className="flex shrink-0 items-center gap-1.5">
+      {connected && mint && tokenBalance !== null && (
+        <span
+          className="num rounded border border-edge bg-tinput px-2 py-1 text-2xs text-mid"
+          title={`Wallet @${symbol} balance`}
+        >
+          {fmtCompact(tokenBalance)} {symbol.toUpperCase()}
+        </span>
+      )}
       {connected && sol !== null && (
         <span
           className="num rounded border border-edge bg-tinput px-2 py-1 text-2xs text-mid"
