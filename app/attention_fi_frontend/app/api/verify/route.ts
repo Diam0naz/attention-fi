@@ -1,0 +1,132 @@
+import { PublicKey } from "@solana/web3.js";
+import {
+  address,
+  appendTransactionMessageInstructions,
+  assertIsTransactionWithBlockhashLifetime,
+  createKeyPairSignerFromBytes,
+  createSolanaRpc,
+  createSolanaRpcSubscriptions,
+  createTransactionMessage,
+  getSignatureFromTransaction,
+  pipe,
+  sendAndConfirmTransactionFactory,
+  setTransactionMessageFeePayerSigner,
+  setTransactionMessageLifetimeUsingBlockhash,
+  signTransactionMessageWithSigners,
+} from "@solana/kit";
+import { deriveAttestationPda, getCreateAttestationInstruction } from "sas-lib";
+import nacl from "tweetnacl";
+import { NextResponse } from "next/server";
+import { encodeHandleData, MAX_HANDLE_LEN, SAS_ATTESTATION_TTL_S, verifyMessage } from "@/lib/sas/config";
+
+export const dynamic = "force-dynamic";
+
+interface VerifyRequest {
+  handle: string;
+  wallet: string;
+  /** base64 signature over `verifyMessage(handle, wallet)`, from the wallet's signMessage. */
+  signature: string;
+}
+
+function rpcUrls() {
+  const http = process.env.SAS_RPC_ENDPOINT ?? "https://api.devnet.solana.com";
+  const ws = http.replace(/^http/, "ws");
+  return { http, ws };
+}
+
+/** Lazily built so a misconfigured env fails a request, not the route's module load. */
+function issuerSecretKeyBytes(): Uint8Array {
+  const raw = process.env.SAS_ISSUER_SECRET_KEY;
+  if (!raw) throw new Error("SAS_ISSUER_SECRET_KEY is not configured");
+  const parsed: unknown = JSON.parse(raw);
+  if (!Array.isArray(parsed) || parsed.length !== 64) {
+    throw new Error("SAS_ISSUER_SECRET_KEY must be a 64-byte solana-keygen JSON array");
+  }
+  return Uint8Array.from(parsed as number[]);
+}
+
+export async function POST(req: Request) {
+  let body: VerifyRequest;
+  try {
+    body = (await req.json()) as VerifyRequest;
+  } catch {
+    return NextResponse.json({ error: "invalid JSON body" }, { status: 400 });
+  }
+
+  const { handle, wallet, signature } = body;
+  if (typeof handle !== "string" || handle.length === 0 || handle.length > MAX_HANDLE_LEN) {
+    return NextResponse.json({ error: "invalid handle" }, { status: 400 });
+  }
+  if (typeof wallet !== "string" || typeof signature !== "string") {
+    return NextResponse.json({ error: "missing wallet or signature" }, { status: 400 });
+  }
+
+  let walletPubkey: PublicKey;
+  try {
+    walletPubkey = new PublicKey(wallet);
+  } catch {
+    return NextResponse.json({ error: "invalid wallet address" }, { status: 400 });
+  }
+
+  // The message is reconstructed server-side (never trusted from the client)
+  // so it always matches exactly what VerifyHandleFlow displayed for signing.
+  const message = new TextEncoder().encode(verifyMessage(handle, wallet));
+  const signatureBytes = Buffer.from(signature, "base64");
+  const validSignature =
+    signatureBytes.length === 64 &&
+    nacl.sign.detached.verify(message, signatureBytes, walletPubkey.toBytes());
+  if (!validSignature) {
+    return NextResponse.json({ error: "signature does not match wallet" }, { status: 401 });
+  }
+
+  const credentialEnv = process.env.SAS_CREDENTIAL_ADDRESS;
+  const schemaEnv = process.env.SAS_SCHEMA_ADDRESS;
+  if (!credentialEnv || !schemaEnv) {
+    return NextResponse.json(
+      { error: "SAS not configured — run scripts/sas-setup.ts first" },
+      { status: 503 },
+    );
+  }
+
+  try {
+    const issuer = await createKeyPairSignerFromBytes(issuerSecretKeyBytes());
+    const credential = address(credentialEnv);
+    const schema = address(schemaEnv);
+    const nonce = address(wallet);
+    const [attestation] = await deriveAttestationPda({ credential, schema, nonce });
+
+    const expiry = BigInt(Math.floor(Date.now() / 1000) + SAS_ATTESTATION_TTL_S);
+    const instruction = getCreateAttestationInstruction({
+      payer: issuer,
+      authority: issuer,
+      credential,
+      schema,
+      attestation,
+      nonce,
+      data: encodeHandleData(handle),
+      expiry,
+    });
+
+    const { http, ws } = rpcUrls();
+    const rpc = createSolanaRpc(http);
+    const rpcSubscriptions = createSolanaRpcSubscriptions(ws);
+    const sendAndConfirm = sendAndConfirmTransactionFactory({ rpc, rpcSubscriptions });
+
+    const { value: latestBlockhash } = await rpc.getLatestBlockhash().send();
+    const transactionMessage = pipe(
+      createTransactionMessage({ version: 0 }),
+      (m) => setTransactionMessageFeePayerSigner(issuer, m),
+      (m) => setTransactionMessageLifetimeUsingBlockhash(latestBlockhash, m),
+      (m) => appendTransactionMessageInstructions([instruction], m),
+    );
+    const signedTransaction = await signTransactionMessageWithSigners(transactionMessage);
+    assertIsTransactionWithBlockhashLifetime(signedTransaction);
+    await sendAndConfirm(signedTransaction, { commitment: "confirmed" });
+    const txSignature = getSignatureFromTransaction(signedTransaction);
+
+    return NextResponse.json({ attestation: attestation.toString(), signature: txSignature });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "attestation creation failed";
+    return NextResponse.json({ error: msg }, { status: 500 });
+  }
+}

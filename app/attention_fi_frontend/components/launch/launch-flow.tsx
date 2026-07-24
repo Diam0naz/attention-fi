@@ -13,6 +13,7 @@ import { Keypair, PublicKey } from "@solana/web3.js";
 import { useProgram } from "@/lib/solana/use-program";
 import { registerToken } from "@/lib/solana/registry";
 import { explorerTx } from "@/lib/solana/config";
+import { verifyMessage } from "@/lib/sas/config";
 
 type MechId = "bonding" | "dutch" | "conviction" | "revenue";
 
@@ -43,7 +44,7 @@ const TIER_ARG: Record<string, object> = {
 const STEPS = ["Mechanism", "Verify", "Seed & review", "Confirm"];
 
 export function LaunchFlow() {
-  const { connected, shortAddress, address } = useWallet();
+  const { connected, shortAddress, address, getSigner } = useWallet();
   const program = useProgram();
   const [step, setStep] = useState(0); // 0..3
   const [mech, setMech] = useState<MechId>("bonding");
@@ -53,6 +54,8 @@ export function LaunchFlow() {
   const [walletOpen, setWalletOpen] = useState(false);
   // Wallet is connected (1); start on "awaiting signature" (2) so the SIGN button shows.
   const [verifyStep, setVerifyStep] = useState<2 | 3>(2);
+  const [verifying, setVerifying] = useState(false);
+  const [verifyErr, setVerifyErr] = useState<string | null>(null);
   const [tx, setTx] = useState<TxState | null>(null);
   const [txSig, setTxSig] = useState<string | null>(null);
   const [txErr, setTxErr] = useState<string | null>(null);
@@ -93,6 +96,53 @@ export function LaunchFlow() {
     } catch (e) {
       setTxErr(e instanceof Error ? e.message : "Launch failed");
       setTx("failed");
+    }
+  }
+
+  // Wallet signs the exact copy VerifyHandleFlow shows; the server verifies
+  // that signature, then issues a real SAS attestation (see /api/verify).
+  // That attestation is what verifyHandle checks on-chain before minting the
+  // soulbound credential NFT — no step here is mocked.
+  async function signAndVerify() {
+    if (!program || !address) return setWalletOpen(true);
+    const signer = getSigner();
+    if (!signer?.signMessage) {
+      setVerifyErr("This wallet doesn't support message signing.");
+      return;
+    }
+    setVerifying(true);
+    setVerifyErr(null);
+    try {
+      const messageBytes = new TextEncoder().encode(verifyMessage(handle, address));
+      const signed = await signer.signMessage(messageBytes);
+      const signatureBytes = signed instanceof Uint8Array ? signed : signed.signature;
+      const signatureB64 = Buffer.from(signatureBytes).toString("base64");
+
+      const res = await fetch("/api/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ handle, wallet: address, signature: signatureB64 }),
+      });
+      const json: { attestation?: string; error?: string } = await res.json();
+      if (!res.ok || !json.attestation) throw new Error(json.error ?? "verification failed");
+
+      const subject = new PublicKey(address);
+      const asset = Keypair.generate();
+      await program.methods
+        .verifyHandle(handle, "")
+        .accounts({
+          payer: subject,
+          subject,
+          attestation: new PublicKey(json.attestation),
+          asset: asset.publicKey,
+        })
+        .signers([asset])
+        .rpc();
+      setVerifyStep(3);
+    } catch (e) {
+      setVerifyErr(e instanceof Error ? e.message : "Verification failed");
+    } finally {
+      setVerifying(false);
     }
   }
 
@@ -204,12 +254,18 @@ export function LaunchFlow() {
         {/* Step 2 — verify handle */}
         {step === 1 &&
           (connected ? (
-            <VerifyHandleFlow
-              handle={handle || "handle"}
-              walletAddress={shortAddress ?? ""}
-              step={verifyStep}
-              onSign={() => setVerifyStep(3)}
-            />
+            <div>
+              <VerifyHandleFlow
+                handle={handle || "handle"}
+                walletAddress={shortAddress ?? ""}
+                step={verifyStep}
+                onSign={signAndVerify}
+                disabled={verifying}
+              />
+              {verifyErr && (
+                <p className="mt-2 font-mono text-[10px] text-noise">{verifyErr}</p>
+              )}
+            </div>
           ) : (
             <div className="rounded-sm border border-white/[0.08] bg-[#0f1620] p-6 text-center">
               <div className="text-[13px] font-bold">Connect a wallet to verify</div>

@@ -6,6 +6,7 @@ export interface VerifyHandleFlowProps {
   /** 1 = wallet connected, 2 = awaiting signature, 3 = attestation issued */
   step: 1 | 2 | 3;
   onSign: () => void;
+  disabled?: boolean;
 }
 
 function StepDot({ done, active, index }: { done: boolean; active: boolean; index: number }) {
@@ -29,7 +30,7 @@ function StepDot({ done, active, index }: { done: boolean; active: boolean; inde
   );
 }
 
-export function VerifyHandleFlow({ handle, walletAddress, step, onSign }: VerifyHandleFlowProps) {
+export function VerifyHandleFlow({ handle, walletAddress, step, onSign, disabled }: VerifyHandleFlowProps) {
   return (
     <div className="rounded-sm border border-white/10 bg-[#0f1620] p-5">
       <div className="text-[14px] font-bold">Verify your X handle</div>
@@ -62,9 +63,10 @@ export function VerifyHandleFlow({ handle, walletAddress, step, onSign }: Verify
             {step === 2 && (
               <button
                 onClick={onSign}
-                className="mt-2.5 rounded-sm bg-signal px-4 py-2 font-mono text-[11.5px] font-bold text-[#0A0A0A]"
+                disabled={disabled}
+                className="mt-2.5 rounded-sm bg-signal px-4 py-2 font-mono text-[11.5px] font-bold text-[#0A0A0A] disabled:opacity-50"
               >
-                SIGN &amp; VERIFY
+                {disabled ? "VERIFYING…" : "SIGN & VERIFY"}
               </button>
             )}
           </div>

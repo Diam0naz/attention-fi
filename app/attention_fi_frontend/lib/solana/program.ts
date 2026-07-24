@@ -58,6 +58,10 @@ export const curvePda = (mint: PublicKey): PublicKey =>
 export const verificationPda = (subject: PublicKey): PublicKey =>
   PublicKey.findProgramAddressSync([enc.encode("verify"), subject.toBytes()], PROGRAM_ID)[0];
 
+/** Singleton PDA holding the dedicated SAS attestation issuer key. */
+export const issuerConfigPda = (): PublicKey =>
+  PublicKey.findProgramAddressSync([enc.encode("issuer")], PROGRAM_ID)[0];
+
 const TOKEN_PROGRAM_ID = new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
 const ASSOCIATED_TOKEN_PROGRAM_ID = new PublicKey("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
 
