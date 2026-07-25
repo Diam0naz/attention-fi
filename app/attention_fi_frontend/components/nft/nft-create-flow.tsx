@@ -235,7 +235,9 @@ export function NftCreateFlow() {
         Step {step + 1} · {STEPS[step]}
       </div>
 
-      <div className="mt-4">
+      {/* min-height keeps the step body a consistent size so the Back/CONTINUE
+          nav doesn't jump when a short step (Review) follows a tall one */}
+      <div className="mt-4 min-h-[420px]">
         {/* 1 — type */}
         {step === 0 && (
           <div className="flex flex-col gap-2.5">

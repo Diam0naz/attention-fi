@@ -86,5 +86,16 @@ export function registerToken(handle: string, mint: string, meta?: LaunchedToken
   if (typeof window === "undefined") return;
   const current = launchedRegistry();
   current[norm(handle)] = meta ? { mint, ...meta } : mint;
-  window.localStorage.setItem(LS_KEY, JSON.stringify(current));
+  try {
+    window.localStorage.setItem(LS_KEY, JSON.stringify(current));
+  } catch {
+    // Quota exceeded — most likely a large data: URI image. Persist the
+    // essential mint→handle mapping without the image rather than losing the
+    // launch record entirely.
+    const { image: _image, ...rest } = (typeof current[norm(handle)] === "object"
+      ? (current[norm(handle)] as { mint: string } & LaunchedTokenMeta)
+      : { mint }) as { mint: string } & LaunchedTokenMeta;
+    current[norm(handle)] = rest.name || rest.symbol ? rest : mint;
+    window.localStorage.setItem(LS_KEY, JSON.stringify(current));
+  }
 }

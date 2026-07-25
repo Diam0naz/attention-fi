@@ -59,6 +59,29 @@ const DEFAULT_AUCTION_DURATION_S = 24 * 60 * 60;
 const DEFAULT_LOCK_PERIOD_S = 7 * 24 * 60 * 60;
 const DEFAULT_EARLY_EXIT_PENALTY_BPS = 1_000;
 
+// The launch image is stored only in the browser-local token registry (never
+// on-chain), so a self-contained data: URI is fine — it just needs room. Cap
+// the source bytes so a pasted/encoded image can't blow the localStorage quota.
+const IMAGE_MAX_CHARS = 500_000; // ~375 KB once base64-decoded
+const IMAGE_MAX_FILE_BYTES = 360_000; // keeps the encoded data URI under the cap
+
+/** Read a picked image file into a data: URI, rejecting oversized files rather
+ *  than truncating (a sliced data URI is a corrupt image). */
+function readImageFile(
+  file: File,
+  onDone: (dataUrl: string) => void,
+  onErr: (message: string) => void,
+): void {
+  if (!file.type.startsWith("image/")) return onErr("That file isn't an image.");
+  if (file.size > IMAGE_MAX_FILE_BYTES) {
+    return onErr(`Image is too large (${Math.round(file.size / 1024)} KB) — pick one under ~350 KB.`);
+  }
+  const reader = new FileReader();
+  reader.onload = () => onDone(typeof reader.result === "string" ? reader.result : "");
+  reader.onerror = () => onErr("Couldn't read that image.");
+  reader.readAsDataURL(file);
+}
+
 const STEPS = ["Mechanism", "Verify", "Seed & review", "Confirm"];
 
 export function LaunchFlow() {
@@ -70,6 +93,7 @@ export function LaunchFlow() {
   const [name, setName] = useState("");
   const [symbol, setSymbol] = useState("");
   const [image, setImage] = useState("");
+  const [imageErr, setImageErr] = useState<string | null>(null);
   const [walletOpen, setWalletOpen] = useState(false);
   // Wallet is connected (1); start on "awaiting signature" (2) so the SIGN button shows.
   const [verifyStep, setVerifyStep] = useState<2 | 3>(2);
@@ -286,19 +310,52 @@ export function LaunchFlow() {
             </div>
 
             <div className="mt-1">
-              <label className="font-mono text-[10px] uppercase tracking-[0.1em] text-[#6B6B6B]">
-                Image URL (optional)
-              </label>
-              <input
+              <div className="flex items-center justify-between">
+                <label className="font-mono text-[10px] uppercase tracking-[0.1em] text-[#6B6B6B]">
+                  Image (optional)
+                </label>
+                <label className="cursor-pointer font-mono text-[10px] uppercase tracking-[0.1em] text-signal hover:underline">
+                  Upload
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        setImageErr(null);
+                        readImageFile(file, setImage, setImageErr);
+                      }
+                      e.target.value = ""; // allow re-picking the same file
+                    }}
+                  />
+                </label>
+              </div>
+              <textarea
                 value={image}
-                onChange={(e) => setImage(e.target.value.slice(0, 2048))}
-                placeholder="https://…/art.png"
-                className="mt-1 w-full rounded-sm border border-white/10 bg-[#12181f] px-3 py-2.5 font-mono text-[12px] outline-none placeholder:text-[#4b5563]"
+                rows={2}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (v.length > IMAGE_MAX_CHARS) {
+                    setImageErr("Image data is too large — upload a smaller file instead.");
+                    return;
+                  }
+                  setImageErr(null);
+                  setImage(v);
+                }}
+                placeholder="https://…/art.png  ·  or paste an image URL / data URI, or Upload"
+                className="mt-1 w-full resize-y break-all rounded-sm border border-white/10 bg-[#12181f] px-3 py-2.5 font-mono text-[12px] outline-none placeholder:text-[#4b5563]"
               />
-              {image && (
+              {imageErr && <p className="mt-1 font-mono text-[10px] text-noise">{imageErr}</p>}
+              {image && !imageErr && (
                 <div className="mt-3 flex justify-center">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={image} alt="preview" className="h-20 w-20 rounded-full border border-white/10 object-cover" />
+                  <img
+                    src={image}
+                    alt="preview"
+                    onError={() => setImageErr("That image didn't load — check the URL.")}
+                    className="h-20 w-20 rounded-full border border-white/10 object-cover"
+                  />
                 </div>
               )}
             </div>
