@@ -1,12 +1,11 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, BadgeCheck, Camera, Check, Copy, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useWallet } from "@/components/wallet/wallet-provider";
 import { WalletConnectModal } from "@/components/wallet/wallet-connect-modal";
-import { TxStatus, type TxState } from "@/components/wallet/tx-status";
 import { Footer } from "@/components/feed/footer";
 import { NftCard, type NftCardData } from "@/components/nft/nft-card";
 import { NftLanyard } from "@/components/nft/nft-lanyard";
@@ -14,6 +13,8 @@ import { useOwnedNfts } from "@/components/nft/use-owned-nfts";
 import { useSolBalance } from "@/lib/solana/use-sol-balance";
 import { useTokenBalance } from "@/lib/solana/use-token-balance";
 import { USDC_MINT } from "@/lib/solana/config";
+import { launchedHandles, launchedMeta } from "@/lib/solana/registry";
+import { useTokenIndex } from "@/lib/token-index";
 import { getNftState, getPortfolio } from "@/lib/mock-data";
 
 function usd(n: number): string {
@@ -25,7 +26,6 @@ function usd(n: number): string {
 export function ProfileView() {
   const { connected, address, shortAddress, disconnect } = useWallet();
   const [walletOpen, setWalletOpen] = useState(false);
-  const [claimTx, setClaimTx] = useState<TxState | null>(null);
   const [copied, setCopied] = useState(false);
   const [pfp, setPfp] = useState<string | null>(null);
   const [selectedNft, setSelectedNft] = useState<NftCardData | null>(null);
@@ -36,6 +36,28 @@ export function ProfileView() {
   const ownedOnchain = useOwnedNfts();
   const portfolio = useMemo(() => (address ? getPortfolio(address) : null), [address]);
   const nft = useMemo(() => (address ? getNftState(address) : null), [address]);
+
+  // Tokens actually launched from this browser, merged with live on-chain
+  // market caps. The handle↔mint mapping only exists in the local registry
+  // (a bare SPL mint carries no handle on-chain), so this is the source of
+  // truth for "what did I create" — not the mock portfolio.
+  const { tokens: indexed } = useTokenIndex();
+  const [launched, setLaunched] = useState<string[]>([]);
+  useEffect(() => {
+    setLaunched(launchedHandles());
+  }, [address]);
+  const created = useMemo(() => {
+    return launched.map((handle) => {
+      const meta = launchedMeta(handle);
+      const live = indexed.find((t) => t.handle === handle);
+      return {
+        handle,
+        name: meta?.name ?? handle,
+        marketCap: live?.marketCap ?? 0,
+        live: Boolean(live?.live),
+      };
+    });
+  }, [launched, indexed]);
 
   // Opt-in profile picture, persisted per wallet address (client-only). Loaded on
   // address change via adjust-state-on-prop-change (no setState-in-effect).
@@ -180,53 +202,49 @@ export function ProfileView() {
           </div>
         </Section>
 
-        {/* created tokens */}
-        <Section title="Tokens you created" count={portfolio.created.length}>
-          <div className="flex flex-col gap-2.5">
-            {portfolio.created.map((c) => (
-              <div key={c.handle} className="rounded-sm border border-white/[0.08] bg-[#0f1620] p-4">
-                <div className="flex items-center gap-2">
-                  <Link href={`/token/${c.handle}`} className="text-[14px] font-bold hover:text-signal">
-                    @{c.handle}
-                  </Link>
-                  {c.verified ? (
-                    <BadgeCheck className="h-4 w-4 text-signal" />
-                  ) : (
-                    <span className="rounded-full border border-noise/40 px-2 py-0.5 font-mono text-[8px] text-noise">
-                      UNVERIFIED
+        {/* created tokens — real launches from this browser's registry */}
+        <Section title="Tokens you created" count={created.length}>
+          {created.length === 0 ? (
+            <div className="rounded-sm border border-dashed border-white/12 p-6 text-center">
+              <p className="font-mono text-[11px] text-[#6B6B6B]">
+                You haven&apos;t launched any tokens yet.
+              </p>
+              <Link
+                href="/launch"
+                className="mt-3 inline-block rounded-sm bg-signal px-4 py-2 font-mono text-[11px] font-bold text-[#0A0A0A]"
+              >
+                Launch a token
+              </Link>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2.5">
+              {created.map((c) => (
+                <Link
+                  key={c.handle}
+                  href={`/token/${c.handle}`}
+                  className="group rounded-sm border border-white/[0.08] bg-[#0f1620] p-4 transition-colors hover:border-signal/40"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="text-[14px] font-bold group-hover:text-signal">@{c.handle}</span>
+                    <span
+                      className={cn(
+                        "rounded-full border px-2 py-0.5 font-mono text-[8px]",
+                        c.live
+                          ? "border-signal/40 text-signal"
+                          : "border-white/15 text-[#6B6B6B]",
+                      )}
+                    >
+                      {c.live ? "LIVE" : "PENDING"}
                     </span>
-                  )}
-                  <span className="ml-auto font-mono text-[12px] text-[#6B6B6B]">MCAP {usd(c.marketCap)}</span>
-                </div>
-                <div className="mt-3 flex items-center justify-between rounded-sm border border-white/[0.06] bg-[#12181f] px-3.5 py-2.5">
-                  <div>
-                    <div className="font-mono text-[9px] text-[#6B6B6B]">CLAIMABLE CREATOR FEES</div>
-                    <div className="font-mono text-[16px] font-bold text-signal">{usd(c.claimableUsd)}</div>
+                    <span className="ml-auto font-mono text-[12px] text-[#6B6B6B]">
+                      {c.live ? `MCAP ${usd(c.marketCap)}` : "—"}
+                    </span>
                   </div>
-                  <button
-                    onClick={() => {
-                      if (!c.verified) return;
-                      setClaimTx("pending");
-                      setTimeout(() => setClaimTx("confirmed"), 1500);
-                    }}
-                    disabled={!c.verified || c.claimableUsd === 0}
-                    className="rounded-sm bg-signal px-4 py-2 font-mono text-[11px] font-bold text-[#0A0A0A] disabled:cursor-not-allowed disabled:opacity-40"
-                  >
-                    {c.verified ? "CLAIM" : "VERIFY TO CLAIM"}
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-          {claimTx && (
-            <div className="mt-3">
-              <TxStatus
-                state={claimTx}
-                title={claimTx === "pending" ? "Claiming fees…" : "Fees claimed"}
-                detail="Creator fee → your wallet"
-                signature="7xРq…2mK9"
-                explorerUrl="#"
-              />
+                  <div className="mt-1 font-mono text-[10px] text-[#6B6B6B]">
+                    {c.name} · manage &amp; claim creator fees on the token page →
+                  </div>
+                </Link>
+              ))}
             </div>
           )}
         </Section>
