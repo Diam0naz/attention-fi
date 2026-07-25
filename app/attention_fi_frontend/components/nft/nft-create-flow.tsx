@@ -13,7 +13,7 @@ import { getNftState } from "@/lib/mock-data";
 import { Keypair, PublicKey } from "@solana/web3.js";
 import { BN } from "@anchor-lang/core";
 import { useProgram } from "@/lib/solana/use-program";
-import { handleToMint, launchedHandles } from "@/lib/solana/registry";
+import { handleToMint, myCreatedTokens } from "@/lib/solana/registry";
 import { explorerTx } from "@/lib/solana/config";
 
 const SOL_USD = 164.2;
@@ -61,8 +61,17 @@ export function NftCreateFlow() {
   // issue genesis fee-share NFTs for, now that genesis is creator-gated on-chain.
   const [myTokens, setMyTokens] = useState<{ handle: string; symbol: string }[]>([]);
   useEffect(() => {
-    setMyTokens(launchedHandles().map((h) => ({ handle: h, symbol: h.slice(0, 4).toUpperCase() })));
-  }, []);
+    let cancelled = false;
+    void (async () => {
+      const tokens = address ? await myCreatedTokens(address) : [];
+      if (!cancelled) {
+        setMyTokens(tokens.map((t) => ({ handle: t.handle, symbol: t.symbol ?? t.handle.slice(0, 4).toUpperCase() })));
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [address]);
   const [walletOpen, setWalletOpen] = useState(false);
   const [step, setStep] = useState(0);
   const [kind, setKind] = useState<Kind>("nft");

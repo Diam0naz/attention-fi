@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import type { TokenDetail } from "@/lib/mock-data";
 import { useReadonlyProgram } from "@/lib/solana/use-program";
-import { handleToMint } from "@/lib/solana/registry";
+import { handleToMint, resolveHandleFromDb } from "@/lib/solana/registry";
 import { fetchOnchainDetail } from "@/lib/solana/token-data";
 
 export type TokenSource = "mock" | "onchain";
@@ -19,14 +19,15 @@ export function useLiveTokenDetail(base: TokenDetail): { token: TokenDetail; sou
 
   useEffect(() => {
     let cancelled = false;
-    setLive(null); // reset when the handle changes
-    const mint = handleToMint(base.handle);
-    if (!mint) return;
-    fetchOnchainDetail(program, base, mint)
-      .then((result) => {
-        if (!cancelled && result) setLive(result);
-      })
-      .catch(() => undefined);
+    void (async () => {
+      setLive(null); // reset when the handle changes
+      // Local cache (fast) first; fall back to the durable DB so a visitor can
+      // open a token launched from a different browser/device.
+      const mint = handleToMint(base.handle) ?? (await resolveHandleFromDb(base.handle));
+      if (cancelled || !mint) return;
+      const result = await fetchOnchainDetail(program, base, mint).catch(() => null);
+      if (!cancelled && result) setLive(result);
+    })();
     return () => {
       cancelled = true;
     };

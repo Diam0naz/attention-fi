@@ -13,7 +13,7 @@ import { useOwnedNfts } from "@/components/nft/use-owned-nfts";
 import { useSolBalance } from "@/lib/solana/use-sol-balance";
 import { useTokenBalance } from "@/lib/solana/use-token-balance";
 import { USDC_MINT } from "@/lib/solana/config";
-import { launchedHandles, launchedMeta } from "@/lib/solana/registry";
+import { myCreatedTokens, type CreatedToken } from "@/lib/solana/registry";
 import { useTokenIndex } from "@/lib/token-index";
 import { getNftState, getPortfolio } from "@/lib/mock-data";
 
@@ -42,17 +42,23 @@ export function ProfileView() {
   // (a bare SPL mint carries no handle on-chain), so this is the source of
   // truth for "what did I create" — not the mock portfolio.
   const { tokens: indexed } = useTokenIndex();
-  const [launched, setLaunched] = useState<string[]>([]);
+  const [launched, setLaunched] = useState<CreatedToken[]>([]);
   useEffect(() => {
-    setLaunched(launchedHandles());
+    let cancelled = false;
+    void (async () => {
+      const t = address ? await myCreatedTokens(address) : [];
+      if (!cancelled) setLaunched(t);
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [address]);
   const created = useMemo(() => {
-    return launched.map((handle) => {
-      const meta = launchedMeta(handle);
-      const live = indexed.find((t) => t.handle === handle);
+    return launched.map((t) => {
+      const live = indexed.find((i) => i.handle === t.handle);
       return {
-        handle,
-        name: meta?.name ?? handle,
+        handle: t.handle,
+        name: t.name ?? t.handle,
         marketCap: live?.marketCap ?? 0,
         live: Boolean(live?.live),
       };

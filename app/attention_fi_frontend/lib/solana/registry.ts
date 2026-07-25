@@ -79,10 +79,16 @@ export function launchedHandles(): string[] {
   return Object.keys(launchedRegistry());
 }
 
-/** Record a freshly-launched token so the rest of the app can read it on-chain,
- *  plus whatever display metadata the creator gave it — there's no on-chain
- *  metadata account for bare SPL mints, so this is the only place it lives. */
-export function registerToken(handle: string, mint: string, meta?: LaunchedTokenMeta): void {
+/** Record a freshly-launched token. Writes the browser-local cache immediately
+ *  (synchronous readers stay fast) and, when `db` is supplied, mirrors it to
+ *  the Neon-backed registry so the creator's launches survive across ports and
+ *  devices (localStorage is per-origin). */
+export function registerToken(
+  handle: string,
+  mint: string,
+  meta?: LaunchedTokenMeta,
+  db?: { creator: string; mechanism?: string },
+): void {
   if (typeof window === "undefined") return;
   const current = launchedRegistry();
   current[norm(handle)] = meta ? { mint, ...meta } : mint;
@@ -97,5 +103,105 @@ export function registerToken(handle: string, mint: string, meta?: LaunchedToken
       : { mint }) as { mint: string } & LaunchedTokenMeta;
     current[norm(handle)] = rest.name || rest.symbol ? rest : mint;
     window.localStorage.setItem(LS_KEY, JSON.stringify(current));
+  }
+
+  if (db) {
+    // Fire-and-forget: a failed sync just means this launch stays local until
+    // the next successful write; never block the launch confirmation on it.
+    void fetch("/api/tokens", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        handle: norm(handle),
+        mint,
+        creator: db.creator,
+        name: meta?.name ?? null,
+        symbol: meta?.symbol ?? null,
+        image: meta?.image ?? null,
+        mechanism: db.mechanism ?? null,
+      }),
+    }).catch(() => undefined);
+  }
+}
+
+/** A creator's launch, from the durable registry merged with local cache. */
+export interface CreatedToken {
+  handle: string;
+  mint: string;
+  name?: string;
+  symbol?: string;
+  image?: string;
+}
+
+interface DbToken {
+  handle: string;
+  mint: string;
+  name: string | null;
+  symbol: string | null;
+  image: string | null;
+}
+
+/** The wallet's launches from the durable DB ([] when unconfigured/unreachable). */
+async function fetchCreatedFromDb(creator: string): Promise<DbToken[]> {
+  try {
+    const res = await fetch(`/api/tokens?creator=${encodeURIComponent(creator)}`);
+    if (!res.ok) return [];
+    const json = (await res.json()) as { tokens?: DbToken[] };
+    return json.tokens ?? [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * A wallet's created tokens: the durable DB record (cross-device) merged with
+ * this browser's local launches (which cover a token that was just launched
+ * before its DB write lands, or when the DB isn't configured). DB wins on
+ * conflict since it's authoritative and creator-scoped.
+ */
+export async function myCreatedTokens(creator: string): Promise<CreatedToken[]> {
+  const byHandle = new Map<string, CreatedToken>();
+  const local = launchedRegistry();
+  for (const handle of Object.keys(local)) {
+    const entry = local[handle]!;
+    byHandle.set(
+      handle,
+      typeof entry === "string"
+        ? { handle, mint: entry }
+        : { handle, mint: entry.mint, name: entry.name, symbol: entry.symbol, image: entry.image },
+    );
+  }
+  for (const t of await fetchCreatedFromDb(creator)) {
+    byHandle.set(t.handle, {
+      handle: t.handle,
+      mint: t.mint,
+      name: t.name ?? undefined,
+      symbol: t.symbol ?? undefined,
+      image: t.image ?? undefined,
+    });
+    // hydrate the local cache so synchronous readers resolve it cross-device
+    if (!local[t.handle]) local[t.handle] = { mint: t.mint, name: t.name ?? undefined };
+  }
+  if (typeof window !== "undefined") {
+    try {
+      window.localStorage.setItem(LS_KEY, JSON.stringify(local));
+    } catch {
+      /* quota — the in-memory merge above is still returned */
+    }
+  }
+  return [...byHandle.values()];
+}
+
+/** Resolve a handle→mint from the durable DB when it isn't in the local cache
+ *  (e.g. a visitor opening a token page for a token someone else launched). */
+export async function resolveHandleFromDb(handle: string): Promise<PublicKey | null> {
+  try {
+    const res = await fetch(`/api/tokens?handle=${encodeURIComponent(norm(handle))}`);
+    if (!res.ok) return null;
+    const json = (await res.json()) as { token?: { mint?: string } | null };
+    const mint = json.token?.mint;
+    return mint ? new PublicKey(mint) : null;
+  } catch {
+    return null;
   }
 }

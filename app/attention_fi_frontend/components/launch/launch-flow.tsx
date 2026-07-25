@@ -225,7 +225,12 @@ export function LaunchFlow() {
           .signers([mint])
           .rpc();
       }
-      registerToken(handle, mint.publicKey.toBase58(), { name, symbol: ticker, image: image || undefined });
+      registerToken(
+        handle,
+        mint.publicKey.toBase58(),
+        { name, symbol: ticker, image: image || undefined },
+        { creator: address, mechanism: mech },
+      );
       setTxSig(sig);
       setTx("confirmed");
     } catch (e) {
