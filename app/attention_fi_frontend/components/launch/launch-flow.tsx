@@ -291,7 +291,7 @@ export function LaunchFlow() {
               </label>
               <input
                 value={image}
-                onChange={(e) => setImage(e.target.value.slice(0, 300))}
+                onChange={(e) => setImage(e.target.value.slice(0, 2048))}
                 placeholder="https://…/art.png"
                 className="mt-1 w-full rounded-sm border border-white/10 bg-[#12181f] px-3 py-2.5 font-mono text-[12px] outline-none placeholder:text-[#4b5563]"
               />
