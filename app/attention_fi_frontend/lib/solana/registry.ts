@@ -192,15 +192,22 @@ export async function myCreatedTokens(creator: string): Promise<CreatedToken[]> 
   return [...byHandle.values()];
 }
 
-/** Resolve a handle→mint from the durable DB when it isn't in the local cache
- *  (e.g. a visitor opening a token page for a token someone else launched). */
-export async function resolveHandleFromDb(handle: string): Promise<PublicKey | null> {
+/** Resolve a handle→{mint, meta} from the durable DB when it isn't in the local
+ *  cache (e.g. a visitor opening a token page for a token someone else launched
+ *  on another device). */
+export async function resolveTokenFromDb(
+  handle: string,
+): Promise<{ mint: PublicKey; meta: LaunchedTokenMeta } | null> {
   try {
     const res = await fetch(`/api/tokens?handle=${encodeURIComponent(norm(handle))}`);
     if (!res.ok) return null;
-    const json = (await res.json()) as { token?: { mint?: string } | null };
-    const mint = json.token?.mint;
-    return mint ? new PublicKey(mint) : null;
+    const json = (await res.json()) as { token?: DbToken | null };
+    const t = json.token;
+    if (!t?.mint) return null;
+    return {
+      mint: new PublicKey(t.mint),
+      meta: { name: t.name ?? undefined, symbol: t.symbol ?? undefined, image: t.image ?? undefined },
+    };
   } catch {
     return null;
   }

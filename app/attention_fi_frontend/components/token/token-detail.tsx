@@ -8,6 +8,7 @@ import { getHolders, getTrades, type TokenDetail } from "@/lib/mock-data";
 import { X_URL } from "@/lib/config";
 import { PriceChart } from "@/components/token/price-chart";
 import { MindshareView } from "@/components/token/mindshare-view";
+import { Avatar } from "@/components/feed/avatar";
 import { Footer } from "@/components/feed/footer";
 import { WalletConnectModal } from "@/components/wallet/wallet-connect-modal";
 import { PublicKey } from "@solana/web3.js";
@@ -167,7 +168,7 @@ export function TokenDetailTerminal({ token: tokenProp }: { token: TokenDetail }
 
           {/* header */}
           <div className="flex items-center gap-3">
-            <div className="h-12 w-12 shrink-0 rounded-full bg-[repeating-linear-gradient(45deg,#1c2733,#1c2733_4px,#222f3d_4px,#222f3d_8px)]" />
+            <Avatar handle={token.handle} image={token.image} className="h-12 w-12" />
             <div className="min-w-0">
               <div className="flex items-center gap-2">
                 <span className="text-[20px] font-bold">@{token.handle}</span>
