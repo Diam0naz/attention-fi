@@ -16,8 +16,10 @@ import {
 } from "@solana/kit";
 import { deriveAttestationPda, fetchMaybeAttestation, getCreateAttestationInstruction } from "sas-lib";
 import nacl from "tweetnacl";
+import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { decodeHandleData, encodeHandleData, MAX_HANDLE_LEN, SAS_ATTESTATION_TTL_S, verifyMessage } from "@/lib/sas/config";
+import { PROOF_COOKIE, readProof, xConfig } from "@/lib/x-oauth";
 
 export const dynamic = "force-dynamic";
 
@@ -97,6 +99,29 @@ export async function POST(req: Request) {
     nacl.sign.detached.verify(message, signatureBytes, walletPubkey.toBytes());
   if (!validSignature) {
     return NextResponse.json({ error: "signature does not match wallet" }, { status: 401 });
+  }
+
+  // Prove real X-handle ownership before issuing an attestation. When X OAuth
+  // is configured, the caller must first complete /api/verify/x/start, which
+  // sets a signed x_proof cookie binding {wallet, handle} to the X account they
+  // authenticated as. If X OAuth is NOT configured (devnet without X creds), we
+  // skip this — the wallet signature alone gates issuance, as before.
+  const oauth = xConfig();
+  if (oauth) {
+    const proofCookie = (await cookies()).get(PROOF_COOKIE)?.value;
+    const proof = proofCookie ? readProof(oauth, proofCookie) : null;
+    if (!proof || proof.wallet !== wallet || proof.handle !== handle.toLowerCase()) {
+      return NextResponse.json(
+        { error: "Verify your X account first.", needsX: true },
+        { status: 403 },
+      );
+    }
+  } else if (process.env.NODE_ENV === "production") {
+    // Never let a production build issue attestations on a mere wallet signature.
+    return NextResponse.json(
+      { error: "X verification is unavailable — server is misconfigured." },
+      { status: 503 },
+    );
   }
 
   const credentialEnv = process.env.SAS_CREDENTIAL_ADDRESS;

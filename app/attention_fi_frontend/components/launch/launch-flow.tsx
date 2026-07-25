@@ -66,6 +66,13 @@ const DEFAULT_EARLY_EXIT_PENALTY_BPS = 1_000;
 const IMAGE_MAX_CHARS = 500_000; // ~375 KB once base64-decoded
 const IMAGE_MAX_FILE_BYTES = 360_000; // keeps the encoded data URI under the cap
 
+// When X OAuth is configured, verification requires proving X-handle ownership
+// (redirect flow) before the wallet signature. Off → dev sign-only flow.
+const X_OAUTH_ENABLED = process.env.NEXT_PUBLIC_X_OAUTH_ENABLED === "true";
+// The launch draft is stashed here across the full-page X redirect, which
+// would otherwise reset this component's state to step 0.
+const LAUNCH_DRAFT_KEY = "af.launch.draft";
+
 /** Read a picked image file into a data: URI, rejecting oversized files rather
  *  than truncating (a sliced data URI is a corrupt image). */
 function readImageFile(
@@ -104,6 +111,45 @@ export function LaunchFlow() {
   // one-time, wallet-level credential (the Verification PDA is `init`, one per
   // wallet), so once it exists every future launch skips the verify step.
   const [verifiedHandle, setVerifiedHandle] = useState<string | null>(null);
+  // The X handle proven via OAuth this session (before the on-chain credential
+  // exists). Required to sign when X_OAUTH_ENABLED.
+  const [xVerified, setXVerified] = useState<string | null>(null);
+  const [xError, setXError] = useState<string | null>(null);
+
+  // Returning from the X redirect: /launch?x=<handle> or ?x_error=<reason>.
+  // Restore the pre-redirect draft and resume at the verify step.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const sp = new URLSearchParams(window.location.search);
+    const x = sp.get("x");
+    const xErr = sp.get("x_error");
+    if (!x && !xErr) return;
+    try {
+      const raw = sessionStorage.getItem(LAUNCH_DRAFT_KEY);
+      if (raw) {
+        const d = JSON.parse(raw) as Partial<{ mech: MechId; name: string; symbol: string; image: string }>;
+        if (d.mech) setMech(d.mech);
+        if (typeof d.name === "string") setName(d.name);
+        if (typeof d.symbol === "string") setSymbol(d.symbol);
+        if (typeof d.image === "string") setImage(d.image);
+      }
+    } catch {
+      // ignore a malformed draft
+    }
+    if (x) {
+      setXVerified(x);
+      setHandle(x);
+      setStep(1);
+    } else if (xErr) {
+      setXError(
+        xErr === "denied"
+          ? "X authorization was cancelled."
+          : "Couldn't verify with X — please try again.",
+      );
+      setStep(1);
+    }
+    window.history.replaceState({}, "", "/launch");
+  }, []);
 
   useEffect(() => {
     if (!address || !program) return;
@@ -188,6 +234,19 @@ export function LaunchFlow() {
     }
   }
 
+  // Kick off X OAuth: stash the draft (the redirect resets this component),
+  // then hand off to the server flow which returns to /launch?x=<handle>.
+  function verifyWithX() {
+    if (!address) return setWalletOpen(true);
+    setXError(null);
+    try {
+      sessionStorage.setItem(LAUNCH_DRAFT_KEY, JSON.stringify({ mech, name, symbol, image }));
+    } catch {
+      // sessionStorage unavailable — proceed anyway, the user just re-enters
+    }
+    window.location.href = `/api/verify/x/start?wallet=${encodeURIComponent(address)}`;
+  }
+
   // Wallet signs the exact copy VerifyHandleFlow shows; the server verifies
   // that signature, then issues a real SAS attestation (see /api/verify).
   // That attestation is what verifyHandle checks on-chain before minting the
@@ -212,7 +271,12 @@ export function LaunchFlow() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ handle, wallet: address, signature: signatureB64 }),
       });
-      const json: { attestation?: string; error?: string } = await res.json();
+      const json: { attestation?: string; error?: string; needsX?: boolean } = await res.json();
+      if (res.status === 403 && json.needsX) {
+        // The X proof expired (10-min window) — send them back through OAuth.
+        setXVerified(null);
+        throw new Error("Your X verification expired — verify with X again.");
+      }
       if (!res.ok || !json.attestation) throw new Error(json.error ?? "verification failed");
 
       const subject = new PublicKey(address);
@@ -410,8 +474,28 @@ export function LaunchFlow() {
                   You can launch straight away.
                 </p>
               </div>
+            ) : X_OAUTH_ENABLED && !xVerified ? (
+              <div className="rounded-sm border border-white/[0.08] bg-[#0f1620] p-6 text-center">
+                <div className="text-[13px] font-bold">Prove you own the X account</div>
+                <p className="mx-auto mt-1.5 max-w-xs text-[11px] leading-relaxed text-[#6B6B6B]">
+                  Sign in with X to prove you control @{handle || "your handle"}, then confirm with
+                  your wallet. Only the real account owner can launch its token and claim creator fees.
+                </p>
+                <button
+                  onClick={verifyWithX}
+                  className="mt-4 inline-flex items-center gap-2 rounded-sm bg-[#F5F4F0] px-5 py-2.5 font-mono text-[12px] font-bold text-[#0A0A0A]"
+                >
+                  Verify with 𝕏
+                </button>
+                {xError && <p className="mt-2 font-mono text-[10px] text-noise">{xError}</p>}
+              </div>
             ) : (
               <div>
+                {xVerified && (
+                  <div className="mb-3 flex items-center gap-2 rounded-sm border border-signal/30 bg-signal/[0.05] px-3 py-2 font-mono text-[10px] text-signal">
+                    <Check className="h-3.5 w-3.5" /> X verified as @{xVerified} — now confirm with your wallet.
+                  </div>
+                )}
                 <VerifyHandleFlow
                   handle={handle || "handle"}
                   walletAddress={shortAddress ?? ""}
