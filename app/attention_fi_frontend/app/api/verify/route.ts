@@ -34,6 +34,26 @@ function rpcUrls() {
   return { http, ws };
 }
 
+/** Retry a flaky RPC call a few times with a per-attempt timeout, so an
+ *  intermittent ETIMEDOUT doesn't sink the whole request. Devnet RPCs
+ *  (even keyed ones) drop connections often enough that a single attempt is
+ *  unreliable. */
+async function withRetry<T>(fn: () => Promise<T>, attempts = 3, timeoutMs = 7000): Promise<T> {
+  let lastErr: unknown;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await Promise.race([
+        fn(),
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error("RPC timed out")), timeoutMs)),
+      ]);
+    } catch (e) {
+      lastErr = e;
+      if (i < attempts - 1) await new Promise((r) => setTimeout(r, 500 * (i + 1)));
+    }
+  }
+  throw lastErr;
+}
+
 /** Lazily built so a misconfigured env fails a request, not the route's module load. */
 function issuerSecretKeyBytes(): Uint8Array {
   const raw = process.env.SAS_ISSUER_SECRET_KEY;
@@ -103,7 +123,19 @@ export async function POST(req: Request) {
     // created it (e.g. the on-chain verifyHandle step failed and the user
     // retried), don't try to recreate it — that fails simulation with "account
     // already in use" and 500s. Return the existing one so the flow proceeds.
-    const existing = await fetchMaybeAttestation(rpc, attestation);
+    let existing: Awaited<ReturnType<typeof fetchMaybeAttestation>>;
+    try {
+      existing = await withRetry(() => fetchMaybeAttestation(rpc, attestation));
+    } catch (e) {
+      console.error("[/api/verify] existence check failed after retries:", e);
+      return NextResponse.json(
+        {
+          error:
+            "Couldn't reach Solana to check your verification status — a transient RPC hiccup. Please try again in a moment.",
+        },
+        { status: 503 },
+      );
+    }
     if (existing.exists) {
       // An attestation is one-per-wallet (PDA keyed by nonce=wallet). If it's
       // already bound to a DIFFERENT handle, returning it would make the
@@ -137,7 +169,7 @@ export async function POST(req: Request) {
     const rpcSubscriptions = createSolanaRpcSubscriptions(ws);
     const sendAndConfirm = sendAndConfirmTransactionFactory({ rpc, rpcSubscriptions });
 
-    const { value: latestBlockhash } = await rpc.getLatestBlockhash().send();
+    const { value: latestBlockhash } = await withRetry(() => rpc.getLatestBlockhash().send());
     const transactionMessage = pipe(
       createTransactionMessage({ version: 0 }),
       (m) => setTransactionMessageFeePayerSigner(issuer, m),
