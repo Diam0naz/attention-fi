@@ -14,7 +14,7 @@ import {
   setTransactionMessageLifetimeUsingBlockhash,
   signTransactionMessageWithSigners,
 } from "@solana/kit";
-import { deriveAttestationPda, getCreateAttestationInstruction } from "sas-lib";
+import { deriveAttestationPda, fetchMaybeAttestation, getCreateAttestationInstruction } from "sas-lib";
 import nacl from "tweetnacl";
 import { NextResponse } from "next/server";
 import { encodeHandleData, MAX_HANDLE_LEN, SAS_ATTESTATION_TTL_S, verifyMessage } from "@/lib/sas/config";
@@ -95,6 +95,19 @@ export async function POST(req: Request) {
     const nonce = address(wallet);
     const [attestation] = await deriveAttestationPda({ credential, schema, nonce });
 
+    const { http, ws } = rpcUrls();
+    const rpc = createSolanaRpc(http);
+
+    // Idempotent: the attestation PDA is deterministic in (credential, schema,
+    // nonce=wallet), so it can only be created once. If a prior verify already
+    // created it (e.g. the on-chain verifyHandle step failed and the user
+    // retried), don't try to recreate it — that fails simulation with "account
+    // already in use" and 500s. Return the existing one so the flow proceeds.
+    const existing = await fetchMaybeAttestation(rpc, attestation);
+    if (existing.exists) {
+      return NextResponse.json({ attestation: attestation.toString(), existing: true });
+    }
+
     const expiry = BigInt(Math.floor(Date.now() / 1000) + SAS_ATTESTATION_TTL_S);
     const instruction = getCreateAttestationInstruction({
       payer: issuer,
@@ -107,8 +120,6 @@ export async function POST(req: Request) {
       expiry,
     });
 
-    const { http, ws } = rpcUrls();
-    const rpc = createSolanaRpc(http);
     const rpcSubscriptions = createSolanaRpcSubscriptions(ws);
     const sendAndConfirm = sendAndConfirmTransactionFactory({ rpc, rpcSubscriptions });
 
@@ -127,6 +138,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ attestation: attestation.toString(), signature: txSignature });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "attestation creation failed";
+    // Surface the real cause server-side — the JSON body alone is easy to miss.
+    console.error("[/api/verify] attestation creation failed:", e);
     return NextResponse.json({ error: msg }, { status: 500 });
   }
 }
