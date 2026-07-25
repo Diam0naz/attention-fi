@@ -17,7 +17,7 @@ import {
 import { deriveAttestationPda, fetchMaybeAttestation, getCreateAttestationInstruction } from "sas-lib";
 import nacl from "tweetnacl";
 import { NextResponse } from "next/server";
-import { encodeHandleData, MAX_HANDLE_LEN, SAS_ATTESTATION_TTL_S, verifyMessage } from "@/lib/sas/config";
+import { decodeHandleData, encodeHandleData, MAX_HANDLE_LEN, SAS_ATTESTATION_TTL_S, verifyMessage } from "@/lib/sas/config";
 
 export const dynamic = "force-dynamic";
 
@@ -105,6 +105,20 @@ export async function POST(req: Request) {
     // already in use" and 500s. Return the existing one so the flow proceeds.
     const existing = await fetchMaybeAttestation(rpc, attestation);
     if (existing.exists) {
+      // An attestation is one-per-wallet (PDA keyed by nonce=wallet). If it's
+      // already bound to a DIFFERENT handle, returning it would make the
+      // on-chain verifyHandle fail its handle-binding check with a cryptic
+      // InvalidHandle — surface the real situation instead.
+      const boundHandle = decodeHandleData(Uint8Array.from(existing.data.data));
+      if (boundHandle && boundHandle !== handle) {
+        return NextResponse.json(
+          {
+            error: `This wallet is already verified as @${boundHandle}. Use @${boundHandle} to continue, or connect a different wallet.`,
+            boundHandle,
+          },
+          { status: 409 },
+        );
+      }
       return NextResponse.json({ attestation: attestation.toString(), existing: true });
     }
 

@@ -25,4 +25,14 @@ export function encodeHandleData(handle: string): Uint8Array {
   return out;
 }
 
+/** Inverse of encodeHandleData: read the handle bound in an attestation's
+ *  `data` field so /api/verify can tell whether an existing attestation is for
+ *  the handle being requested (an attestation is one-per-wallet). */
+export function decodeHandleData(data: Uint8Array): string {
+  if (data.length < 4) return "";
+  const len = data[0]! | (data[1]! << 8) | (data[2]! << 16) | (data[3]! << 24);
+  if (len < 0 || len > data.length - 4) return "";
+  return new TextDecoder().decode(data.slice(4, 4 + len));
+}
+
 export const MAX_HANDLE_LEN = 32;
