@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -14,6 +14,7 @@ import { BN } from "@anchor-lang/core";
 import { useProgram } from "@/lib/solana/use-program";
 import { registerToken } from "@/lib/solana/registry";
 import { explorerTx } from "@/lib/solana/config";
+import { verificationPda } from "@/lib/solana/program";
 import { verifyMessage } from "@/lib/sas/config";
 
 type MechId = "bonding" | "dutch" | "conviction" | "revenue";
@@ -99,6 +100,34 @@ export function LaunchFlow() {
   const [verifyStep, setVerifyStep] = useState<2 | 3>(2);
   const [verifying, setVerifying] = useState(false);
   const [verifyErr, setVerifyErr] = useState<string | null>(null);
+  // The handle this wallet is already verified as, if any. Verification is a
+  // one-time, wallet-level credential (the Verification PDA is `init`, one per
+  // wallet), so once it exists every future launch skips the verify step.
+  const [verifiedHandle, setVerifiedHandle] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!address || !program) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const pda = verificationPda(new PublicKey(address));
+        const record = await program.account.verification.fetchNullable(pda);
+        if (cancelled) return;
+        if (record) {
+          setVerifiedHandle(record.handle);
+          setVerifyStep(3); // already verified — skip the sign step
+        } else {
+          setVerifiedHandle(null);
+          setVerifyStep(2);
+        }
+      } catch {
+        // RPC hiccup — leave the sign step available rather than blocking.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [address, program]);
   const [tx, setTx] = useState<TxState | null>(null);
   const [txSig, setTxSig] = useState<string | null>(null);
   const [txErr, setTxErr] = useState<string | null>(null);
@@ -198,6 +227,7 @@ export function LaunchFlow() {
         })
         .signers([asset])
         .rpc();
+      setVerifiedHandle(handle);
       setVerifyStep(3);
     } catch (e) {
       setVerifyErr(e instanceof Error ? e.message : "Verification failed");
@@ -275,7 +305,9 @@ export function LaunchFlow() {
               <span className="text-[#6B6B6B]">@</span>
               <input
                 value={handle}
-                onChange={(e) => setHandle(e.target.value.replace(/[^a-zA-Z0-9_]/g, ""))}
+                // X handles are case-insensitive and ≤15 chars — normalize to
+                // lowercase so the attestation, registry, and PDA all agree.
+                onChange={(e) => setHandle(e.target.value.replace(/[^a-zA-Z0-9_]/g, "").toLowerCase().slice(0, 15))}
                 placeholder="handle"
                 className="w-full bg-transparent px-1.5 py-2.5 text-[13px] outline-none placeholder:text-[#4b5563]"
               />
@@ -365,18 +397,33 @@ export function LaunchFlow() {
         {/* Step 2 — verify handle */}
         {step === 1 &&
           (connected ? (
-            <div>
-              <VerifyHandleFlow
-                handle={handle || "handle"}
-                walletAddress={shortAddress ?? ""}
-                step={verifyStep}
-                onSign={signAndVerify}
-                disabled={verifying}
-              />
-              {verifyErr && (
-                <p className="mt-2 font-mono text-[10px] text-noise">{verifyErr}</p>
-              )}
-            </div>
+            verifiedHandle ? (
+              <div className="rounded-sm border border-signal/30 bg-signal/[0.05] p-6 text-center">
+                <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-signal/15">
+                  <Check className="h-5 w-5 text-signal" />
+                </div>
+                <div className="mt-3 text-[13px] font-bold">
+                  Verified as <span className="text-signal">@{verifiedHandle}</span>
+                </div>
+                <p className="mx-auto mt-1.5 max-w-xs text-[11px] leading-relaxed text-[#6B6B6B]">
+                  This wallet already holds its soulbound verification credential — a one-time step.
+                  You can launch straight away.
+                </p>
+              </div>
+            ) : (
+              <div>
+                <VerifyHandleFlow
+                  handle={handle || "handle"}
+                  walletAddress={shortAddress ?? ""}
+                  step={verifyStep}
+                  onSign={signAndVerify}
+                  disabled={verifying}
+                />
+                {verifyErr && (
+                  <p className="mt-2 font-mono text-[10px] text-noise">{verifyErr}</p>
+                )}
+              </div>
+            )
           ) : (
             <div className="rounded-sm border border-white/[0.08] bg-[#0f1620] p-6 text-center">
               <div className="text-[13px] font-bold">Connect a wallet to verify</div>
