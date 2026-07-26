@@ -15,7 +15,6 @@
  */
 import { readFileSync } from "node:fs";
 import {
-  address,
   appendTransactionMessageInstructions,
   assertIsTransactionWithBlockhashLifetime,
   createKeyPairSignerFromBytes,

@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { PublicKey } from "@solana/web3.js";
 import { BN } from "@anchor-lang/core";
-import { ArrowLeft, BadgeCheck, Check, Gavel, Gift, Lock, Plus, TrendingUp, X } from "lucide-react";
+import { ArrowLeft, BadgeCheck, Gavel, Gift, Lock, Plus, TrendingUp, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useWallet } from "@/components/wallet/wallet-provider";
 import { WalletConnectModal } from "@/components/wallet/wallet-connect-modal";

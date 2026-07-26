@@ -16,6 +16,23 @@ const eslintConfig = defineConfig([
     // from) — not app code, so it isn't held to the app's lint rules.
     "components/Attention-fi Repository (1)/**",
   ]),
+  {
+    rules: {
+      // `_`-prefixed names are deliberately unused: destructure-to-omit
+      // (`const { image: _image, ...rest }`) and signature placeholders that
+      // exist to keep a callback's arity.
+      "@typescript-eslint/no-unused-vars": [
+        "warn",
+        {
+          argsIgnorePattern: "^_",
+          varsIgnorePattern: "^_",
+          caughtErrorsIgnorePattern: "^_",
+          destructuredArrayIgnorePattern: "^_",
+          ignoreRestSiblings: true,
+        },
+      ],
+    },
+  },
 ]);
 
 export default eslintConfig;

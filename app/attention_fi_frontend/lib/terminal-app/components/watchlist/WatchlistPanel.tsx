@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/terminal-app/lib/cn";
 import { fmtPercent, fmtPrice, fmtSigned } from "@/lib/terminal-app/lib/format";
 import { useProvider } from "@/lib/terminal-app/lib/providers";
@@ -210,17 +210,21 @@ function WatchRow({
   const prevLast = useRef<number | null>(null);
   const flashRef = useRef<HTMLDivElement | null>(null);
 
-  // flash-tint the row on price change, decaying via CSS animation
-  if (stat && prevLast.current !== null && stat.last !== prevLast.current) {
-    const cls = stat.last > prevLast.current ? "flash-up" : "flash-down";
+  // flash-tint the row on price change, decaying via CSS animation. Runs after
+  // commit (not during render) so the DOM write and the prev-price bookkeeping
+  // don't double-fire under StrictMode/concurrent rendering.
+  const last = stat?.last;
+  useEffect(() => {
+    if (last === undefined) return;
+    const prev = prevLast.current;
+    prevLast.current = last;
+    if (prev === null || last === prev) return;
     const el = flashRef.current;
-    if (el) {
-      el.classList.remove("flash-up", "flash-down");
-      void el.offsetWidth; // restart animation
-      el.classList.add(cls);
-    }
-  }
-  if (stat) prevLast.current = stat.last;
+    if (!el) return;
+    el.classList.remove("flash-up", "flash-down");
+    void el.offsetWidth; // restart animation
+    el.classList.add(last > prev ? "flash-up" : "flash-down");
+  }, [last]);
 
   const up = (stat?.changePercent ?? 0) >= 0;
 

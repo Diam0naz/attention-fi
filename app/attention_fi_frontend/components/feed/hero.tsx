@@ -1,4 +1,3 @@
-import Link from "next/link";
 import Strands from "@/components/reactbits/strands";
 import { MagicCircle } from "@/components/reactbits/magic-circle";
 import { GradientText, ShinyText } from "@/components/reactbits/text";

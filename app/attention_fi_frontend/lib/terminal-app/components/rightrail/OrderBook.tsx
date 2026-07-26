@@ -56,12 +56,19 @@ export function OrderBook() {
   const spread = bestAsk - bestBid;
   const spreadPct = bestBid > 0 ? (spread / bestBid) * 100 : 0;
 
-  let cum = 0;
-  const asksCum = book.asks.map((l) => ({ ...l, cum: (cum += l.qty) }));
-  const askMax = cum;
-  cum = 0;
-  const bidsCum = book.bids.map((l) => ({ ...l, cum: (cum += l.qty) }));
-  const bidMax = cum;
+  // Running depth totals — accumulated explicitly rather than by mutating a
+  // captured variable inside .map(), which reads as a pure transform but isn't.
+  const withCum = (levels: typeof book.asks) => {
+    const out: ((typeof levels)[number] & { cum: number })[] = [];
+    let total = 0;
+    for (const l of levels) {
+      total += l.qty;
+      out.push({ ...l, cum: total });
+    }
+    return { rows: out, max: total };
+  };
+  const { rows: asksCum, max: askMax } = withCum(book.asks);
+  const { rows: bidsCum, max: bidMax } = withCum(book.bids);
 
   /**
    * Click-to-trade at a level: clicking a bid preps a buy, an ask preps a
