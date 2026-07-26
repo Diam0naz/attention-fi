@@ -4,7 +4,7 @@ import {
   marketDbConfigured,
   newestSnapshotAge,
 } from "@/lib/market-db";
-import { fetchAllCurves, fetchGlobal, spotPriceSol } from "@/lib/solana/curve";
+import { fetchAllSnapshotRows, fetchGlobal } from "@/lib/solana/curve";
 import { getReadonlyProgram } from "@/lib/solana/program";
 
 export const dynamic = "force-dynamic";
@@ -13,7 +13,8 @@ export const dynamic = "force-dynamic";
 const MIN_INTERVAL_S = 45;
 
 /**
- * Records one price snapshot per live bonding curve. The chain is read
+ * Records one price snapshot per live token, across every launch mechanism.
+ * The chain is read
  * server-side (clients only trigger, never supply data), and a freshness
  * check makes concurrent triggers from many open terminals coalesce into
  * one write per interval. Wire a cron to this endpoint in production;
@@ -29,16 +30,9 @@ export async function GET() {
       return NextResponse.json({ stored: 0, reason: "fresh", age });
     }
     const program = getReadonlyProgram();
-    const [curves, global] = await Promise.all([
-      fetchAllCurves(program),
-      fetchGlobal(program),
-    ]);
+    const global = await fetchGlobal(program);
     const decimals = global?.tokenDecimals ?? 6;
-    const rows = curves.map((c) => ({
-      mint: c.mint,
-      priceSol: spotPriceSol(c, decimals),
-      realSolLamports: c.realSolReserves,
-    }));
+    const rows = await fetchAllSnapshotRows(program, decimals);
     await insertSnapshots(rows);
     return NextResponse.json({ stored: rows.length });
   } catch (e) {

@@ -129,6 +129,19 @@ interface HasReserves {
   complete: boolean;
 }
 
+/** Dutch-auction price at `nowSec`, mirroring the program's linear descent. */
+function linearDescentLamports(
+  startPrice: bigint,
+  floorPrice: bigint,
+  startTime: bigint,
+  duration: bigint,
+  nowSec: bigint,
+): bigint {
+  const dur = duration <= 0n ? 1n : duration;
+  const elapsed = nowSec > startTime ? nowSec - startTime : 0n;
+  return elapsed >= dur ? floorPrice : startPrice - ((startPrice - floorPrice) * elapsed) / dur;
+}
+
 function reservePrice(raw: HasReserves, decimals: number): { spot: number; mcap: number } {
   const vSol = Number(BigInt(raw.virtualSolReserves.toString())) / LAMPORTS_PER_SOL;
   const vTok = Number(BigInt(raw.virtualTokenReserves.toString())) / 10 ** decimals;
@@ -181,14 +194,13 @@ export async function fetchAnyCurve(
     };
   }
   if (dutch) {
-    const now = BigInt(Math.floor(Date.now() / 1000));
-    const start = BigInt(dutch.startTime.toString());
-    const duration = BigInt(Math.max(1, Number(dutch.duration.toString())));
-    const elapsed = now > start ? now - start : 0n;
-    const startPrice = BigInt(dutch.startPrice.toString());
-    const floorPrice = BigInt(dutch.floorPrice.toString());
-    const priceLamports =
-      elapsed >= duration ? floorPrice : startPrice - ((startPrice - floorPrice) * elapsed) / duration;
+    const priceLamports = linearDescentLamports(
+      BigInt(dutch.startPrice.toString()),
+      BigInt(dutch.floorPrice.toString()),
+      BigInt(dutch.startTime.toString()),
+      BigInt(dutch.duration.toString()),
+      BigInt(Math.floor(Date.now() / 1000)),
+    );
     const spot = Number(priceLamports) / LAMPORTS_PER_SOL;
     const supply = Number(BigInt(dutch.totalForSale.toString())) / 10 ** decimals;
     return {
@@ -217,6 +229,67 @@ export async function fetchAnyCurve(
     };
   }
   return null;
+}
+
+/** One price sample for the history store, for a token on any mechanism. */
+export interface SnapshotRow {
+  mint: string;
+  priceSol: number;
+  realSolLamports: bigint;
+}
+
+/**
+ * A spot-price sample for every launched token across all four mechanisms, so
+ * chart history accrues regardless of how a token was launched (the recorder
+ * used to see bonding curves only).
+ */
+export async function fetchAllSnapshotRows(
+  program: Program<AttentionFi>,
+  decimals: number,
+): Promise<SnapshotRow[]> {
+  const [bonding, conviction, dutch, revenue] = await Promise.all([
+    program.account.bondingCurve.all().catch(() => []),
+    program.account.convictionCurve.all().catch(() => []),
+    program.account.dutchAuction.all().catch(() => []),
+    program.account.revenueShare.all().catch(() => []),
+  ]);
+  const rows: SnapshotRow[] = [];
+  for (const { account: c } of bonding) {
+    rows.push({
+      mint: c.mint.toBase58(),
+      priceSol: reservePrice(c as unknown as HasReserves, decimals).spot,
+      realSolLamports: BigInt(c.realSolReserves.toString()),
+    });
+  }
+  for (const { account: c } of conviction) {
+    rows.push({
+      mint: c.mint.toBase58(),
+      priceSol: reservePrice(c as unknown as HasReserves, decimals).spot,
+      realSolLamports: BigInt(c.realSolReserves.toString()),
+    });
+  }
+  for (const { account: c } of dutch) {
+    const priceLamports = linearDescentLamports(
+      BigInt(c.startPrice.toString()),
+      BigInt(c.floorPrice.toString()),
+      BigInt(c.startTime.toString()),
+      BigInt(c.duration.toString()),
+      BigInt(Math.floor(Date.now() / 1000)),
+    );
+    rows.push({
+      mint: c.mint.toBase58(),
+      priceSol: Number(priceLamports) / LAMPORTS_PER_SOL,
+      realSolLamports: BigInt(c.realSolReserves.toString()),
+    });
+  }
+  for (const { account: c } of revenue) {
+    rows.push({
+      mint: c.mint.toBase58(),
+      priceSol: Number(BigInt(c.sharePrice.toString())) / LAMPORTS_PER_SOL,
+      realSolLamports: BigInt(c.revenueReserves.toString()),
+    });
+  }
+  return rows;
 }
 
 /** Global config (fees, graduation threshold, decimals). Null if uninitialised. */

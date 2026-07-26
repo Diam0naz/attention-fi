@@ -17,7 +17,40 @@ import {
 } from "lightweight-charts";
 import { Minus, Plus, Maximize2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { getChartSeries } from "@/lib/mock-data";
+import { getChartSeries, type Candle, type Volume } from "@/lib/mock-data";
+import { SOL_USD } from "@/lib/solana/token-data";
+
+// Fixed total supply (whole tokens) — real snapshots store SOL/token, so
+// price → market-cap-USD via price × supply × SOL/USD keeps the real series on
+// the same scale the chart (and the header market cap) already use.
+const TOTAL_SUPPLY_WHOLE = 1_000_000_000;
+
+interface ApiCandle {
+  time: number;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+}
+
+/** Convert real SOL-priced OHLCV candles to the market-cap-USD chart series. */
+function toSeries(rows: ApiCandle[]): { candles: Candle[]; volumes: Volume[] } {
+  const k = TOTAL_SUPPLY_WHOLE * SOL_USD;
+  const candles = rows.map((c) => ({
+    time: c.time,
+    open: c.open * k,
+    high: c.high * k,
+    low: c.low * k,
+    close: c.close * k,
+  }));
+  const volumes = rows.map((c) => ({
+    time: c.time,
+    value: c.volume * SOL_USD,
+    color: c.close >= c.open ? "rgba(0,255,133,0.5)" : "rgba(255,59,92,0.5)",
+  }));
+  return { candles, volumes };
+}
 
 const TIMEFRAMES = [
   { label: "1m", sec: 60 },
@@ -58,7 +91,15 @@ interface Legend {
 }
 
 /** Trading chart with exchange basics: timeframes, candle/line, MA, volume, zoom. */
-export function PriceChart({ handle, marketCap }: { handle: string; marketCap: number }) {
+export function PriceChart({
+  handle,
+  marketCap,
+  mint,
+}: {
+  handle: string;
+  marketCap: number;
+  mint?: string;
+}) {
   const ref = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
 
@@ -67,11 +108,41 @@ export function PriceChart({ handle, marketCap }: { handle: string; marketCap: n
   const [showMA, setShowMA] = useState(true);
   const [showVol, setShowVol] = useState(true);
   const [legend, setLegend] = useState<Legend | null>(null);
+  // Real OHLCV from the price-history store, once loaded. Null → use synthetic.
+  const [real, setReal] = useState<{ candles: Candle[]; volumes: Volume[] } | null>(null);
 
-  const { candles, volumes } = useMemo(
+  const synthetic = useMemo(
     () => getChartSeries(handle, marketCap, tfSec),
     [handle, marketCap, tfSec],
   );
+
+  // Pull real history for this mint + timeframe; fall back to synthetic when the
+  // store has nothing yet (fewer than 2 candles) or the token isn't on-chain.
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      if (!mint) {
+        if (!cancelled) setReal(null);
+        return;
+      }
+      const now = Math.floor(Date.now() / 1000);
+      const from = now - tfSec * 240;
+      try {
+        const r = await fetch(`/api/market/candles?mint=${mint}&tf=${tfSec}&from=${from}&to=${now}`);
+        const j = (r.ok ? await r.json() : { candles: [] }) as { candles?: ApiCandle[] };
+        if (cancelled) return;
+        const rows = j.candles ?? [];
+        setReal(rows.length >= 2 ? toSeries(rows) : null);
+      } catch {
+        if (!cancelled) setReal(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [mint, tfSec]);
+
+  const { candles, volumes } = real ?? synthetic;
 
   useEffect(() => {
     const el = ref.current;

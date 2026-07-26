@@ -254,7 +254,7 @@ export function TokenDetailTerminal({ token: tokenProp }: { token: TokenDetail }
           <div className="mt-4">
             {tab === "chart" && (
               <div className="overflow-hidden rounded-sm border border-white/[0.06] bg-black">
-                <PriceChart handle={token.handle} marketCap={token.marketCap} />
+                <PriceChart handle={token.handle} marketCap={token.marketCap} mint={tokenMint || undefined} />
               </div>
             )}
 
