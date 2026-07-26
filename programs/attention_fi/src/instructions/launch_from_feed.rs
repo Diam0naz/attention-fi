@@ -2,7 +2,7 @@ use anchor_lang::prelude::*;
 use anchor_spl::associated_token::AssociatedToken;
 use anchor_spl::token::spl_token::instruction::AuthorityType;
 use anchor_spl::token::{self, Mint, MintTo, SetAuthority, Token, TokenAccount};
-use switchboard_on_demand::{PullFeedAccountData, ON_DEMAND_MAINNET_PID};
+use switchboard_on_demand::{PullFeedAccountData, ON_DEMAND_DEVNET_PID, ON_DEMAND_MAINNET_PID};
 
 use crate::constants::{CURVE_SEED, FEED_MAX_STALENESS, FEED_MIN_SAMPLES, GLOBAL_SEED};
 use crate::error::AttentionError;
@@ -18,9 +18,10 @@ pub struct LaunchFromFeed<'info> {
     #[account(mut, seeds = [GLOBAL_SEED], bump = global.bump)]
     pub global: Account<'info, Global>,
 
-    /// CHECK: Switchboard On-Demand pull feed; owner-checked here and parsed +
-    /// staleness-validated in the handler.
-    #[account(owner = ON_DEMAND_MAINNET_PID @ AttentionError::InvalidFeed)]
+    /// CHECK: Switchboard On-Demand pull feed. Ownership (devnet or mainnet
+    /// Switchboard program) is checked in the handler, then parsed +
+    /// staleness-validated — a single `owner =` constraint can't accept either
+    /// cluster's program id.
     pub feed: UncheckedAccount<'info>,
 
     #[account(
@@ -58,6 +59,14 @@ pub struct LaunchFromFeed<'info> {
 /// Switchboard mindshare feed rather than a trusted keeper `tier` argument.
 pub fn launch_from_feed_handler(ctx: Context<LaunchFromFeed>) -> Result<()> {
     let clock = Clock::get()?;
+
+    // Accept a feed owned by either the devnet or mainnet Switchboard program,
+    // so the same binary works on both clusters.
+    let feed_owner = ctx.accounts.feed.owner;
+    require!(
+        feed_owner == &ON_DEMAND_MAINNET_PID || feed_owner == &ON_DEMAND_DEVNET_PID,
+        AttentionError::InvalidFeed
+    );
 
     // Read the current mindshare value from the oracle (fresh + enough samples).
     let feed_info = ctx.accounts.feed.to_account_info();
