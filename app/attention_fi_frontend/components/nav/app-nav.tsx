@@ -1,11 +1,13 @@
 "use client";
 
+import { useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Logo } from "@/components/brand/logo";
 import { TickerTape } from "@/components/feed/ticker-tape";
 import { WaitlistButton } from "@/components/waitlist/waitlist-button";
 import { WalletButton } from "@/components/wallet/wallet-button";
+import { refreshSolUsd } from "@/lib/solana/sol-usd";
 import { cn } from "@/lib/utils";
 
 const LINKS = [
@@ -21,6 +23,15 @@ const LINKS = [
  */
 export function AppNav() {
   const pathname = usePathname();
+
+  // Keep the app-wide SOL/USD display rate fresh (used by feeds, token pages,
+  // NFT pricing). Refreshes on load and every 5 min; the rate is display-only.
+  useEffect(() => {
+    void refreshSolUsd();
+    const id = setInterval(() => void refreshSolUsd(), 5 * 60_000);
+    return () => clearInterval(id);
+  }, []);
+
   if (pathname.startsWith("/terminal")) return null;
 
   return (

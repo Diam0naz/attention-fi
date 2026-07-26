@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { fetchAllCurves, fetchGlobal, marketCapSol, spotPriceSol, type CurveState } from "@/lib/solana/curve";
 import { getReadonlyProgram } from "@/lib/solana/program";
 import { allTokenHandles, handleToMint, launchedMeta } from "@/lib/solana/registry";
-import { SOL_USD } from "@/lib/solana/token-data";
+import { solUsd } from "@/lib/solana/sol-usd";
 import { MOCK_TOKENS, tierFromMindshare, type Tier, type Token } from "@/lib/mock-data";
 
 /**
@@ -82,7 +82,7 @@ function buildIndex(curves: CurveState[], decimals: number): IndexState {
       live: true,
       mint: curve.mint,
       spotSol: spotPriceSol(curve, decimals),
-      marketCap: Math.max(1, Math.round(marketCapSol(curve, decimals) * SOL_USD)),
+      marketCap: Math.max(1, Math.round(marketCapSol(curve, decimals) * solUsd())),
       tier: TIER_BY_INDEX[curve.tier] ?? base.tier,
     });
   }
@@ -98,7 +98,7 @@ function buildIndex(curves: CurveState[], decimals: number): IndexState {
       name: meta?.name || titleCase(handle),
       vertical: "Narrative",
       mindshare,
-      marketCap: Math.max(1, Math.round(marketCapSol(curve, decimals) * SOL_USD)),
+      marketCap: Math.max(1, Math.round(marketCapSol(curve, decimals) * solUsd())),
       delta24h: 0,
       tier: TIER_BY_INDEX[curve.tier] ?? tierFromMindshare(mindshare),
       verified: false,

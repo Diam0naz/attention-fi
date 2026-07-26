@@ -4,10 +4,7 @@ import type { AttentionFi } from "@/lib/idl/attention_fi";
 import type { TokenDetail } from "@/lib/mock-data";
 import { fetchAnyCurve, fetchGlobal, LAMPORTS_PER_SOL } from "./curve";
 import { launchedMeta } from "./registry";
-
-// TODO: replace with a real SOL/USD oracle read. Mirrors the terminal's mock rate.
-/** TODO: replace with a real oracle read; shared by every USD conversion. */
-export const SOL_USD = 164.2;
+import { solUsd } from "./sol-usd";
 
 /**
  * Build a TokenDetail from live on-chain state for whichever mechanism launched
@@ -29,6 +26,7 @@ export async function fetchOnchainDetail(
   // UI — there's no on-chain metadata account for a bare SPL mint, so the
   // generic mock (handle title-cased) is all `base` has otherwise.
   const meta = launchedMeta(base.handle);
+  const usd = solUsd();
 
   return {
     ...base,
@@ -36,13 +34,13 @@ export async function fetchOnchainDetail(
     symbol: meta?.symbol || base.symbol,
     image: meta?.image ?? base.image,
     mechanism: curve.mechanism,
-    marketCap: Math.round(curve.marketCapSol * SOL_USD),
-    raisedUsd: Math.round(curve.realSolReservesSol * SOL_USD),
+    marketCap: Math.round(curve.marketCapSol * usd),
+    raisedUsd: Math.round(curve.realSolReservesSol * usd),
     targetUsd: global
-      ? Math.round((Number(global.graduationSol) / LAMPORTS_PER_SOL) * SOL_USD)
+      ? Math.round((Number(global.graduationSol) / LAMPORTS_PER_SOL) * usd)
       : base.targetUsd,
     virtualSol: +curve.spotPriceSol.toFixed(9),
-    liquidityUsd: Math.round(curve.realSolReservesSol * SOL_USD * 2),
+    liquidityUsd: Math.round(curve.realSolReservesSol * usd * 2),
     creatorFeeBps: global?.creatorFeeShareBps ?? base.creatorFeeBps,
   };
 }

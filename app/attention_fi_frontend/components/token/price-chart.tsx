@@ -18,7 +18,7 @@ import {
 import { Minus, Plus, Maximize2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getChartSeries, type Candle, type Volume } from "@/lib/mock-data";
-import { SOL_USD } from "@/lib/solana/token-data";
+import { solUsd } from "@/lib/solana/sol-usd";
 
 // Fixed total supply (whole tokens) — real snapshots store SOL/token, so
 // price → market-cap-USD via price × supply × SOL/USD keeps the real series on
@@ -36,7 +36,8 @@ interface ApiCandle {
 
 /** Convert real SOL-priced OHLCV candles to the market-cap-USD chart series. */
 function toSeries(rows: ApiCandle[]): { candles: Candle[]; volumes: Volume[] } {
-  const k = TOTAL_SUPPLY_WHOLE * SOL_USD;
+  const usd = solUsd();
+  const k = TOTAL_SUPPLY_WHOLE * usd;
   const candles = rows.map((c) => ({
     time: c.time,
     open: c.open * k,
@@ -46,7 +47,7 @@ function toSeries(rows: ApiCandle[]): { candles: Candle[]; volumes: Volume[] } {
   }));
   const volumes = rows.map((c) => ({
     time: c.time,
-    value: c.volume * SOL_USD,
+    value: c.volume * usd,
     color: c.close >= c.open ? "rgba(0,255,133,0.5)" : "rgba(255,59,92,0.5)",
   }));
   return { candles, volumes };

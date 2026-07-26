@@ -16,6 +16,7 @@ import { useWallet } from "@/components/wallet/wallet-provider";
 import { useLiveTokenDetail } from "@/components/token/use-live-token";
 import { useProgram } from "@/lib/solana/use-program";
 import { useSolBalance } from "@/lib/solana/use-sol-balance";
+import { useSolUsd } from "@/lib/solana/sol-usd";
 import { useTokenBalance } from "@/lib/solana/use-token-balance";
 import { handleToMint } from "@/lib/solana/registry";
 import { buyTokens, sellTokens } from "@/lib/solana/trade";
@@ -37,6 +38,7 @@ export function TokenDetailTerminal({ token: tokenProp }: { token: TokenDetail }
   const { connected, address, shortAddress, disconnect } = useWallet();
   const program = useProgram();
   const solBalance = useSolBalance();
+  const solUsdRate = useSolUsd();
   const tokenMint = handleToMint(token.handle)?.toBase58() ?? "";
   // How many of THIS token the wallet holds (null when none / unregistered).
   const heldTokens = useTokenBalance(tokenMint);
@@ -71,7 +73,7 @@ export function TokenDetailTerminal({ token: tokenProp }: { token: TokenDetail }
   const amt = parseFloat(amount) || 0;
   // Price estimate (SOL/token) from market cap (works for live + mock); the real
   // fill comes from the on-chain curve. Buy: SOL→tokens; Sell: tokens→SOL.
-  const priceSol = token.marketCap / 164.2 / 1_000_000_000;
+  const priceSol = token.marketCap / solUsdRate / 1_000_000_000;
   const receive = side === "buy" ? (priceSol > 0 ? amt / priceSol : 0) : amt * priceSol;
   // Balance for the active side: SOL when buying, token holdings when selling.
   const sideBalance = side === "buy" ? walletSol : heldTokens ?? 0;
@@ -135,7 +137,9 @@ export function TokenDetailTerminal({ token: tokenProp }: { token: TokenDetail }
           >
             TERMINAL ↗
           </Link>
-          <span className="hidden font-mono text-[10px] text-[#6B6B6B] sm:inline">SOL/USD $164.20</span>
+          <span className="hidden font-mono text-[10px] text-[#6B6B6B] sm:inline">
+            SOL/USD ${solUsdRate.toFixed(2)}
+          </span>
           {connected ? (
             <div className="flex items-center gap-1.5 rounded-sm border border-signal/40 bg-signal/[0.06] px-1 py-0.5">
               <span className="inline-flex items-center gap-1.5 px-2 py-1 font-mono text-[11px] font-bold text-signal">

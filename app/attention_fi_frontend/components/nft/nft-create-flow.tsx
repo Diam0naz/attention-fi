@@ -14,9 +14,9 @@ import { Keypair, PublicKey } from "@solana/web3.js";
 import { BN } from "@anchor-lang/core";
 import { useProgram } from "@/lib/solana/use-program";
 import { handleToMint, myCreatedTokens } from "@/lib/solana/registry";
+import { solUsd } from "@/lib/solana/sol-usd";
 import { explorerTx } from "@/lib/solana/config";
 
-const SOL_USD = 164.2;
 const DURATION_SEC: Record<string, number> = { "6h": 21_600, "12h": 43_200, "24h": 86_400, "48h": 172_800 };
 
 type Kind = "genesis" | "auction" | "nft";
@@ -152,7 +152,7 @@ export function NftCreateFlow() {
       const me = new PublicKey(address);
       let sig: string;
       if (kind === "nft" && listForSale) {
-        const toLamports = (usd: string) => new BN(Math.round(((+usd || 0) / SOL_USD) * 1e9));
+        const toLamports = (usd: string) => new BN(Math.round(((+usd || 0) / solUsd()) * 1e9));
         sig = await program.methods
           .startNftAuction(
             toLamports(startUsd),
@@ -180,7 +180,7 @@ export function NftCreateFlow() {
           .signers([asset])
           .rpc();
       } else {
-        const toLamports = (usd: string) => new BN(Math.round(((+usd || 0) / SOL_USD) * 1e9));
+        const toLamports = (usd: string) => new BN(Math.round(((+usd || 0) / solUsd()) * 1e9));
         sig = await program.methods
           .startNftAuction(
             toLamports(startUsd),
