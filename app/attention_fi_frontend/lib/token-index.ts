@@ -53,7 +53,36 @@ function titleCase(handle: string): string {
   return handle.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-function buildIndex(curves: CurveState[], decimals: number): IndexState {
+interface MindshareEntry {
+  mindshare: number;
+  delta24h: number;
+  rank: number;
+}
+
+/** Live attention data from the mindshare service, keyed by handle. Empty on
+ *  failure so the index falls back to the catalog's baseline mindshare. */
+async function fetchMindshareMap(): Promise<Map<string, MindshareEntry>> {
+  try {
+    const res = await fetch("/api/mindshare");
+    if (!res.ok) return new Map();
+    const json = (await res.json()) as {
+      tokens?: { handle: string; mindshare: number; delta24h: number; rank: number }[];
+    };
+    const map = new Map<string, MindshareEntry>();
+    for (const t of json.tokens ?? []) {
+      map.set(t.handle.toLowerCase(), { mindshare: t.mindshare, delta24h: t.delta24h, rank: t.rank });
+    }
+    return map;
+  } catch {
+    return new Map();
+  }
+}
+
+function buildIndex(
+  curves: CurveState[],
+  decimals: number,
+  mindshareMap: Map<string, MindshareEntry>,
+): IndexState {
   const mintToHandle = new Map<string, string>();
   for (const handle of allTokenHandles()) {
     const mint = handleToMint(handle);
@@ -110,6 +139,17 @@ function buildIndex(curves: CurveState[], decimals: number): IndexState {
     });
   }
 
+  // Overlay live attention: the mindshare service is the source of truth for
+  // mindshare / 24h delta (a token's price is on-chain, its attention is not).
+  // For preview (non-live) tokens, re-derive the tier from live mindshare too.
+  for (const t of tokens) {
+    const entry = mindshareMap.get(t.handle.toLowerCase());
+    if (!entry) continue;
+    t.mindshare = entry.mindshare;
+    t.delta24h = entry.delta24h;
+    if (!t.live) t.tier = tierFromMindshare(entry.mindshare);
+  }
+
   tokens.sort((a, b) => b.marketCap - a.marketCap);
   for (let i = 0; i < tokens.length; i++) tokens[i]!.rank = i + 1;
 
@@ -126,9 +166,15 @@ export function fetchTokenIndex(force = false): Promise<IndexState> {
   inflight = (async () => {
     const program = getReadonlyProgram();
     globalOnce ??= fetchGlobal(program);
-    const [curves, global] = await Promise.all([fetchAllCurves(program), globalOnce]);
-    if (curves.length > 0) {
-      cache = buildIndex(curves, global?.tokenDecimals ?? 6);
+    const [curves, global, mindshareMap] = await Promise.all([
+      fetchAllCurves(program),
+      globalOnce,
+      fetchMindshareMap(),
+    ]);
+    // Rebuild when either source has data — live attention should upgrade the
+    // feed even before any token is launched on-chain.
+    if (curves.length > 0 || mindshareMap.size > 0) {
+      cache = buildIndex(curves, global?.tokenDecimals ?? 6, mindshareMap);
       for (const cb of listeners) cb(cache);
     }
     return cache;
