@@ -57,6 +57,17 @@ export function TokenDetailTerminal({ token: tokenProp }: { token: TokenDetail }
 
   const up = token.delta24h >= 0;
   const gradPct = Math.min(100, Math.round((token.raisedUsd / token.targetUsd) * 100));
+  // The trade panel implements the bonding curve's constant-product buy/sell.
+  // A live token on another mechanism reads fine but can't trade through this
+  // panel yet, so lock it with a clear label rather than firing the wrong ix.
+  const MECH_LABEL: Record<NonNullable<TokenDetail["mechanism"]>, string> = {
+    bonding: "Bonding curve · constant-product",
+    conviction: "Conviction curve · time-locked",
+    dutch: "Dutch auction · descending price",
+    revenue: "Revenue share · fixed price",
+  };
+  const tradeLocked = Boolean(token.mechanism && token.mechanism !== "bonding");
+  const mechLabel = token.mechanism ? MECH_LABEL[token.mechanism] : MECH_LABEL.bonding;
   const amt = parseFloat(amount) || 0;
   // Price estimate (SOL/token) from market cap (works for live + mock); the real
   // fill comes from the on-chain curve. Buy: SOL→tokens; Sell: tokens→SOL.
@@ -68,7 +79,7 @@ export function TokenDetailTerminal({ token: tokenProp }: { token: TokenDetail }
 
   async function submit() {
     if (!connected) return setWalletOpen(true);
-    if (amt <= 0) return;
+    if (amt <= 0 || tradeLocked) return;
 
     const mint = handleToMint(token.handle);
     setTx("pending");
@@ -418,16 +429,20 @@ export function TokenDetailTerminal({ token: tokenProp }: { token: TokenDetail }
 
             <button
               onClick={submit}
+              disabled={tradeLocked}
               className={cn(
                 "mt-4 w-full rounded-sm py-3 font-mono text-[13px] font-bold tracking-wide text-[#0A0A0A]",
                 side === "buy" ? "bg-signal" : "bg-noise",
+                tradeLocked && "cursor-not-allowed opacity-40",
               )}
             >
-              {connected ? `${side.toUpperCase()} $${token.symbol}` : "CONNECT TO TRADE"}
+              {tradeLocked
+                ? `${token.mechanism?.toUpperCase()} — TRADING SOON`
+                : connected
+                  ? `${side.toUpperCase()} $${token.symbol}`
+                  : "CONNECT TO TRADE"}
             </button>
-            <div className="mt-2 text-center font-mono text-[10px] text-[#4b5563]">
-              Bonding curve · constant-product
-            </div>
+            <div className="mt-2 text-center font-mono text-[10px] text-[#4b5563]">{mechLabel}</div>
 
             {tx && (
               <div className="mt-3">

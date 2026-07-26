@@ -95,6 +95,8 @@ export interface TokenDetail extends Token {
   liquidityUsd: number;
   virtualSol: number;
   creatorFeeBps: number;
+  /** Launch mechanism, set once the on-chain curve is read (live tokens only). */
+  mechanism?: "bonding" | "conviction" | "dutch" | "revenue";
   /** Candlestick heights (0-100) with direction, oldest → newest. */
   candles: { h: number; up: boolean }[];
 }

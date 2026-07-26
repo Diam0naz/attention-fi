@@ -54,6 +54,16 @@ export const globalPda = (): PublicKey =>
 export const curvePda = (mint: PublicKey): PublicKey =>
   PublicKey.findProgramAddressSync([enc.encode("curve"), mint.toBytes()], PROGRAM_ID)[0];
 
+/** Per-mechanism state PDAs (seeds mirror the program's constants). */
+export const convictionPda = (mint: PublicKey): PublicKey =>
+  PublicKey.findProgramAddressSync([enc.encode("conviction"), mint.toBytes()], PROGRAM_ID)[0];
+
+export const auctionPda = (mint: PublicKey): PublicKey =>
+  PublicKey.findProgramAddressSync([enc.encode("auction"), mint.toBytes()], PROGRAM_ID)[0];
+
+export const revenuePda = (mint: PublicKey): PublicKey =>
+  PublicKey.findProgramAddressSync([enc.encode("revenue"), mint.toBytes()], PROGRAM_ID)[0];
+
 /** Verification is keyed by the subject wallet, not the handle. */
 export const verificationPda = (subject: PublicKey): PublicKey =>
   PublicKey.findProgramAddressSync([enc.encode("verify"), subject.toBytes()], PROGRAM_ID)[0];

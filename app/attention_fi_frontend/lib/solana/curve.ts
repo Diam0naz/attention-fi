@@ -1,7 +1,7 @@
 import { PublicKey } from "@solana/web3.js";
 import type { Program } from "@anchor-lang/core";
 import type { AttentionFi } from "@/lib/idl/attention_fi";
-import { curvePda, globalPda } from "./program";
+import { auctionPda, convictionPda, curvePda, globalPda, revenuePda } from "./program";
 
 export const LAMPORTS_PER_SOL = 1_000_000_000;
 
@@ -97,6 +97,126 @@ export async function fetchAllCurves(program: Program<AttentionFi>): Promise<Cur
   } catch {
     return [];
   }
+}
+
+// --- any-mechanism reader ---------------------------------------------------
+// A token can be launched on any of four curves. They share a reserve model
+// (bonding + conviction) or price fields (dutch + revenue); this collapses all
+// four into one shape the token page can render regardless of mechanism.
+
+export type Mechanism = "bonding" | "conviction" | "dutch" | "revenue";
+
+export interface AnyCurve {
+  mechanism: Mechanism;
+  mint: string;
+  creator: string;
+  /** SOL per whole token. */
+  spotPriceSol: number;
+  /** Fully-diluted market cap in SOL. */
+  marketCapSol: number;
+  /** Real SOL raised into the curve/auction so far. */
+  realSolReservesSol: number;
+  tier: number;
+  complete: boolean;
+}
+
+interface HasReserves {
+  virtualSolReserves: { toString(): string };
+  virtualTokenReserves: { toString(): string };
+  realSolReserves: { toString(): string };
+  tokenTotalSupply: { toString(): string };
+  tier: number;
+  complete: boolean;
+}
+
+function reservePrice(raw: HasReserves, decimals: number): { spot: number; mcap: number } {
+  const vSol = Number(BigInt(raw.virtualSolReserves.toString())) / LAMPORTS_PER_SOL;
+  const vTok = Number(BigInt(raw.virtualTokenReserves.toString())) / 10 ** decimals;
+  const spot = vTok === 0 ? 0 : vSol / vTok;
+  const supply = Number(BigInt(raw.tokenTotalSupply.toString())) / 10 ** decimals;
+  return { spot, mcap: spot * supply };
+}
+
+/**
+ * Read a token's curve regardless of which mechanism launched it. Fetches all
+ * four candidate PDAs in parallel and returns the one that exists. Null when
+ * the mint isn't launched on any of them.
+ */
+export async function fetchAnyCurve(
+  program: Program<AttentionFi>,
+  mint: PublicKey,
+  decimals: number,
+): Promise<AnyCurve | null> {
+  const [bonding, conviction, dutch, revenue] = await Promise.all([
+    program.account.bondingCurve.fetchNullable(curvePda(mint)).catch(() => null),
+    program.account.convictionCurve.fetchNullable(convictionPda(mint)).catch(() => null),
+    program.account.dutchAuction.fetchNullable(auctionPda(mint)).catch(() => null),
+    program.account.revenueShare.fetchNullable(revenuePda(mint)).catch(() => null),
+  ]);
+
+  if (bonding) {
+    const { spot, mcap } = reservePrice(bonding as unknown as HasReserves, decimals);
+    return {
+      mechanism: "bonding",
+      mint: mint.toBase58(),
+      creator: bonding.creator.toBase58(),
+      spotPriceSol: spot,
+      marketCapSol: mcap,
+      realSolReservesSol: Number(BigInt(bonding.realSolReserves.toString())) / LAMPORTS_PER_SOL,
+      tier: bonding.tier,
+      complete: bonding.complete,
+    };
+  }
+  if (conviction) {
+    const { spot, mcap } = reservePrice(conviction as unknown as HasReserves, decimals);
+    return {
+      mechanism: "conviction",
+      mint: mint.toBase58(),
+      creator: conviction.creator.toBase58(),
+      spotPriceSol: spot,
+      marketCapSol: mcap,
+      realSolReservesSol: Number(BigInt(conviction.realSolReserves.toString())) / LAMPORTS_PER_SOL,
+      tier: conviction.tier,
+      complete: conviction.complete,
+    };
+  }
+  if (dutch) {
+    const now = BigInt(Math.floor(Date.now() / 1000));
+    const start = BigInt(dutch.startTime.toString());
+    const duration = BigInt(Math.max(1, Number(dutch.duration.toString())));
+    const elapsed = now > start ? now - start : 0n;
+    const startPrice = BigInt(dutch.startPrice.toString());
+    const floorPrice = BigInt(dutch.floorPrice.toString());
+    const priceLamports =
+      elapsed >= duration ? floorPrice : startPrice - ((startPrice - floorPrice) * elapsed) / duration;
+    const spot = Number(priceLamports) / LAMPORTS_PER_SOL;
+    const supply = Number(BigInt(dutch.totalForSale.toString())) / 10 ** decimals;
+    return {
+      mechanism: "dutch",
+      mint: mint.toBase58(),
+      creator: dutch.creator.toBase58(),
+      spotPriceSol: spot,
+      marketCapSol: spot * supply,
+      realSolReservesSol: Number(BigInt(dutch.realSolReserves.toString())) / LAMPORTS_PER_SOL,
+      tier: dutch.tier,
+      complete: dutch.complete,
+    };
+  }
+  if (revenue) {
+    const spot = Number(BigInt(revenue.sharePrice.toString())) / LAMPORTS_PER_SOL;
+    const supply = Number(BigInt(revenue.tokenTotalSupply.toString())) / 10 ** decimals;
+    return {
+      mechanism: "revenue",
+      mint: mint.toBase58(),
+      creator: revenue.creator.toBase58(),
+      spotPriceSol: spot,
+      marketCapSol: spot * supply,
+      realSolReservesSol: Number(BigInt(revenue.revenueReserves.toString())) / LAMPORTS_PER_SOL,
+      tier: revenue.tier,
+      complete: false,
+    };
+  }
+  return null;
 }
 
 /** Global config (fees, graduation threshold, decimals). Null if uninitialised. */
