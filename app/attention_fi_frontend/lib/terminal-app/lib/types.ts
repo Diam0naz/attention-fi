@@ -76,6 +76,12 @@ export interface MarketDataProvider {
     to: number,
   ): Promise<Candle[]>;
   subscribeTicks(symbol: string, cb: (t: Tick) => void): Unsubscribe;
+  /**
+   * Historical trades, newest-first, for seeding the tape on mount. Optional:
+   * providers without a trade index (mock, binance-via-websocket) omit it and
+   * the tape simply starts empty and fills from live ticks.
+   */
+  getRecentTrades?(symbol: string, limit?: number): Promise<Tick[]>;
   subscribeCandles(
     symbol: string,
     tf: Timeframe,

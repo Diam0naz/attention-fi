@@ -266,6 +266,14 @@
 }
 .af-scrollbar-x::-webkit-scrollbar-thumb:hover { background-color: rgba(0, 255, 133, 0.35); }
 
+/* Scrollable but chrome-free — for the mobile nav row, where a visible bar
+   would read as clutter on a 2-line header. */
+.af-no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.af-no-scrollbar::-webkit-scrollbar { display: none; }
+
 @media (prefers-reduced-motion: reduce) {
   .af-gradient-text, .af-shiny-text, .af-pulse-dot, .af-ticker-track,
   .af-orbit, .af-orbit-rev, .af-orbit-fast { animation: none; }

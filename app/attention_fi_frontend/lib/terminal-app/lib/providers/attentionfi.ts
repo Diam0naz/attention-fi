@@ -416,6 +416,47 @@ export class AttentionFiProvider implements MarketDataProvider {
     };
   }
 
+  /**
+   * Real trade history from the event indexer (/api/activity), newest-first.
+   * These are actual on-chain buys/sells decoded from program events — unlike
+   * the live ticks above, which are inferred from polled price movement. Price
+   * is derived per trade (SOL paid / tokens received) and `qty` stays in SOL so
+   * the tape's units match the live stream.
+   */
+  async getRecentTrades(symbol: string, limit = 100): Promise<Tick[]> {
+    const key = symbol.toLowerCase();
+    const mint = handleToMint(key);
+    if (!mint) return [];
+    try {
+      const res = await fetch(
+        `/api/activity?mint=${mint.toBase58()}&kinds=trade,swap&limit=${limit}`,
+      );
+      if (!res.ok) return [];
+      const body = (await res.json()) as {
+        events?: {
+          isBuy: boolean | null;
+          sol: number | null;
+          tokens: number | null;
+          blockTime: number | null;
+        }[];
+      };
+      const out: Tick[] = [];
+      for (const e of body.events ?? []) {
+        if (!e.sol || !e.tokens || e.tokens <= 0) continue;
+        out.push({
+          symbol: key,
+          price: e.sol / e.tokens,
+          qty: e.sol,
+          time: (e.blockTime ?? 0) * 1000,
+          isSellerMaker: e.isBuy === false,
+        });
+      }
+      return out;
+    } catch {
+      return []; // no index / offline — tape falls back to live ticks only
+    }
+  }
+
   private buildBook(symbol: string, curve: CurveState, depth: number): OrderBook {
     const x = Number(curve.virtualSolReserves); // lamports
     const y = Number(curve.virtualTokenReserves); // raw tokens

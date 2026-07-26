@@ -17,9 +17,10 @@ interface TapeRow extends Tick {
 }
 
 /**
- * Time & sales tape: ticks buffer into a ref and flush to state once per
- * animation frame; rows are virtualized. Block trades (>=8x rolling average
- * size) get highlighted.
+ * Time & sales tape: seeded with real on-chain trades from the event indexer,
+ * then live ticks buffer into a ref and flush to state once per animation
+ * frame; rows are virtualized. Block trades (>=8x rolling average size) get
+ * highlighted.
  */
 export function TimeAndSales() {
   const provider = useProvider();
@@ -34,6 +35,24 @@ export function TimeAndSales() {
     setRows([]);
     buffer.current = [];
     avgSize.current = 0;
+    let cancelled = false;
+
+    // Seed with real indexed trades so the tape has history on open instead of
+    // sitting empty until the next poll. Live ticks below prepend on top.
+    void provider.getRecentTrades?.(symbol, MAX_ROWS).then((trades) => {
+      if (cancelled || trades.length === 0) return;
+      const seeded = trades.map((t) => ({
+        ...t,
+        id: idCounter.current++,
+        block: false,
+      }));
+      const avg = seeded.reduce((sum, t) => sum + t.qty, 0) / seeded.length;
+      avgSize.current = avg;
+      for (const row of seeded) row.block = avg > 0 && row.qty >= avg * 8;
+      // Newest-first from the API; append below anything already streamed in.
+      setRows((prev) => [...prev, ...seeded].slice(0, MAX_ROWS));
+    });
+
     const unsub = provider.subscribeTicks(symbol, (t) => {
       avgSize.current = avgSize.current === 0 ? t.qty : avgSize.current * 0.98 + t.qty * 0.02;
       buffer.current.push({
@@ -54,6 +73,7 @@ export function TimeAndSales() {
       }
     });
     return () => {
+      cancelled = true;
       unsub();
       if (rafId.current) cancelAnimationFrame(rafId.current);
       rafId.current = 0;
