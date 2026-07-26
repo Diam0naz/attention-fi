@@ -15,6 +15,7 @@ import { useProgram } from "@/lib/solana/use-program";
 import { registerToken } from "@/lib/solana/registry";
 import { explorerTx } from "@/lib/solana/config";
 import { verificationPda } from "@/lib/solana/program";
+import { mindshareFeedEnabled, launchFromFeed } from "@/lib/solana/mindshare-feed";
 import { verifyMessage } from "@/lib/sas/config";
 
 type MechId = "bonding" | "dutch" | "conviction" | "revenue";
@@ -181,6 +182,9 @@ export function LaunchFlow() {
   const mindshare = 0.98; // mock: fetched from Kaito for the handle
   const t = tierFor(mindshare);
   const mechName = MECHANISMS.find((m) => m.id === mech)!.name;
+  // Bonding launches seed their tier from the on-chain Switchboard mindshare
+  // feed when one is configured — a decentralized oracle, not a keeper arg.
+  const feedActive = mech === "bonding" && mindshareFeedEnabled();
   // Symbol defaults to the token name (or handle) if the creator leaves it blank.
   const ticker = (symbol || name || handle).replace(/[^a-zA-Z0-9]/g, "").slice(0, 6).toUpperCase();
   const canContinue = step !== 0 || (handle.trim().length > 0 && name.trim().length > 0);
@@ -201,11 +205,15 @@ export function LaunchFlow() {
       const price = pricePerTokenLamports(t.tier);
       let sig: string;
       if (mech === "bonding") {
-        sig = await program.methods
-          .launchToken(tierArg)
-          .accounts({ creator, mint: mint.publicKey })
-          .signers([mint])
-          .rpc();
+        // When a Switchboard mindshare feed is configured, seed the tier from
+        // the on-chain oracle (decentralized) rather than the keeper tier arg.
+        sig = mindshareFeedEnabled()
+          ? await launchFromFeed(program, mint)
+          : await program.methods
+              .launchToken(tierArg)
+              .accounts({ creator, mint: mint.publicKey })
+              .signers([mint])
+              .rpc();
       } else if (mech === "dutch") {
         sig = await program.methods
           .startAuction(tierArg, new BN(price * 3), new BN(price), new BN(DEFAULT_AUCTION_DURATION_S))
@@ -537,6 +545,11 @@ export function LaunchFlow() {
               @{handle} sits at {mindshare}% mindshare → tier <span className="text-signal">{t.tier}</span>.
               The curve seeds at that price instead of zero.
             </p>
+            {feedActive && (
+              <p className="mt-2 inline-flex items-center gap-1.5 rounded-sm border border-signal/30 bg-signal/6 px-2 py-1 text-[10px] font-mono text-signal">
+                ◈ Tier read on-chain from the live 𝕏 mindshare oracle at launch
+              </p>
+            )}
             <dl className="mt-4 flex flex-col gap-2.5 font-mono text-[12px]">
               {[
                 ["Token", `${name || handle} ($${ticker})`],
