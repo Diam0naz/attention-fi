@@ -2178,7 +2178,9 @@ export type AttentionFi = {
         {
           "name": "feed",
           "docs": [
-            "staleness-validated in the handler."
+            "Switchboard program) is checked in the handler, then parsed +",
+            "staleness-validated \u2014 a single `owner =` constraint can't accept either",
+            "cluster's program id."
           ]
         },
         {
@@ -4455,6 +4457,70 @@ export type AttentionFi = {
       ]
     },
     {
+      "name": "updateMindshare",
+      "docs": [
+        "Refresh a token's on-chain mindshare snapshot from the Switchboard feed",
+        "(permissionless crank; the value is trusted from the oracle, not the caller)."
+      ],
+      "discriminator": [
+        104,
+        234,
+        116,
+        148,
+        49,
+        247,
+        14,
+        215
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "mint"
+        },
+        {
+          "name": "feed",
+          "docs": [
+            "in the handler via `read_mindshare_bps`."
+          ]
+        },
+        {
+          "name": "mindshare",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  105,
+                  110,
+                  100,
+                  115,
+                  104,
+                  97,
+                  114,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "verifyHandle",
       "docs": [
         "Verify an X handle\u2194wallet binding against a Solana Attestation Service",
@@ -4698,6 +4764,19 @@ export type AttentionFi = {
         169,
         247,
         237
+      ]
+    },
+    {
+      "name": "mindshareState",
+      "discriminator": [
+        195,
+        70,
+        26,
+        170,
+        103,
+        161,
+        120,
+        180
       ]
     },
     {
@@ -4961,6 +5040,11 @@ export type AttentionFi = {
       "code": 6022,
       "name": "notReadyToGraduate",
       "msg": "Curve has not reached the graduation threshold"
+    },
+    {
+      "code": 6023,
+      "name": "insufficientActivity",
+      "msg": "Not enough trading volume or deposits to reach the next perk level"
     }
   ],
   "types": [
@@ -5607,6 +5691,51 @@ export type AttentionFi = {
           {
             "name": "timestamp",
             "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "mindshareState",
+      "docs": [
+        "On-chain snapshot of a token's mindshare, sourced from the Switchboard feed.",
+        "Keyed by mint (works for any launch mechanism) and kept fresh by an",
+        "oracle-gated `update_mindshare` crank. Instructions that want to react to",
+        "attention (dynamic graduation, mindshare-weighted rewards) read this cheaply",
+        "instead of requiring a fresh oracle read in their own transaction. Separate",
+        "from the curve accounts so adding it never changes their layout."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "mindshareBps",
+            "docs": [
+              "Conversation share in basis points (e.g. 3.24% => 324)."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "tier",
+            "docs": [
+              "Tier derived from `mindshare_bps` at the last update."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "updatedSlot",
+            "docs": [
+              "Slot of the last oracle update (freshness for readers)."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
           }
         ]
       }

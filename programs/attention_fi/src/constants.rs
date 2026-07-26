@@ -11,6 +11,8 @@ pub const REVENUE_SEED: &[u8] = b"revenue";
 pub const REVSTAKE_SEED: &[u8] = b"revstake";
 pub const VERIFY_SEED: &[u8] = b"verify";
 pub const ISSUER_SEED: &[u8] = b"issuer";
+pub const MINDSHARE_SEED: &[u8] = b"mindshare";
+pub const TRADER_SEED: &[u8] = b"trader";
 pub const PERK_SEED: &[u8] = b"perk";
 pub const PERK_AUTH_SEED: &[u8] = b"perkauth";
 pub const GENESIS_SEED: &[u8] = b"genesis";
@@ -22,6 +24,15 @@ pub const NFTAUCTION_SEED: &[u8] = b"nftauction";
 pub const MAX_PERK_LEVEL: u8 = 5;
 /// Fee discount granted per perk level, in basis points (1% per level).
 pub const DISCOUNT_PER_LEVEL_BPS: u16 = 100;
+/// Cumulative activity score (TraderStats::activity_score, lamports) required
+/// to reach each level. Index 0 = level 1's requirement, etc.
+pub const PERK_LEVEL_ACTIVITY_LAMPORTS: [u64; MAX_PERK_LEVEL as usize] = [
+    1 * 1_000_000_000,   // level 1: 1 SOL
+    5 * 1_000_000_000,   // level 2: 5 SOL
+    20 * 1_000_000_000,  // level 3: 20 SOL
+    75 * 1_000_000_000,  // level 4: 75 SOL
+    250 * 1_000_000_000, // level 5: 250 SOL
+];
 
 // Exposed in the IDL for clients that derive PDAs from the seed string.
 #[constant]

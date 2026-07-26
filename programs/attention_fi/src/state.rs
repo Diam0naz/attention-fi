@@ -184,6 +184,72 @@ pub struct IssuerConfig {
     pub bump: u8,
 }
 
+/// On-chain snapshot of a token's mindshare, sourced from the Switchboard feed.
+/// Keyed by mint (works for any launch mechanism) and kept fresh by an
+/// oracle-gated `update_mindshare` crank. Instructions that want to react to
+/// attention (dynamic graduation, mindshare-weighted rewards) read this cheaply
+/// instead of requiring a fresh oracle read in their own transaction. Separate
+/// from the curve accounts so adding it never changes their layout.
+#[account]
+#[derive(InitSpace)]
+pub struct MindshareState {
+    pub mint: Pubkey,
+    /// Conversation share in basis points (e.g. 3.24% => 324).
+    pub mindshare_bps: u64,
+    /// Tier derived from `mindshare_bps` at the last update.
+    pub tier: u8,
+    /// Slot of the last oracle update (freshness for readers).
+    pub updated_slot: u64,
+    pub bump: u8,
+}
+
+/// Cumulative trading activity for one wallet, across every mechanism —
+/// what perk level-ups are gated on. One per wallet, created on a trader's
+/// first buy/sell/deposit and updated on every one after.
+#[account]
+#[derive(InitSpace)]
+pub struct TraderStats {
+    pub owner: Pubkey,
+    /// Cumulative SOL moved across buys and sells, all mechanisms (lamports).
+    pub volume_lamports: u64,
+    /// Cumulative SOL locked via conviction buys or revenue-share purchases —
+    /// counted separately from (and in addition to) volume_lamports since
+    /// committing capital is a stronger signal than a single trade.
+    pub deposits_lamports: u64,
+    pub bump: u8,
+}
+
+impl TraderStats {
+    /// Combined score perk levels are gated on: deposits count double since
+    /// locking capital is a stronger signal than a single trade.
+    pub fn activity_score(&self) -> Result<u64> {
+        let doubled = self
+            .deposits_lamports
+            .checked_mul(2)
+            .ok_or(crate::error::AttentionError::MathOverflow)?;
+        self.volume_lamports
+            .checked_add(doubled)
+            .ok_or_else(|| crate::error::AttentionError::MathOverflow.into())
+    }
+
+    /// Initializes owner/bump on first touch, then accrues volume/deposits.
+    pub fn accrue(&mut self, owner: Pubkey, bump: u8, volume: u64, deposit: u64) -> Result<()> {
+        if self.owner == Pubkey::default() {
+            self.owner = owner;
+            self.bump = bump;
+        }
+        self.volume_lamports = self
+            .volume_lamports
+            .checked_add(volume)
+            .ok_or(crate::error::AttentionError::MathOverflow)?;
+        self.deposits_lamports = self
+            .deposits_lamports
+            .checked_add(deposit)
+            .ok_or(crate::error::AttentionError::MathOverflow)?;
+        Ok(())
+    }
+}
+
 /// An upgradeable perk NFT record. The Metaplex Core asset's Attributes carry
 /// the level/discount for display; this PDA is the on-chain source of truth that
 /// trading instructions read to apply the holder's fee discount. One per asset.

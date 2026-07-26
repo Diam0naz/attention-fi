@@ -8,6 +8,7 @@ pub mod events;
 pub mod instructions;
 pub mod nft;
 pub mod oracle;
+pub mod oracle_feed;
 pub mod revenue;
 pub mod state;
 
@@ -37,6 +38,12 @@ pub mod attention_fi {
     /// (decentralized oracle) instead of a trusted keeper tier argument.
     pub fn launch_from_feed(ctx: Context<LaunchFromFeed>) -> Result<()> {
         launch_from_feed::launch_from_feed_handler(ctx)
+    }
+
+    /// Refresh a token's on-chain mindshare snapshot from the Switchboard feed
+    /// (permissionless crank; the value is trusted from the oracle, not the caller).
+    pub fn update_mindshare(ctx: Context<UpdateMindshare>) -> Result<()> {
+        update_mindshare::update_mindshare_handler(ctx)
     }
 
     /// Buy tokens along the curve with SOL (slippage-guarded).

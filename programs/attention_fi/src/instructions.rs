@@ -27,6 +27,7 @@ pub mod settle_auction;
 pub mod start_auction;
 pub mod start_nft_auction;
 pub mod swap;
+pub mod update_mindshare;
 pub mod verify_handle;
 
 // Glob re-export so the `#[derive(Accounts)]`-generated client/CPI helper modules
@@ -61,4 +62,5 @@ pub use settle_auction::*;
 pub use start_auction::*;
 pub use start_nft_auction::*;
 pub use swap::*;
+pub use update_mindshare::*;
 pub use verify_handle::*;

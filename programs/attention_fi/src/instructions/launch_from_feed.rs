@@ -1,14 +1,13 @@
+use crate::constants::{CURVE_SEED, GLOBAL_SEED};
+use crate::error::AttentionError;
+use crate::events::{LaunchEvent, MECH_BONDING};
+use crate::oracle::tier_from_mindshare_bps;
+use crate::oracle_feed::read_mindshare_bps;
+use crate::state::{BondingCurve, Global};
 use anchor_lang::prelude::*;
 use anchor_spl::associated_token::AssociatedToken;
 use anchor_spl::token::spl_token::instruction::AuthorityType;
 use anchor_spl::token::{self, Mint, MintTo, SetAuthority, Token, TokenAccount};
-use switchboard_on_demand::{PullFeedAccountData, ON_DEMAND_DEVNET_PID, ON_DEMAND_MAINNET_PID};
-
-use crate::constants::{CURVE_SEED, FEED_MAX_STALENESS, FEED_MIN_SAMPLES, GLOBAL_SEED};
-use crate::error::AttentionError;
-use crate::events::{LaunchEvent, MECH_BONDING};
-use crate::oracle::tier_from_mindshare_bps;
-use crate::state::{BondingCurve, Global};
 
 #[derive(Accounts)]
 pub struct LaunchFromFeed<'info> {
@@ -60,32 +59,10 @@ pub struct LaunchFromFeed<'info> {
 pub fn launch_from_feed_handler(ctx: Context<LaunchFromFeed>) -> Result<()> {
     let clock = Clock::get()?;
 
-    // Accept a feed owned by either the devnet or mainnet Switchboard program,
-    // so the same binary works on both clusters.
-    let feed_owner = ctx.accounts.feed.owner;
-    require!(
-        feed_owner == &ON_DEMAND_MAINNET_PID || feed_owner == &ON_DEMAND_DEVNET_PID,
-        AttentionError::InvalidFeed
-    );
-
-    // Read the current mindshare value from the oracle (fresh + enough samples).
-    let feed_info = ctx.accounts.feed.to_account_info();
-    let feed = PullFeedAccountData::parse(feed_info.data.borrow())
-        .map_err(|_| error!(AttentionError::InvalidFeed))?;
-    let value = feed
-        .get_value(clock.slot, FEED_MAX_STALENESS, FEED_MIN_SAMPLES, true)
-        .map_err(|_| error!(AttentionError::StaleFeed))?;
-
-    // Feed publishes mindshare as a percent (e.g. 3.24 => 3.24%). Convert to bps.
-    let mantissa = u128::try_from(value.mantissa().max(0)).unwrap_or(0);
-    let denom = 10u128
-        .checked_pow(value.scale())
-        .ok_or(AttentionError::MathOverflow)?;
-    let bps = mantissa
-        .checked_mul(100)
-        .and_then(|scaled| scaled.checked_div(denom))
-        .ok_or(AttentionError::MathOverflow)?;
-    let tier = tier_from_mindshare_bps(u64::try_from(bps).unwrap_or(u64::MAX));
+    // Read the current mindshare (bps) from the Switchboard feed and map it to a
+    // launch tier — a decentralized oracle seeds the price, not a keeper arg.
+    let bps = read_mindshare_bps(&ctx.accounts.feed.to_account_info(), clock.slot)?;
+    let tier = tier_from_mindshare_bps(bps);
 
     let global = &ctx.accounts.global;
     let total_supply = global.token_total_supply;
