@@ -1,0 +1,220 @@
+// The light indexer's chain half: walk the program's recent transactions,
+// decode its Anchor events from the log messages, and normalize them into the
+// flat rows lib/indexer-db.ts persists. Reads only — never signs. Kept
+// defensive about field casing and number types so a coder/IDL quirk degrades
+// to a skipped event rather than a failed crawl.
+
+import { EventParser, type Program } from "@anchor-lang/core";
+import type { ConfirmedSignatureInfo } from "@solana/web3.js";
+import type { AttentionFi } from "@/lib/idl/attention_fi";
+import type { ChainEventInsert } from "@/lib/indexer-db";
+
+export interface CrawlResult {
+  rows: ChainEventInsert[];
+  /** Newest signature seen this crawl — store as the cursor for the next one. */
+  newestSig: string | null;
+  scanned: number;
+}
+
+function b58(v: unknown): string | null {
+  if (v === null || v === undefined) return null;
+  if (typeof v === "string") return v;
+  if (typeof v === "object" && "toBase58" in v && typeof v.toBase58 === "function") {
+    return v.toBase58() as string;
+  }
+  return String(v);
+}
+
+function toBig(v: unknown): bigint | null {
+  if (v === null || v === undefined) return null;
+  if (typeof v === "bigint") return v;
+  if (typeof v === "number") return BigInt(Math.trunc(v));
+  if (typeof v === "object" && "toString" in v) {
+    try {
+      return BigInt(v.toString());
+    } catch {
+      return null;
+    }
+  }
+  try {
+    return BigInt(v as string | number);
+  } catch {
+    return null;
+  }
+}
+
+const flag = (v: unknown): boolean => v === true;
+
+/** Read a field by any of its casings (Anchor coders vary snake/camel). */
+function pick(d: Record<string, unknown>, ...keys: string[]): unknown {
+  for (const k of keys) {
+    if (k in d && d[k] !== undefined) return d[k];
+  }
+  return undefined;
+}
+
+interface Ctx {
+  signature: string;
+  seq: number;
+  slot: number | null;
+  blockTime: number | null;
+}
+
+/** Map one decoded event to a flat row, or null for events we don't index. */
+function normalize(name: string, data: Record<string, unknown>, ctx: Ctx): ChainEventInsert | null {
+  const base = {
+    signature: ctx.signature,
+    seq: ctx.seq,
+    slot: ctx.slot,
+    blockTime: ctx.blockTime,
+    mint: b58(pick(data, "mint")),
+  };
+  switch (name) {
+    case "TradeEvent":
+      return {
+        ...base,
+        kind: "trade",
+        actor: b58(pick(data, "user")),
+        isBuy: flag(pick(data, "isBuy", "is_buy")),
+        solLamports: toBig(pick(data, "solAmount", "sol_amount")),
+        tokenAmount: toBig(pick(data, "tokenAmount", "token_amount")),
+        feeLamports: toBig(pick(data, "fee")),
+      };
+    case "LaunchEvent":
+      return {
+        ...base,
+        kind: "launch",
+        actor: b58(pick(data, "creator")),
+        isBuy: null,
+        solLamports: toBig(pick(data, "virtualSolReserves", "virtual_sol_reserves")),
+        tokenAmount: null,
+        feeLamports: null,
+      };
+    case "GraduateEvent":
+      return {
+        ...base,
+        kind: "graduate",
+        actor: null,
+        isBuy: null,
+        solLamports: toBig(pick(data, "realSolReserves", "real_sol_reserves")),
+        tokenAmount: toBig(pick(data, "realTokenReserves", "real_token_reserves")),
+        feeLamports: null,
+      };
+    case "AmmSwapEvent": {
+      const isBuy = flag(pick(data, "isBuy", "is_buy"));
+      const amountIn = toBig(pick(data, "amountIn", "amount_in"));
+      const amountOut = toBig(pick(data, "amountOut", "amount_out"));
+      return {
+        ...base,
+        kind: "swap",
+        actor: b58(pick(data, "trader")),
+        isBuy,
+        // SOL is in on a buy, out on a sell; tokens are the mirror.
+        solLamports: isBuy ? amountIn : amountOut,
+        tokenAmount: isBuy ? amountOut : amountIn,
+        feeLamports: null,
+      };
+    }
+    case "CreatorClaimEvent":
+      return {
+        ...base,
+        kind: "claim",
+        actor: b58(pick(data, "creator")),
+        isBuy: null,
+        solLamports: toBig(pick(data, "amount")),
+        tokenAmount: null,
+        feeLamports: null,
+      };
+    case "PoolCreatedEvent":
+      return {
+        ...base,
+        kind: "pool",
+        actor: null,
+        isBuy: null,
+        solLamports: toBig(pick(data, "solReserves", "sol_reserves")),
+        tokenAmount: toBig(pick(data, "tokenReserves", "token_reserves")),
+        feeLamports: null,
+      };
+    default:
+      return null;
+  }
+}
+
+export interface CrawlOptions {
+  /** Stop once this signature is reached (the last-indexed cursor). */
+  until?: string;
+  /** Max signature pages to walk (pageSize each). Bounds RPC + latency. */
+  maxPages?: number;
+  pageSize?: number;
+}
+
+/**
+ * Crawl the program's transactions newer than `until`, decoding every event
+ * into flat rows. Signatures come back newest-first, so `newestSig` is the
+ * first one seen — persist it as the next cursor.
+ */
+export async function crawlProgramEvents(
+  program: Program<AttentionFi>,
+  opts: CrawlOptions = {},
+): Promise<CrawlResult> {
+  const { until, maxPages = 2, pageSize = 25 } = opts;
+  const { connection } = program.provider;
+  const programId = program.programId;
+  const parser = new EventParser(programId, program.coder);
+
+  const sigInfos: ConfirmedSignatureInfo[] = [];
+  let before: string | undefined;
+  for (let page = 0; page < maxPages; page++) {
+    const batch = await connection.getSignaturesForAddress(
+      programId,
+      { until, before, limit: pageSize },
+      "confirmed",
+    );
+    if (batch.length === 0) break;
+    sigInfos.push(...batch);
+    before = batch[batch.length - 1]!.signature;
+    if (batch.length < pageSize) break;
+  }
+
+  const newestSig = sigInfos[0]?.signature ?? null;
+  const rows: ChainEventInsert[] = [];
+
+  for (const info of sigInfos) {
+    if (info.err) continue;
+    let logs: string[] | null | undefined;
+    let slot = info.slot;
+    let blockTime = info.blockTime ?? null;
+    try {
+      const tx = await connection.getTransaction(info.signature, {
+        commitment: "confirmed",
+        maxSupportedTransactionVersion: 0,
+      });
+      logs = tx?.meta?.logMessages;
+      slot = tx?.slot ?? slot;
+      blockTime = tx?.blockTime ?? blockTime;
+    } catch {
+      continue; // one flaky getTransaction shouldn't abort the whole crawl
+    }
+    if (!logs) continue;
+
+    let seq = 0;
+    try {
+      for (const ev of parser.parseLogs(logs)) {
+        const row = normalize(ev.name, ev.data as Record<string, unknown>, {
+          signature: info.signature,
+          seq,
+          slot: slot ?? null,
+          blockTime,
+        });
+        if (row) {
+          rows.push(row);
+          seq++;
+        }
+      }
+    } catch {
+      // Undecodable logs for this tx — skip it, keep indexing the rest.
+    }
+  }
+
+  return { rows, newestSig, scanned: sigInfos.length };
+}
