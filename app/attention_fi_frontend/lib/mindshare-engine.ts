@@ -1,9 +1,15 @@
 // Part 1/2 of the mindshare pipeline: turn a handle into an attention score.
-// Real source is Kaito (behind KAITO_API_KEY); until that's configured, a
-// deterministic engine produces stable-but-drifting values so the whole
-// pipeline — frontend feeds, Neon history, the Switchboard oracle, and the
-// on-chain seed — runs end-to-end today. Swapping in Kaito changes only this
-// file; nothing downstream cares where the number came from.
+//
+// The live source is now the organic X aggregator (`lib/x-mindshare.ts`), which
+// measures share-of-conversation directly from public X signals. The route
+// computes that universe map and passes each handle's value in as an override;
+// this module is the fallback that keeps the whole pipeline — frontend feeds,
+// Neon history, the Switchboard oracle, the on-chain seed — running end-to-end
+// when the aggregator is unconfigured or a sweep fails.
+//
+// Kaito is PAUSED (cost): `fetchKaitoMindshare` is retained but no longer called
+// on the default path. Set KAITO_API_KEY + KAITO_API_URL and call it explicitly
+// to re-enable. Nothing downstream cares where the number came from.
 
 import { MOCK_TOKENS } from "@/lib/mock-data";
 
@@ -79,12 +85,21 @@ export async function fetchKaitoMindshare(handle: string): Promise<number | null
 
 export interface MindshareValue {
   mindshare: number;
-  source: "kaito" | "engine";
+  source: "x" | "kaito" | "engine";
 }
 
-/** Current mindshare for a handle: Kaito when configured, else the engine. */
-export async function currentMindshare(handle: string): Promise<MindshareValue> {
-  const kaito = await fetchKaitoMindshare(handle);
-  if (kaito !== null) return { mindshare: kaito, source: "kaito" };
+/**
+ * Current mindshare for a handle. When the caller has already resolved a value
+ * from the organic X aggregator (the universe has to be normalized as a whole),
+ * it passes it in as `override` and we trust it; otherwise we fall back to the
+ * deterministic engine. Kept sync-simple: no network call on the default path.
+ */
+export function currentMindshare(
+  handle: string,
+  override: number | null = null,
+): MindshareValue {
+  if (override !== null && Number.isFinite(override)) {
+    return { mindshare: override, source: "x" };
+  }
   return { mindshare: engineMindshare(handle), source: "engine" };
 }

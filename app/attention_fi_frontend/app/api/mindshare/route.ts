@@ -6,6 +6,7 @@ import {
   engineMindshare,
   norm,
 } from "@/lib/mindshare-engine";
+import { computeUniverseMindshare } from "@/lib/x-mindshare";
 import {
   getHistory,
   getLatestAll,
@@ -79,12 +80,21 @@ async function deltaAndSpark(
   return { delta24h, sparkline };
 }
 
-/** Rank of `value` within the universe, by engine ordering (stable + cheap). */
-function rankOf(handle: string, value: number, all: { handle: string }[]): number {
+/**
+ * Rank of `value` within the universe. Orders by the same source the value came
+ * from: the organic X map when present (so a handle's number and its rank agree),
+ * else the engine.
+ */
+function rankOf(
+  handle: string,
+  value: number,
+  all: { handle: string }[],
+  valueOf: (h: string) => number,
+): number {
   let above = 0;
   for (const u of all) {
     if (u.handle === handle) continue;
-    if (engineMindshare(u.handle) > value) above++;
+    if (valueOf(u.handle) > value) above++;
   }
   return above + 1;
 }
@@ -112,12 +122,17 @@ export async function GET(req: NextRequest) {
   const handleParam = req.nextUrl.searchParams.get("handle");
   const all = await universe();
 
+  // Organic X aggregator: one normalized share map for the whole tracked
+  // universe (null when unconfigured / a sweep failed → engine fills the gap).
+  const xMap = await computeUniverseMindshare(all.map((u) => u.handle));
+  const valueOf = (h: string): number => xMap?.get(h) ?? engineMindshare(h);
+
   // Single handle → rich record. Top-level `mindshare` is what the Switchboard
   // job parses ($.mindshare), so this same endpoint feeds both UI and oracle.
   if (handleParam) {
     const handle = norm(handleParam);
-    const { mindshare, source } = await currentMindshare(handle);
-    const rank = rankOf(handle, mindshare, all);
+    const { mindshare, source } = currentMindshare(handle, xMap?.get(handle) ?? null);
+    const rank = rankOf(handle, mindshare, all, valueOf);
     const vertical = curatedVertical(handle);
     const { delta24h, sparkline } = await deltaAndSpark(handle, mindshare);
     const ageSec = mindshareDbConfigured() ? await newestAgeForHandle(handle).catch(() => null) : null;
@@ -135,12 +150,10 @@ export async function GET(req: NextRequest) {
       // no ages → treat all as writable this pass
     }
   }
-  const rows = await Promise.all(
-    all.map(async ({ handle, vertical }) => {
-      const { mindshare, source } = await currentMindshare(handle);
-      return { handle, mindshare, source, vertical };
-    }),
-  );
+  const rows = all.map(({ handle, vertical }) => {
+    const { mindshare, source } = currentMindshare(handle, xMap?.get(handle) ?? null);
+    return { handle, mindshare, source, vertical };
+  });
   rows.sort((a, b) => b.mindshare - a.mindshare);
   const tokens = rows.map((r, i) => {
     const past = engineMindshare(r.handle, Date.now() - 24 * HOUR * 1000);
