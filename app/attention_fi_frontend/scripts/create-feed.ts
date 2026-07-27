@@ -133,11 +133,17 @@ async function main(): Promise<void> {
     jobs,
   });
 
+  // Feed init runs right up against the default compute allowance (the
+  // Switchboard program alone burns ~90k CU creating the account and storing
+  // the job), so give it explicit headroom rather than relying on the estimate.
+  // The priority fee keeps it moving on a congested devnet.
   const tx = await asV0Tx({
     connection,
     ixs: [ix],
     payer: wallet.publicKey,
     signers: [walletKp, feedKp],
+    computeUnitLimitMultiple: Number(process.env.FEED_CU_MULTIPLE) || 3,
+    computeUnitPrice: Number(process.env.FEED_CU_PRICE) || 50_000,
   });
 
   console.log(`Creating mindshare feed for @${handle} on ${rpc} ...`);
@@ -154,5 +160,12 @@ async function main(): Promise<void> {
 
 main().catch((e: unknown) => {
   console.error(e instanceof Error ? e.message : e);
+  // web3.js truncates program logs in the message; print them in full since
+  // they're what actually identifies the failing instruction.
+  const logs = (e as { logs?: string[] })?.logs;
+  if (Array.isArray(logs)) {
+    console.error("\nProgram logs:");
+    for (const l of logs) console.error(`  ${l}`);
+  }
   process.exit(1);
 });
