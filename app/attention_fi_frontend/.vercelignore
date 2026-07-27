@@ -1,0 +1,21 @@
+# Deploying from this directory uploads it directly (no git), so be explicit
+# about what must never leave the machine.
+
+# Secrets — set these in the Vercel project's Environment Variables instead.
+.env
+.env.*
+!.env.example
+
+# Local build + dependency artifacts; Vercel installs and builds its own.
+.next
+node_modules
+
+# One-off operator scripts. They run locally against a wallet or an API key and
+# are not part of the deployed app.
+scripts
+
+# Design handoff reference material, not app code.
+components/Attention-fi Repository (1)
+
+.git
+.DS_Store
