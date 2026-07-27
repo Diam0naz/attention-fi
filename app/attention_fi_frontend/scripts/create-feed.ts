@@ -19,8 +19,15 @@
  * plan to launch, or a single default feed) so the launch flow can seed price
  * from live mindshare instead of a keeper-supplied tier.
  *
- * MINDSHARE_API_BASE must be publicly reachable by Switchboard's oracle gateway
- * — localhost won't resolve. Deploy the app (or expose it via a tunnel) first.
+ * MINDSHARE_API_BASE must be resolvable by Switchboard's oracle gateway —
+ * localhost won't work. It does NOT have to be a public launch: an unlisted
+ * Vercel preview URL is enough, and the deployment can stay behind Vercel
+ * Deployment Protection if you pass the bypass token as a request header:
+ *
+ *   MINDSHARE_API_HEADERS='{"x-vercel-protection-bypass":"<token>"}'
+ *
+ * Headers are baked into the feed's job definition, so anyone who can read the
+ * job can read them — use a scoped bypass token, never a real credential.
  */
 import { homedir } from "node:os";
 import { Connection } from "@solana/web3.js";
@@ -65,10 +72,51 @@ async function main(): Promise<void> {
   const program = await AnchorUtils.loadProgramFromConnection(connection, wallet);
   const queue = await Queue.loadDefault(program);
 
+  // Optional request headers, e.g. a Vercel protection-bypass token so the
+  // deployment can stay unlisted/protected while the oracle still reaches it.
+  let headers: { key: string; value: string }[] = [];
+  const rawHeaders = process.env.MINDSHARE_API_HEADERS;
+  if (rawHeaders) {
+    try {
+      headers = Object.entries(JSON.parse(rawHeaders) as Record<string, string>).map(
+        ([key, value]) => ({ key, value: String(value) }),
+      );
+    } catch {
+      console.error("error: MINDSHARE_API_HEADERS must be a JSON object of header->value");
+      process.exit(1);
+    }
+  }
+
+  const url = `${apiBase}/api/mindshare?handle=${encodeURIComponent(handle)}`;
+
+  // Fail fast if the oracle won't be able to read this endpoint — far cheaper
+  // to catch here than to debug a feed that silently never resolves.
+  // Generous: a cold sweep can take a few seconds, and a false negative here
+  // would send you debugging a deployment that was actually fine.
+  const probe = await fetch(url, {
+    headers: Object.fromEntries(headers.map((h) => [h.key, h.value])),
+    signal: AbortSignal.timeout(30_000),
+  }).catch(() => null);
+  if (!probe || !probe.ok) {
+    console.error(
+      `error: ${url} returned ${probe ? probe.status : "no response"}.\n` +
+        "The Switchboard oracles fetch this URL themselves, so it must be reachable\n" +
+        "from the public internet. If the deployment is protected, pass a bypass\n" +
+        "token via MINDSHARE_API_HEADERS.",
+    );
+    process.exit(1);
+  }
+  const probed = (await probe.json().catch(() => ({}))) as { mindshare?: unknown };
+  if (typeof probed.mindshare !== "number") {
+    console.error("error: response has no numeric top-level `mindshare` field to parse");
+    process.exit(1);
+  }
+  console.log(`Endpoint OK — @${handle} currently reads ${probed.mindshare}`);
+
   const jobs = [
     OracleJob.fromObject({
       tasks: [
-        { httpTask: { url: `${apiBase}/api/mindshare?handle=${encodeURIComponent(handle)}` } },
+        { httpTask: headers.length > 0 ? { url, headers } : { url } },
         { jsonParseTask: { path: "$.mindshare" } },
       ],
     }),

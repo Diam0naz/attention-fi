@@ -12,7 +12,13 @@ import { WalletProvider } from "@/components/wallet/wallet-provider";
 export const metadata: Metadata = {
   title: "AttentionFi — Pump.fun for X",
   description:
-    "Mindshare is the asset. Trade the attention of the X social graph on bonding curves seeded by real Kaito data.",
+    "Mindshare is the asset. Trade the attention of the social graph on bonding curves seeded by a live mindshare oracle.",
+  // Belt-and-braces with app/robots.ts: a pre-launch deployment has to be
+  // publicly reachable for the oracle, but shouldn't be indexed or previewed.
+  robots:
+    process.env.NEXT_PUBLIC_ALLOW_INDEXING === "true"
+      ? { index: true, follow: true }
+      : { index: false, follow: false, nocache: true },
 };
 
 export default function RootLayout({
