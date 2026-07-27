@@ -6,11 +6,17 @@
 // posts — which is why nothing downstream (the /api/mindshare shape, the
 // Switchboard job, the on-chain instructions) needs to know which one ran.
 //
+// Volume per handle = mentions of it + its own casts, mirroring the X path's
+// `(@handle OR from:handle)`. Mentions come from cast search; own casts need an
+// FID, resolved on-protocol via lib/farcaster-identity.ts (a handle with no
+// Farcaster account just contributes mentions).
+//
 // Enabled by NEYNAR_API_KEY. Neynar's cast search returns paginated results
 // with NO total count, so volume is counted from the returned casts inside a
 // rolling window rather than read from a `total` field — see countCasts.
 // Results are cached in-process for FARCASTER_MINDSHARE_TTL_S (default 600s).
 
+import { countCastsByFid, resolveFids } from "@/lib/farcaster-identity";
 import { norm } from "@/lib/mindshare-engine";
 
 const SEARCH_URL = "https://api.neynar.com/v2/farcaster/cast/search";
@@ -140,7 +146,22 @@ export async function computeUniverseMindshare(
     return cache.map;
   }
 
-  const counts = await mapLimit(universe, SWEEP_CONCURRENCY, (h) => countCasts(h, apiKey));
+  // Resolve handles to FIDs so a handle's own casts can be counted alongside
+  // mentions of it — the same `(@handle OR from:handle)` shape the X path uses.
+  // Unresolvable handles fall back to mentions only.
+  const fids = await resolveFids(universe, apiKey).catch(
+    () => new Map<string, number | null>(),
+  );
+  const sinceMs = Date.now() - WINDOW_DAYS * 86_400_000;
+
+  const counts = await mapLimit(universe, SWEEP_CONCURRENCY, async (h) => {
+    const mentions = await countCasts(h, apiKey);
+    const fid = fids.get(h) ?? null;
+    if (fid === null) return mentions;
+    const own = await countCastsByFid(fid, sinceMs, apiKey);
+    if (mentions === null) return own;
+    return mentions + (own ?? 0);
+  });
   const failed = counts.filter((c) => c === null).length;
   // Mostly failures (rate limit / outage) → don't publish a skewed map.
   if (failed > universe.length / 2) return null;

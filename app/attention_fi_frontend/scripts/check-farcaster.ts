@@ -75,13 +75,30 @@ async function countFor(handle: string): Promise<number | null> {
   }
 }
 
+/** Resolve a handle to an FID via the snapchain username proof. */
+async function fidFor(handle: string): Promise<number | null> {
+  try {
+    const res = await fetch(
+      `https://snapchain-api.neynar.com/v1/userNameProofByName?name=${encodeURIComponent(handle)}`,
+      { headers: { "x-api-key": KEY, Accept: "application/json" }, signal: AbortSignal.timeout(15_000) },
+    );
+    if (!res.ok) return null;
+    const body = (await res.json()) as { fid?: number };
+    return typeof body.fid === "number" && body.fid > 0 ? body.fid : null;
+  } catch {
+    return null;
+  }
+}
+
 async function main(): Promise<void> {
   console.log(`Neynar cast search — casts in the last ${WINDOW_DAYS}d (first page, max 100)\n`);
   const counts: { handle: string; n: number }[] = [];
   for (const h of handles) {
     const n = await countFor(h);
     if (n !== null) {
-      console.log(`  ${h.padEnd(16)} ${String(n).padStart(4)} casts`);
+      const fid = await fidFor(h);
+      const id = fid === null ? "no Farcaster account" : `fid ${fid}`;
+      console.log(`  ${h.padEnd(16)} ${String(n).padStart(4)} casts   (${id})`);
       counts.push({ handle: h, n });
     }
   }
