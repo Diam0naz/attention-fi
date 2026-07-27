@@ -84,6 +84,43 @@ export const MOCK_TOKENS: Token[] = [
   { rank: 12, handle: "synth_wave", name: "Synth Wave", vertical: "Music", mindshare: 0.27, marketCap: 9_400, delta24h: 7, tier: "New", verified: false, spark: [0.21, 0.22, 0.23, 0.24, 0.25, 0.26, 0.27, 0.27] },
 ];
 
+/**
+ * Real accounts, curated to cover every vertical. Unlike the illustrative
+ * handles above, these exist on Farcaster (every FID below was verified via
+ * snapchain's username proof), so their mindshare is MEASURED from live cast
+ * volume rather than simulated.
+ *
+ * The seeded `mindshare`/`spark` values here are only a fallback for when no
+ * aggregator is configured — once NEYNAR_API_KEY is set, /api/mindshare
+ * overwrites them with real shares. They're seeded from an actual measurement
+ * so the fallback still looks sane.
+ */
+export const LIVE_TOKENS: Token[] = [
+  { rank: 13, handle: "base", name: "Base", vertical: "DeFi", mindshare: 42.5, marketCap: 210_000, delta24h: 12, tier: "Top 10", verified: false, spark: [31, 34, 36, 38, 40, 41, 42, 42.5] },
+  { rank: 14, handle: "degen", name: "Degen", vertical: "Gaming", mindshare: 16.5, marketCap: 88_000, delta24h: -6, tier: "Top 10", verified: false, spark: [19, 18.4, 18, 17.5, 17.1, 16.8, 16.6, 16.5] },
+  { rank: 15, handle: "farcaster", name: "Farcaster", vertical: "Narrative", mindshare: 13.4, marketCap: 74_000, delta24h: 8, tier: "Top 10", verified: false, spark: [11.8, 12.1, 12.4, 12.7, 13, 13.2, 13.3, 13.4] },
+  { rank: 16, handle: "clanker", name: "Clanker", vertical: "AI/Tech", mindshare: 11.6, marketCap: 63_000, delta24h: 24, tier: "Top 10", verified: false, spark: [8.2, 8.9, 9.5, 10.1, 10.7, 11.1, 11.4, 11.6] },
+  { rank: 17, handle: "higher", name: "Higher", vertical: "Narrative", mindshare: 7.2, marketCap: 41_000, delta24h: 4, tier: "Top 10", verified: false, spark: [6.6, 6.7, 6.8, 6.9, 7, 7.1, 7.15, 7.2] },
+  { rank: 18, handle: "ethereum", name: "Ethereum", vertical: "ZK/Infra", mindshare: 3.6, marketCap: 29_000, delta24h: -2, tier: "Top 10", verified: false, spark: [3.9, 3.85, 3.8, 3.74, 3.7, 3.66, 3.62, 3.6] },
+  { rank: 19, handle: "sound", name: "Sound", vertical: "Music", mindshare: 2.7, marketCap: 19_500, delta24h: 9, tier: "Top 100", verified: false, spark: [2.3, 2.36, 2.44, 2.5, 2.56, 2.62, 2.67, 2.7] },
+  { rank: 20, handle: "solana", name: "Solana", vertical: "DeFi", mindshare: 1.05, marketCap: 12_800, delta24h: -14, tier: "Top 100", verified: false, spark: [1.4, 1.32, 1.25, 1.19, 1.14, 1.1, 1.07, 1.05] },
+  { rank: 21, handle: "jessepollak", name: "Jesse Pollak", vertical: "DeFi", mindshare: 0.64, marketCap: 8_900, delta24h: 3, tier: "Emerging", verified: false, spark: [0.58, 0.59, 0.6, 0.61, 0.62, 0.63, 0.635, 0.64] },
+  { rank: 22, handle: "zora", name: "Zora", vertical: "Music", mindshare: 0.51, marketCap: 7_400, delta24h: 6, tier: "Emerging", verified: false, spark: [0.44, 0.45, 0.46, 0.47, 0.48, 0.49, 0.5, 0.51] },
+  { rank: 23, handle: "balajis", name: "Balaji", vertical: "Narrative", mindshare: 0.14, marketCap: 3_100, delta24h: -9, tier: "New", verified: false, spark: [0.19, 0.18, 0.17, 0.16, 0.155, 0.15, 0.145, 0.14] },
+  { rank: 24, handle: "vitalik", name: "Vitalik", vertical: "ZK/Infra", mindshare: 0.11, marketCap: 2_600, delta24h: 2, tier: "New", verified: false, spark: [0.1, 0.102, 0.104, 0.106, 0.108, 0.109, 0.11, 0.11] },
+];
+
+/**
+ * Handles whose mindshare is measured from a real social source. The
+ * aggregators normalize ONLY across this set — mixing measured handles with
+ * illustrative ones in a single normalization would flatten every demo token
+ * to the 0.01% floor and collapse its tier.
+ */
+export const LIVE_HANDLES: ReadonlySet<string> = new Set(LIVE_TOKENS.map((t) => t.handle));
+
+/** Everything the feed shows: illustrative catalog + real measured accounts. */
+export const ALL_TOKENS: Token[] = [...MOCK_TOKENS, ...LIVE_TOKENS];
+
 /** Detail view for a single token (the trading terminal). Mock for Phase 0. */
 export interface TokenDetail extends Token {
   symbol: string;

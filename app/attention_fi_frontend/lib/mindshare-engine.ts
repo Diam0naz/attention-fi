@@ -12,7 +12,7 @@
 // on the default path. Set KAITO_API_KEY + KAITO_API_URL and call it explicitly
 // to re-enable. Nothing downstream cares where the number came from.
 
-import { MOCK_TOKENS } from "@/lib/mock-data";
+import { ALL_TOKENS } from "@/lib/mock-data";
 
 export const norm = (handle: string) => handle.replace(/^@/, "").toLowerCase();
 
@@ -25,7 +25,7 @@ function hashStr(s: string): number {
 // Curated handles keep the strategy-brief baselines (e.g. solana_kol ≈ 3.24%)
 // and their vertical; everything else derives a plausible base from its hash.
 const CURATED = new Map(
-  MOCK_TOKENS.map((t) => [norm(t.handle), { mindshare: t.mindshare, vertical: t.vertical }]),
+  ALL_TOKENS.map((t) => [norm(t.handle), { mindshare: t.mindshare, vertical: t.vertical }]),
 );
 
 export function curatedVertical(handle: string): string {

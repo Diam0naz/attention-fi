@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { MOCK_TOKENS } from "@/lib/mock-data";
+import { ALL_TOKENS, LIVE_HANDLES } from "@/lib/mock-data";
 import {
   currentMindshare,
   curatedVertical,
@@ -26,7 +26,7 @@ const HOUR = 3600;
 /** Every handle the app knows: curated catalog + tokens launched on-chain. */
 async function universe(): Promise<{ handle: string; vertical: string }[]> {
   const map = new Map<string, { handle: string; vertical: string }>();
-  for (const t of MOCK_TOKENS) {
+  for (const t of ALL_TOKENS) {
     const h = norm(t.handle);
     if (!map.has(h)) map.set(h, { handle: h, vertical: t.vertical });
   }
@@ -122,10 +122,13 @@ export async function GET(req: NextRequest) {
   const handleParam = req.nextUrl.searchParams.get("handle");
   const all = await universe();
 
-  // One normalized share map for the whole tracked universe, from whichever
-  // aggregator is configured (null when none is / a sweep failed → engine).
+  // Sweep ONLY the handles backed by real accounts. Mindshare is a share of a
+  // normalized set, so folding illustrative handles (which measure zero) into
+  // the same normalization would push every one of them to the 0.01% floor and
+  // collapse its tier. Measured handles are normalized among themselves;
+  // everything else keeps its engine value below.
   const { map: liveMap, source: liveSource } = await resolveUniverseMindshare(
-    all.map((u) => u.handle),
+    all.map((u) => u.handle).filter((h) => LIVE_HANDLES.has(h)),
   );
   const valueOf = (h: string): number => liveMap?.get(h) ?? engineMindshare(h);
 

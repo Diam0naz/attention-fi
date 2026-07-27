@@ -5,14 +5,14 @@ import { fetchAllCurves, fetchGlobal, marketCapSol, spotPriceSol, type CurveStat
 import { getReadonlyProgram } from "@/lib/solana/program";
 import { allTokenHandles, handleToMint, launchedMeta } from "@/lib/solana/registry";
 import { solUsd } from "@/lib/solana/sol-usd";
-import { MOCK_TOKENS, tierFromMindshare, type Tier, type Token } from "@/lib/mock-data";
+import { ALL_TOKENS, tierFromMindshare, type Tier, type Token } from "@/lib/mock-data";
 
 /**
  * The single read path for token listings. Merges live on-chain bonding
  * curves (one getProgramAccounts snapshot) over the curated mock catalog:
  * a handle with a launched curve gets its real market cap, tier and spot
  * price; everything else stays a "hypothetical" preview entry. Components
- * that render token lists should consume this — not MOCK_TOKENS — so the
+ * that render token lists should consume this — not ALL_TOKENS — so the
  * feed upgrades itself token-by-token as launches happen.
  */
 
@@ -39,7 +39,7 @@ interface IndexState {
 /** synchronous fallback so first paint never blanks */
 function mockIndex(): IndexState {
   return {
-    tokens: MOCK_TOKENS.map((t) => ({ ...t, live: false })),
+    tokens: ALL_TOKENS.map((t) => ({ ...t, live: false })),
     liveCount: 0,
     loadedAt: 0,
   };
@@ -98,7 +98,7 @@ function buildIndex(
   const seen = new Set<string>();
   const tokens: IndexedToken[] = [];
 
-  for (const base of MOCK_TOKENS) {
+  for (const base of ALL_TOKENS) {
     const handle = base.handle.toLowerCase();
     seen.add(handle);
     const curve = liveByHandle.get(handle);
