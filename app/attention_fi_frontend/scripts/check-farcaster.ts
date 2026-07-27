@@ -41,7 +41,14 @@ interface CastSearchResponse {
   message?: string;
 }
 
-async function countFor(handle: string): Promise<number | null> {
+interface Measured {
+  raw: number;
+  projected: number;
+  saturated: boolean;
+  spanHours: number;
+}
+
+async function countFor(handle: string): Promise<Measured | null> {
   const url = new URL(SEARCH_URL);
   url.searchParams.set("q", handle);
   url.searchParams.set("limit", "100");
@@ -61,14 +68,32 @@ async function countFor(handle: string): Promise<number | null> {
       );
       return null;
     }
-    const cutoff = Date.now() - WINDOW_DAYS * 86_400_000;
+    const now = Date.now();
+    const windowMs = WINDOW_DAYS * 86_400_000;
+    const cutoff = now - windowMs;
     const casts = body.result?.casts ?? [];
     let n = 0;
+    let oldest = now;
+    let crossed = false;
     for (const c of casts) {
       const t = c.timestamp ? Date.parse(c.timestamp) : Number.NaN;
-      if (Number.isNaN(t) || t >= cutoff) n++;
+      if (Number.isNaN(t)) {
+        n++;
+        continue;
+      }
+      if (t < cutoff) {
+        crossed = true;
+        break;
+      }
+      n++;
+      if (t < oldest) oldest = t;
     }
-    return n;
+    // Saturated (a full page, still inside the window) → the raw count is a
+    // floor. Project the observed rate over the window, as the aggregator does.
+    const saturated = !crossed && casts.length >= 100;
+    const spanMs = Math.max(now - oldest, 60_000);
+    const projected = saturated && spanMs < windowMs ? Math.round((n / spanMs) * windowMs) : n;
+    return { raw: n, projected, saturated, spanHours: spanMs / 3_600_000 };
   } catch (e) {
     console.log(`  ${handle.padEnd(16)} ERROR — ${e instanceof Error ? e.message : String(e)}`);
     return null;
@@ -94,12 +119,15 @@ async function main(): Promise<void> {
   console.log(`Neynar cast search — casts in the last ${WINDOW_DAYS}d (first page, max 100)\n`);
   const counts: { handle: string; n: number }[] = [];
   for (const h of handles) {
-    const n = await countFor(h);
-    if (n !== null) {
+    const m = await countFor(h);
+    if (m !== null) {
       const fid = await fidFor(h);
       const id = fid === null ? "no Farcaster account" : `fid ${fid}`;
-      console.log(`  ${h.padEnd(16)} ${String(n).padStart(4)} casts   (${id})`);
-      counts.push({ handle: h, n });
+      const sat = m.saturated
+        ? `  SATURATED: ${m.raw} in ${m.spanHours.toFixed(1)}h -> ~${m.projected}/${WINDOW_DAYS}d`
+        : "";
+      console.log(`  ${h.padEnd(16)} ${String(m.raw).padStart(4)} casts   (${id})${sat}`);
+      counts.push({ handle: h, n: m.projected });
     }
   }
   if (counts.length === 0) {
@@ -113,9 +141,10 @@ async function main(): Promise<void> {
     console.log(`  ${c.handle.padEnd(16)} ${pct.toFixed(2)}%`);
   }
   console.log(
-    "\nNote: counts saturate at 100/page (the aggregator pages twice, so 200).\n" +
-      "That cap applies to every handle equally, so relative shares stay meaningful.\n" +
-      "To enable: set NEYNAR_API_KEY, and MINDSHARE_SOURCE=farcaster to pin the source.",
+    "\nA full page inside the window means the raw count is a FLOOR, not a\n" +
+      "measurement — two saturated handles would otherwise tie artificially.\n" +
+      "Shares above use the rate-projected volume instead (rate = casts/span).\n" +
+      "To enable: set NEYNAR_API_KEY, and MINDSHARE_SOURCE=farcaster to pin it.",
   );
 }
 

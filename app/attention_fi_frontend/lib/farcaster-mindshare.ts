@@ -21,7 +21,11 @@ import { norm } from "@/lib/mindshare-engine";
 
 const SEARCH_URL = "https://api.neynar.com/v2/farcaster/cast/search";
 const PAGE_SIZE = 100; // Neynar max
-const MAX_PAGES = 2; // caps cost/latency: at most 200 casts counted per handle
+const MAX_PAGES = 4; // hard cap on cost/latency per handle
+// A rate projected from a very short slice is unstable — a single burst would
+// dominate. For saturated handles keep paging until the sample spans at least
+// this long, then stop: low-volume handles still finish in one page.
+const MIN_SPAN_MS = 6 * 3_600_000;
 const WINDOW_DAYS = 7; // matches X's "recent" window, so the two are comparable
 const SWEEP_CONCURRENCY = 2;
 const REQUEST_TIMEOUT_MS = 8000;
@@ -53,10 +57,14 @@ interface CastSearchResponse {
  * *relative* measure and the cap applies equally to every handle.
  */
 async function countCasts(handle: string, apiKey: string): Promise<number | null> {
-  const cutoff = Date.now() - WINDOW_DAYS * 86_400_000;
+  const now = Date.now();
+  const windowMs = WINDOW_DAYS * 86_400_000;
+  const cutoff = now - windowMs;
   let count = 0;
   let cursor: string | null = null;
   let sawAny = false;
+  let oldestMs = now;
+  let exhaustedPages = true; // false once we stop for a reason other than the cap
 
   for (let page = 0; page < MAX_PAGES; page++) {
     const url = new URL(SEARCH_URL);
@@ -78,7 +86,10 @@ async function countCasts(handle: string, apiKey: string): Promise<number | null
     }
 
     const casts = body.result?.casts ?? [];
-    if (casts.length === 0) break;
+    if (casts.length === 0) {
+      exhaustedPages = false;
+      break;
+    }
     sawAny = true;
 
     let crossedWindow = false;
@@ -95,11 +106,35 @@ async function countCasts(handle: string, apiKey: string): Promise<number | null
         break;
       }
       count++;
+      if (t < oldestMs) oldestMs = t;
     }
-    if (crossedWindow) break;
+    if (crossedWindow) {
+      exhaustedPages = false;
+      break;
+    }
+
+    // Sample already spans long enough for a stable rate — stop early rather
+    // than spending more requests on a handle we can already project.
+    if (now - oldestMs >= MIN_SPAN_MS) break;
 
     cursor = body.result?.next?.cursor ?? null;
-    if (!cursor) break;
+    if (!cursor) {
+      exhaustedPages = false;
+      break;
+    }
+  }
+
+  // Saturation: we ran out of pages before reaching the window edge, so `count`
+  // is a floor, not a measurement. Two handles that both saturate would be
+  // forced into an artificial tie — which matters, because these shares feed
+  // the on-chain launch tier. Project the observed rate across the full window
+  // instead: the casts we did see span a known slice of time, so
+  // rate = count / span, volume ~= rate * window. Costs no extra requests.
+  if (exhaustedPages && count > 0) {
+    const spanMs = Math.max(now - oldestMs, 60_000); // floor guards a burst
+    if (spanMs < windowMs) {
+      return Math.round((count / spanMs) * windowMs);
+    }
   }
   return count;
 }
