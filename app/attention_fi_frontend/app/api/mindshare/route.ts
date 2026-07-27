@@ -6,7 +6,7 @@ import {
   engineMindshare,
   norm,
 } from "@/lib/mindshare-engine";
-import { computeUniverseMindshare } from "@/lib/x-mindshare";
+import { resolveUniverseMindshare } from "@/lib/mindshare-sources";
 import {
   getHistory,
   getLatestAll,
@@ -122,16 +122,22 @@ export async function GET(req: NextRequest) {
   const handleParam = req.nextUrl.searchParams.get("handle");
   const all = await universe();
 
-  // Organic X aggregator: one normalized share map for the whole tracked
-  // universe (null when unconfigured / a sweep failed → engine fills the gap).
-  const xMap = await computeUniverseMindshare(all.map((u) => u.handle));
-  const valueOf = (h: string): number => xMap?.get(h) ?? engineMindshare(h);
+  // One normalized share map for the whole tracked universe, from whichever
+  // aggregator is configured (null when none is / a sweep failed → engine).
+  const { map: liveMap, source: liveSource } = await resolveUniverseMindshare(
+    all.map((u) => u.handle),
+  );
+  const valueOf = (h: string): number => liveMap?.get(h) ?? engineMindshare(h);
 
   // Single handle → rich record. Top-level `mindshare` is what the Switchboard
   // job parses ($.mindshare), so this same endpoint feeds both UI and oracle.
   if (handleParam) {
     const handle = norm(handleParam);
-    const { mindshare, source } = currentMindshare(handle, xMap?.get(handle) ?? null);
+    const { mindshare, source } = currentMindshare(
+      handle,
+      liveMap?.get(handle) ?? null,
+      liveSource,
+    );
     const rank = rankOf(handle, mindshare, all, valueOf);
     const vertical = curatedVertical(handle);
     const { delta24h, sparkline } = await deltaAndSpark(handle, mindshare);
@@ -151,7 +157,11 @@ export async function GET(req: NextRequest) {
     }
   }
   const rows = all.map(({ handle, vertical }) => {
-    const { mindshare, source } = currentMindshare(handle, xMap?.get(handle) ?? null);
+    const { mindshare, source } = currentMindshare(
+      handle,
+      liveMap?.get(handle) ?? null,
+      liveSource,
+    );
     return { handle, mindshare, source, vertical };
   });
   rows.sort((a, b) => b.mindshare - a.mindshare);

@@ -132,3 +132,7 @@ main().catch((e: unknown) => {
   console.error(e instanceof Error ? e.message : e);
   process.exit(1);
 });
+
+// Keep this file a module so its top-level names don't collide with the other
+// standalone scripts in this directory.
+export {};

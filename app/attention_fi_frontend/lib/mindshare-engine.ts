@@ -1,11 +1,12 @@
 // Part 1/2 of the mindshare pipeline: turn a handle into an attention score.
 //
-// The live source is now the organic X aggregator (`lib/x-mindshare.ts`), which
-// measures share-of-conversation directly from public X signals. The route
-// computes that universe map and passes each handle's value in as an override;
-// this module is the fallback that keeps the whole pipeline — frontend feeds,
-// Neon history, the Switchboard oracle, the on-chain seed — running end-to-end
-// when the aggregator is unconfigured or a sweep fails.
+// Live sources measure share-of-conversation from a real substrate: Farcaster
+// (`lib/farcaster-mindshare.ts`) or X (`lib/x-mindshare.ts`), selected by
+// `lib/mindshare-sources.ts`. The route resolves that universe map upfront and
+// passes each handle's value in as an override; this module is the fallback
+// that keeps the whole pipeline — frontend feeds, Neon history, the Switchboard
+// oracle, the on-chain seed — running end-to-end when no source is configured
+// or a sweep fails.
 //
 // Kaito is PAUSED (cost): `fetchKaitoMindshare` is retained but no longer called
 // on the default path. Set KAITO_API_KEY + KAITO_API_URL and call it explicitly
@@ -83,23 +84,27 @@ export async function fetchKaitoMindshare(handle: string): Promise<number | null
   }
 }
 
+export type MindshareSource = "x" | "farcaster" | "kaito" | "engine";
+
 export interface MindshareValue {
   mindshare: number;
-  source: "x" | "kaito" | "engine";
+  source: MindshareSource;
 }
 
 /**
- * Current mindshare for a handle. When the caller has already resolved a value
- * from the organic X aggregator (the universe has to be normalized as a whole),
- * it passes it in as `override` and we trust it; otherwise we fall back to the
- * deterministic engine. Kept sync-simple: no network call on the default path.
+ * Current mindshare for a handle. A universe has to be normalized as a whole,
+ * so the caller resolves it upfront (see lib/mindshare-sources.ts) and passes
+ * this handle's slice in as `override` along with the source that produced it;
+ * without one we fall back to the deterministic engine. Kept sync-simple: no
+ * network call on the default path.
  */
 export function currentMindshare(
   handle: string,
   override: number | null = null,
+  source: MindshareSource = "engine",
 ): MindshareValue {
   if (override !== null && Number.isFinite(override)) {
-    return { mindshare: override, source: "x" };
+    return { mindshare: override, source };
   }
   return { mindshare: engineMindshare(handle), source: "engine" };
 }
