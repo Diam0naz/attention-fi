@@ -5,7 +5,8 @@ import Link from "next/link";
 import { BadgeCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { jitter, tokenImage, type Token } from "@/lib/mock-data";
-import { useTokenIndex } from "@/lib/token-index";
+import { useTokenIndex, type IndexedToken } from "@/lib/token-index";
+import { isMeasured } from "@/components/feed/mindshare-source";
 
 const byMindshare = (a: Token, b: Token) => b.mindshare - a.mindshare;
 
@@ -13,7 +14,7 @@ const byMindshare = (a: Token, b: Token) => b.mindshare - a.mindshare;
  *  by mindshare, with ticking numbers, pulse dots and a light sheen. */
 export function TrendingWall() {
   const { tokens: indexed } = useTokenIndex();
-  const [tokens, setTokens] = useState<Token[]>(() => [...indexed].sort(byMindshare).slice(0, 5));
+  const [tokens, setTokens] = useState<IndexedToken[]>(() => [...indexed].sort(byMindshare).slice(0, 5));
 
   // re-seed whenever the on-chain snapshot upgrades entries
   useEffect(() => {
@@ -24,7 +25,9 @@ export function TrendingWall() {
   // so SSR and first paint stay deterministic).
   useEffect(() => {
     const id = setInterval(() => {
-      setTokens((prev) => prev.map(jitter).sort(byMindshare));
+      setTokens((prev) =>
+        prev.map((t) => (isMeasured(t.mindshareSource) ? t : jitter(t))).sort(byMindshare),
+      );
     }, 2600);
     return () => clearInterval(id);
   }, []);

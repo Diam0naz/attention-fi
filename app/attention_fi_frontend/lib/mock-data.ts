@@ -448,7 +448,7 @@ export function getNftAuctions(): NftAuction[] {
 }
 
 /** Small deterministic-ish nudge for the "live" feel (client-side only). */
-export function jitter(token: Token): Token {
+export function jitter<T extends Token>(token: T): T {
   const drift = (Math.random() - 0.5) * 0.06;
   const mindshare = Math.max(0.01, +(token.mindshare + drift).toFixed(2));
   const delta24h = +(token.delta24h + (Math.random() - 0.5) * 1.5).toFixed(1);

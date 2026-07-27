@@ -6,6 +6,7 @@ import { getReadonlyProgram } from "@/lib/solana/program";
 import { allTokenHandles, handleToMint, launchedMeta } from "@/lib/solana/registry";
 import { solUsd } from "@/lib/solana/sol-usd";
 import { ALL_TOKENS, tierFromMindshare, type Tier, type Token } from "@/lib/mock-data";
+import type { MindshareSource } from "@/lib/mindshare-engine";
 
 /**
  * The single read path for token listings. Merges live on-chain bonding
@@ -23,6 +24,12 @@ export interface IndexedToken extends Token {
   spotSol?: number;
   /** mint address (live entries only) */
   mint?: string;
+  /**
+   * Where this entry's mindshare came from. "engine" means a simulated value
+   * for an illustrative handle; anything else was measured from a real social
+   * source. Surfaced in the UI so the two are never conflated.
+   */
+  mindshareSource?: MindshareSource;
 }
 
 /** on-chain MindshareTier discriminants, in declaration order */
@@ -57,6 +64,7 @@ interface MindshareEntry {
   mindshare: number;
   delta24h: number;
   rank: number;
+  source: MindshareSource;
 }
 
 /** Live attention data from the mindshare service, keyed by handle. Empty on
@@ -66,11 +74,22 @@ async function fetchMindshareMap(): Promise<Map<string, MindshareEntry>> {
     const res = await fetch("/api/mindshare");
     if (!res.ok) return new Map();
     const json = (await res.json()) as {
-      tokens?: { handle: string; mindshare: number; delta24h: number; rank: number }[];
+      tokens?: {
+        handle: string;
+        mindshare: number;
+        delta24h: number;
+        rank: number;
+        source?: MindshareSource;
+      }[];
     };
     const map = new Map<string, MindshareEntry>();
     for (const t of json.tokens ?? []) {
-      map.set(t.handle.toLowerCase(), { mindshare: t.mindshare, delta24h: t.delta24h, rank: t.rank });
+      map.set(t.handle.toLowerCase(), {
+        mindshare: t.mindshare,
+        delta24h: t.delta24h,
+        rank: t.rank,
+        source: t.source ?? "engine",
+      });
     }
     return map;
   } catch {
@@ -147,6 +166,7 @@ function buildIndex(
     if (!entry) continue;
     t.mindshare = entry.mindshare;
     t.delta24h = entry.delta24h;
+    t.mindshareSource = entry.source;
     if (!t.live) t.tier = tierFromMindshare(entry.mindshare);
   }
 

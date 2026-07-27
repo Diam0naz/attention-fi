@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { MindshareDot, MindshareLegend, isMeasured } from "@/components/feed/mindshare-source";
 import Link from "next/link";
 import { BadgeCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -10,7 +11,7 @@ import {
   type Token,
   type Vertical,
 } from "@/lib/mock-data";
-import { useTokenIndex } from "@/lib/token-index";
+import { useTokenIndex, type IndexedToken } from "@/lib/token-index";
 import { Sparkline } from "./sparkline";
 import { Avatar } from "./avatar";
 
@@ -29,7 +30,7 @@ const TIER_STYLES: Record<Token["tier"], string> = {
 
 export function SignalBoard() {
   const { tokens: indexed } = useTokenIndex();
-  const [tokens, setTokens] = useState<Token[]>(indexed);
+  const [tokens, setTokens] = useState<IndexedToken[]>(indexed);
   const [vertical, setVertical] = useState<Vertical>("All");
 
   // re-seed whenever the on-chain snapshot upgrades entries
@@ -41,7 +42,9 @@ export function SignalBoard() {
   useEffect(() => {
     const id = setInterval(() => {
       setTokens((prev) => {
-        const next = prev.map(jitter).sort((a, b) => b.mindshare - a.mindshare);
+        const next = prev
+          .map((t) => (isMeasured(t.mindshareSource) ? t : jitter(t)))
+          .sort((a, b) => b.mindshare - a.mindshare);
         return next.map((t, i) => ({ ...t, rank: i + 1 }));
       });
     }, 2200);
@@ -128,7 +131,10 @@ export function SignalBoard() {
                 </span>
               </div>
 
-              <span className="text-right font-mono text-[12px]">{t.mindshare.toFixed(2)}%</span>
+              <span className="flex items-center justify-end gap-1.5 font-mono text-[12px]">
+                <MindshareDot source={t.mindshareSource} />
+                {t.mindshare.toFixed(2)}%
+              </span>
               <span className="hidden text-right font-mono text-[12px] text-[#6B6B6B] sm:block">
                 {usd(t.marketCap)}
               </span>
@@ -148,8 +154,9 @@ export function SignalBoard() {
           );
         })}
       </div>
-      <p className="mt-3 font-mono text-[10px] text-[#6B6B6B]">
-        Phase 0 — hypothetical prices from mock Kaito data. Not yet on-chain.
+      <p className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-[10px] text-[#6B6B6B]">
+        <span>Prices are hypothetical until a curve is launched on-chain.</span>
+        <MindshareLegend />
       </p>
     </section>
   );

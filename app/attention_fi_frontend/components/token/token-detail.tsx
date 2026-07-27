@@ -14,6 +14,8 @@ import { WalletConnectModal } from "@/components/wallet/wallet-connect-modal";
 import { PublicKey } from "@solana/web3.js";
 import { useWallet } from "@/components/wallet/wallet-provider";
 import { useLiveTokenDetail } from "@/components/token/use-live-token";
+import { MindshareSourceBadge } from "@/components/feed/mindshare-source";
+import { useTokenIndex } from "@/lib/token-index";
 import { useProgram } from "@/lib/solana/use-program";
 import { useSolBalance } from "@/lib/solana/use-sol-balance";
 import { useSolUsd } from "@/lib/solana/sol-usd";
@@ -53,6 +55,15 @@ export function TokenDetailTerminal({ token: tokenProp }: { token: TokenDetail }
   const [tab, setTab] = useState<Tab>("chart");
   // 1a "Trading Terminal" (data-dense) vs 1b "Mindshare-First" (social proof).
   const [view, setView] = useState<"terminal" | "mindshare">("terminal");
+
+  // Take mindshare from the shared index rather than the static catalog, so the
+  // number and its measured/simulated label always describe the same thing.
+  const { tokens: indexed } = useTokenIndex();
+  const indexEntry = useMemo(
+    () => indexed.find((t) => t.handle.toLowerCase() === token.handle.toLowerCase()),
+    [indexed, token.handle],
+  );
+  const mindshareValue = indexEntry?.mindshare ?? token.mindshare;
 
   const trades = useMemo(() => getTrades(token.handle), [token.handle]);
   const holders = useMemo(() => getHolders(token.handle), [token.handle]);
@@ -197,8 +208,9 @@ export function TokenDetailTerminal({ token: tokenProp }: { token: TokenDetail }
               </div>
             </div>
             <div className="ml-auto text-right">
-              <div className="font-mono text-[24px] font-bold sm:text-[26px]">{token.mindshare.toFixed(2)}%</div>
+              <div className="font-mono text-[24px] font-bold sm:text-[26px]">{mindshareValue.toFixed(2)}%</div>
               <div className="font-mono text-[10px] text-[#6B6B6B]">MINDSHARE · RANK #{token.rank}</div>
+              <MindshareSourceBadge source={indexEntry?.mindshareSource} className="mt-1" />
             </div>
           </div>
 
