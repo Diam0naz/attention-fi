@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, Check, Gift, Gavel, Image as ImageIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -9,11 +9,10 @@ import { WalletConnectModal } from "@/components/wallet/wallet-connect-modal";
 import { TxStatus, type TxState } from "@/components/wallet/tx-status";
 import { PageBackground } from "@/components/reactbits/page-background";
 import { NftCardFace, type NftCardData } from "@/components/nft/nft-card";
-import { getNftState } from "@/lib/mock-data";
 import { Keypair, PublicKey } from "@solana/web3.js";
 import { BN } from "@anchor-lang/core";
 import { useProgram, useReadonlyProgram } from "@/lib/solana/use-program";
-import { fetchCollections, type CollectionData } from "@/lib/solana/nft-data";
+import { fetchCollections, fetchListableNfts, type CollectionData, type OwnedAsset } from "@/lib/solana/nft-data";
 import { handleToMint, myCreatedTokens } from "@/lib/solana/registry";
 import { solUsd } from "@/lib/solana/sol-usd";
 import { explorerTx } from "@/lib/solana/config";
@@ -147,21 +146,23 @@ export function NftCreateFlow() {
     }
   }
 
-  const nft = useMemo(() => (address ? getNftState(address) : null), [address]);
-  const ownedAssets = useMemo(() => {
-    const out: { id: string; label: string }[] = [];
-    if (nft?.perk)
-      out.push({
-        id: `PERK-${nft.perk.level}`,
-        label: `Perk NFT · Lvl ${nft.perk.level}`,
-      });
-    for (const g of nft?.genesis ?? [])
-      out.push({
-        id: g.id,
-        label: `Genesis ${g.id} · ${(g.shareBps / 100).toFixed(1)}%`,
-      });
-    return out;
-  }, [nft]);
+  // Collectibles the wallet actually holds. This used to list mock perk and
+  // genesis entries, and picking one minted a *new* asset named after it while
+  // the real one stayed put — so nothing the user selected was ever listed.
+  const [ownedAssets, setOwnedAssets] = useState<OwnedAsset[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const list = address
+        ? await fetchListableNfts(readProgram, new PublicKey(address)).catch(() => [])
+        : [];
+      if (!cancelled) setOwnedAssets(list);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [address, readProgram]);
+  const pickedAsset = ownedAssets.find((a) => a.asset === assetId) ?? null;
 
   const kindMeta = KINDS.find((k) => k.id === kind)!;
 
@@ -176,16 +177,10 @@ export function NftCreateFlow() {
           id: "GEN-0001",
           ...(genesisImage.trim() ? { image: genesisImage.trim() } : {}),
         }
-      : assetId.startsWith("PERK")
-      ? {
-          kind: "perk",
-          level: nft?.perk?.level ?? 1,
-          discountBps: nft?.perk?.discountBps ?? 100,
-        }
       : {
-          kind: "genesis",
-          shareBps: nft?.genesis.find((g) => g.id === assetId)?.shareBps ?? 100,
-          id: assetId || "GEN-0001",
+          kind: "custom",
+          name: pickedAsset?.name ?? "Select an asset",
+          ...(pickedAsset?.uri ? { image: pickedAsset.uri } : {}),
         };
   // Standalone NFTs can optionally list into the same Dutch-auction escrow
   // the "1-of-1 auction" kind uses — same start_nft_auction call, since it
@@ -242,17 +237,22 @@ export function NftCreateFlow() {
           .signers([asset])
           .rpc();
       } else {
+        // list_nft_auction escrows an asset that already exists, rather than
+        // start_nft_auction's mint-a-new-one — which is what "list an asset you
+        // own" has to mean.
+        if (!pickedAsset) throw new Error("Select an asset to list.");
         const toLamports = (usd: string) => new BN(Math.round(((+usd || 0) / solUsd()) * 1e9));
         sig = await program.methods
-          .startNftAuction(
+          .listNftAuction(
             toLamports(startUsd),
             toLamports(floorUsd),
             new BN(DURATION_SEC[duration] ?? 86_400),
-            assetId || "AttentionFi 1-of-1",
-            "",
           )
-          .accounts({ creator: me, asset: asset.publicKey })
-          .signers([asset])
+          .accountsPartial({
+            creator: me,
+            asset: new PublicKey(pickedAsset.asset),
+            collection: pickedAsset.collection ? new PublicKey(pickedAsset.collection) : null,
+          })
           .rpc();
       }
       setTxSig(sig);
@@ -605,8 +605,8 @@ export function NftCreateFlow() {
                   className="w-full rounded-sm border border-white/10 bg-[#12181f] px-3 py-2.5 text-[13px] outline-none">
                   <option value="">Select an asset…</option>
                   {ownedAssets.map((a) => (
-                    <option key={a.id} value={a.id}>
-                      {a.label}
+                    <option key={a.asset} value={a.asset}>
+                      {a.name}
                     </option>
                   ))}
                 </select>
