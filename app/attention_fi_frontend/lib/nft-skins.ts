@@ -66,6 +66,17 @@ export const SKINS: Skin[] = [
   },
 ];
 
+/**
+ * What a skin change costs, in lamports.
+ *
+ * Restyling is a protocol service, not a free toggle: it's paid to the treasury
+ * like any other. Read from env so it can be tuned per-deployment without a
+ * redeploy; the server treats this as the minimum it will accept.
+ */
+export const SKIN_FEE_LAMPORTS = Math.round(
+  Number(process.env.NEXT_PUBLIC_SKIN_FEE_SOL ?? "0.01") * 1_000_000_000,
+);
+
 export const DEFAULT_SKIN_ID = "signal";
 
 export const DEFAULT_SKIN: Skin = SKINS[0]!;

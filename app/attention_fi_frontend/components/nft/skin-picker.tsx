@@ -1,36 +1,84 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { PublicKey, SystemProgram, Transaction } from "@solana/web3.js";
 import { cn } from "@/lib/utils";
 import { useWallet } from "@/components/wallet/wallet-provider";
-import { SKINS, DEFAULT_SKIN_ID, skinById } from "@/lib/nft-skins";
+import { useProgram } from "@/lib/solana/use-program";
+import { fetchGlobal } from "@/lib/solana/curve";
+import { SKINS, DEFAULT_SKIN_ID, SKIN_FEE_LAMPORTS, skinById } from "@/lib/nft-skins";
 
 /**
  * Restyle the caller's verification badge.
  *
- * Changing a skin is not a transaction: the asset's on-chain `uri` points at
- * /api/verification/<subject>, so the badge's artwork is resolved at read time.
- * The wallet still signs — but a message, not a transaction — which proves
- * ownership to the API without costing a fee or touching the update authority.
+ * Applying a skin is not an on-chain write to the NFT — the asset's uri points
+ * at /api/verification/<subject>, so the art is resolved at read time. What is
+ * on-chain is the fee: a transfer to the treasury, whose signature the API
+ * verifies before applying the change. Paying from the verified wallet is also
+ * what proves ownership, so no separate message signature is needed.
  */
+
+const FEE_SOL = SKIN_FEE_LAMPORTS / 1_000_000_000;
+
+/** Parse a response that may not be JSON (a proxy error page, an empty 500). */
+async function readJson(res: Response): Promise<{ ok?: boolean; error?: string; skin?: string | null }> {
+  const text = await res.text();
+  if (!text) return { error: `Request failed (${res.status})` };
+  try {
+    return JSON.parse(text) as { ok?: boolean; error?: string };
+  } catch {
+    return { error: `Unexpected response (${res.status})` };
+  }
+}
+
+/**
+ * A paid-for change that hasn't been applied yet, kept in localStorage.
+ *
+ * The fee is spent before the API records anything, so if that call fails the
+ * user is out of pocket with nothing to show. Persisting the signature means
+ * the change can be re-applied later — the server's redeem is atomic, so
+ * retrying the same signature is always safe.
+ */
+interface PendingSkin {
+  skin: string;
+  signature: string;
+}
+const pendingKey = (subject: string) => `af.skin.pending.${subject}`;
+
+function readPending(subject: string): PendingSkin | null {
+  try {
+    const raw = window.localStorage.getItem(pendingKey(subject));
+    return raw ? (JSON.parse(raw) as PendingSkin) : null;
+  } catch {
+    return null;
+  }
+}
+
 export function SkinPicker({ subject }: { subject: string }) {
   const { getSigner } = useWallet();
+  const program = useProgram();
   const [skin, setSkin] = useState<string>(DEFAULT_SKIN_ID);
   const [saving, setSaving] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
+  const [pending, setPending] = useState<PendingSkin | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     void (async () => {
       try {
         const res = await fetch(`/api/verification/skin?subject=${subject}`);
-        const json: { skin?: string | null } = await res.json();
+        const json = await readJson(res);
         if (!cancelled) setSkin(json.skin ?? DEFAULT_SKIN_ID);
       } catch {
         if (!cancelled) setSkin(DEFAULT_SKIN_ID);
       } finally {
-        if (!cancelled) setLoaded(true);
+        if (!cancelled) {
+          // Surface any fee already paid whose change never landed, so it can
+          // be re-applied rather than quietly lost.
+          setPending(readPending(subject));
+          setLoaded(true);
+        }
       }
     })();
     return () => {
@@ -38,34 +86,90 @@ export function SkinPicker({ subject }: { subject: string }) {
     };
   }, [subject]);
 
+  /** Submit an already-paid signature. Safe to call repeatedly. */
+  async function applyPaid(id: string, signature: string): Promise<void> {
+    const res = await fetch("/api/verification/skin", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ subject, skin: id, signature }),
+    });
+    const json = await readJson(res);
+    // 409 means this signature was already consumed — the change did land, so
+    // treat it as success rather than stranding the user in a retry loop.
+    if (res.status === 409) {
+      setSkin(id);
+      clearPending();
+      return;
+    }
+    if (!res.ok || !json.ok) throw new Error(json.error ?? "Could not save skin");
+    setSkin(id);
+    clearPending();
+  }
+
+  function clearPending() {
+    setPending(null);
+    try {
+      window.localStorage.removeItem(pendingKey(subject));
+    } catch {
+      // Private-mode storage failure isn't worth surfacing.
+    }
+  }
+
   async function choose(id: string) {
     if (id === skin || saving) return;
-    const signer = getSigner();
-    if (!signer?.signMessage) {
-      setErr("This wallet doesn't support message signing.");
+    if (!program) {
+      setErr("Connect a wallet to change your skin.");
+      return;
+    }
+    if (!getSigner()) {
+      setErr("Wallet unavailable.");
       return;
     }
     setSaving(id);
     setErr(null);
     try {
-      // Must match the server's skinMessage() exactly.
-      const message = `Set my AttentionFi verification skin to "${id}" for ${subject}.`;
-      const signed = await signer.signMessage(new TextEncoder().encode(message));
-      const bytes = signed instanceof Uint8Array ? signed : signed.signature;
-      const res = await fetch("/api/verification/skin", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          subject,
-          skin: id,
-          signature: Buffer.from(bytes).toString("base64"),
+      const global = await fetchGlobal(program);
+      if (!global?.treasury) throw new Error("Couldn't read the protocol treasury.");
+
+      // Pay first: the API only applies a skin against a confirmed transfer.
+      const tx = new Transaction().add(
+        SystemProgram.transfer({
+          fromPubkey: new PublicKey(subject),
+          toPubkey: new PublicKey(global.treasury),
+          lamports: SKIN_FEE_LAMPORTS,
         }),
+      );
+      const signature = await program.provider.sendAndConfirm!(tx, [], {
+        commitment: "confirmed",
       });
-      const json: { ok?: boolean; error?: string } = await res.json();
-      if (!res.ok || !json.ok) throw new Error(json.error ?? "Could not save skin");
-      setSkin(id);
+
+      // Recorded before the API call, not after: if that call fails the fee is
+      // already spent, and this is what makes it recoverable.
+      const record: PendingSkin = { skin: id, signature };
+      try {
+        window.localStorage.setItem(pendingKey(subject), JSON.stringify(record));
+      } catch {
+        // Storage unavailable — the retry banner just won't survive a reload.
+      }
+      setPending(record);
+
+      await applyPaid(id, signature);
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Could not save skin");
+    } finally {
+      setSaving(null);
+    }
+  }
+
+  /** Re-submit a payment whose skin never landed. */
+  async function retryPending() {
+    if (!pending || saving) return;
+    setSaving(pending.skin);
+    setErr(null);
+    try {
+      await applyPaid(pending.skin, pending.signature);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Still couldn't apply it — try again shortly.");
     } finally {
       setSaving(null);
     }
@@ -75,10 +179,14 @@ export function SkinPicker({ subject }: { subject: string }) {
 
   return (
     <div className="mt-5 border-t border-white/[0.08] pt-4">
-      <div className="text-[12px] font-bold">Badge skin</div>
+      <div className="flex items-baseline justify-between">
+        <div className="text-[12px] font-bold">Badge skin</div>
+        <div className="font-mono text-[10px] text-signal">{FEE_SOL} SOL per change</div>
+      </div>
       <p className="mt-1 text-[11px] leading-relaxed text-[#6B6B6B]">
         Changes the artwork only — the credential, its handle binding and what it gates are
-        untouched. No transaction and no fee; your wallet signs a message to prove it&apos;s yours.
+        untouched. The fee goes to the protocol treasury; the skin itself is applied off-chain,
+        so the NFT is never re-minted.
       </p>
 
       <div className="mt-3 flex flex-wrap gap-2">
@@ -109,14 +217,31 @@ export function SkinPicker({ subject }: { subject: string }) {
                   isActive ? "text-signal" : "text-[#6B6B6B]",
                 )}
               >
-                {saving === s.id ? "SAVING…" : s.name}
+                {saving === s.id ? "PAYING…" : s.name}
               </span>
             </button>
           );
         })}
       </div>
 
-      {err && <p className="mt-2 font-mono text-[10px] text-noise">{err}</p>}
+      {pending && pending.skin !== skin && (
+        <div className="mt-3 rounded-sm border border-signal/30 bg-signal/[0.06] p-3">
+          <div className="font-mono text-[10px] leading-relaxed text-[#F5F4F0]">
+            You already paid for <span className="text-signal">{skinById(pending.skin).name}</span>{" "}
+            but it didn&apos;t apply — usually the database was briefly asleep. Your{" "}
+            {FEE_SOL} SOL isn&apos;t lost; re-apply it for free.
+          </div>
+          <button
+            onClick={() => void retryPending()}
+            disabled={saving !== null}
+            className="mt-2 rounded-sm bg-signal px-3 py-1.5 font-mono text-[10px] font-bold text-[#0A0A0A] disabled:opacity-40"
+          >
+            {saving ? "APPLYING…" : "RE-APPLY (NO CHARGE)"}
+          </button>
+        </div>
+      )}
+
+      {err && <p className="mt-2 font-mono text-[10px] leading-relaxed text-noise">{err}</p>}
 
       <p className="mt-2 font-mono text-[10px] text-[#4b5563]">
         Current: {active.name} · wallets and explorers refresh within a minute.

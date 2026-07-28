@@ -28,6 +28,27 @@ function sql(strings: TemplateStringsArray, ...values: unknown[]) {
   return client(strings, ...values);
 }
 
+/**
+ * Retry a query through a cold start.
+ *
+ * Neon auto-suspends when idle, and the first request after that can fail
+ * outright ("fetch failed") rather than just being slow. Since a skin change
+ * is paid for before this runs, a suspended database must not be what makes it
+ * fail.
+ */
+async function withRetry<T>(run: () => Promise<T>, attempts = 3): Promise<T> {
+  let lastError: unknown;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await run();
+    } catch (e) {
+      lastError = e;
+      if (i < attempts - 1) await new Promise((r) => setTimeout(r, 400 * 2 ** i));
+    }
+  }
+  throw lastError;
+}
+
 let schemaReady: Promise<void> | null = null;
 function ensureSchema(): Promise<void> {
   schemaReady ??= (async () => {
@@ -36,6 +57,14 @@ function ensureSchema(): Promise<void> {
         subject text primary key,
         skin text not null,
         updated_at timestamptz not null default now()
+      )`;
+    // Signature as primary key is the replay guard: the same paid transaction
+    // can't be submitted twice to buy a second skin change.
+    await sql`
+      create table if not exists skin_payment (
+        signature text primary key,
+        subject text not null,
+        paid_at timestamptz not null default now()
       )`;
   })().catch((e) => {
     schemaReady = null; // allow retry on transient failure
@@ -72,4 +101,35 @@ export async function putSkin(subject: string, skin: string): Promise<void> {
     insert into verification_skin (subject, skin, updated_at)
     values (${subject}, ${skin}, now())
     on conflict (subject) do update set skin = ${skin}, updated_at = now()`;
+}
+
+/**
+ * Consume a payment signature and apply the skin, atomically.
+ *
+ * Deliberately one statement rather than two: splitting it leaves a window
+ * where the signature is spent but the skin never lands, which would take the
+ * user's fee and give nothing back. The CTE means either both happen or
+ * neither, so a failure is always safe to retry with the same signature.
+ *
+ * Returns false when the signature was already spent — one payment buys
+ * exactly one change.
+ */
+export async function redeemSkinPayment(
+  subject: string,
+  skin: string,
+  signature: string,
+): Promise<boolean> {
+  await withRetry(() => ensureSchema());
+  const rows = (await withRetry(() => sql`
+    with claim as (
+      insert into skin_payment (signature, subject, paid_at)
+      values (${signature}, ${subject}, now())
+      on conflict (signature) do nothing
+      returning signature
+    )
+    insert into verification_skin (subject, skin, updated_at)
+    select ${subject}, ${skin}, now() from claim
+    on conflict (subject) do update set skin = excluded.skin, updated_at = now()
+    returning subject`)) as { subject: string }[];
+  return rows.length > 0;
 }
