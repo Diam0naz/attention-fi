@@ -47,6 +47,10 @@ function decodeAsset(data: Buffer): { name: string; uri: string; collection: str
 export interface NftAuctionData {
   asset: string;
   creator: string;
+  /** Display name from the Core asset (falls back to a short address). */
+  name: string;
+  /** Artwork URI from the Core asset; undefined when the asset set none. */
+  uri?: string;
   startPrice: bigint;
   floorPrice: bigint;
   startTime: number;
@@ -69,23 +73,30 @@ export async function fetchNftAuctions(program: Program<AttentionFi>): Promise<N
   const assetInfos = await program.provider.connection.getMultipleAccountsInfo(
     all.map((a) => a.account.asset),
   );
-  const collectionByAsset = new Map<string, string | null>();
+  // Keep the whole decode: the asset carries the listing's name and artwork,
+  // and dropping them is why listed 1-of-1s rendered as blank default cards.
+  const decodedByAsset = new Map<string, ReturnType<typeof decodeAsset>>();
   all.forEach((a, i) => {
     const info = assetInfos[i];
-    const decoded = info ? decodeAsset(info.data) : null;
-    collectionByAsset.set(a.account.asset.toBase58(), decoded?.collection ?? null);
+    decodedByAsset.set(a.account.asset.toBase58(), info ? decodeAsset(info.data) : null);
   });
 
-  return all.map((a) => ({
-    asset: a.account.asset.toBase58(),
+  return all.map((a) => {
+    const key = a.account.asset.toBase58();
+    const decoded = decodedByAsset.get(key) ?? null;
+    return {
+    asset: key,
     creator: a.account.creator.toBase58(),
+    name: decoded?.name || short(key),
+    uri: decoded?.uri || undefined,
     startPrice: BigInt(a.account.startPrice.toString()),
     floorPrice: BigInt(a.account.floorPrice.toString()),
     startTime: Number(a.account.startTime.toString()),
     duration: Number(a.account.duration.toString()),
     complete: a.account.complete,
-    collection: collectionByAsset.get(a.account.asset.toBase58()) ?? null,
-  }));
+    collection: decoded?.collection ?? null,
+    };
+  });
 }
 
 /**

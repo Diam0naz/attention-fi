@@ -29,6 +29,18 @@ const LAMPORTS_PER_SOL = 1_000_000_000;
 const short = (a: string) => `${a.slice(0, 4)}…${a.slice(-4)}`;
 const sol = (lamports: bigint): string => (Number(lamports) / LAMPORTS_PER_SOL).toFixed(3);
 
+/** Compact time-remaining label for a descending auction. */
+function countdown(secondsLeft: number): string {
+  if (secondsLeft <= 0) return "ended";
+  const d = Math.floor(secondsLeft / 86_400);
+  const h = Math.floor((secondsLeft % 86_400) / 3600);
+  const m = Math.floor((secondsLeft % 3600) / 60);
+  const sec = Math.floor(secondsLeft % 60);
+  if (d > 0) return `${d}d ${h}h`;
+  if (h > 0) return `${h}h ${m}m`;
+  return m > 0 ? `${m}m ${sec}s` : `${sec}s`;
+}
+
 export type Section = "verification" | "perk" | "genesis" | "auctions";
 
 const MAX_LEVEL = 5;
@@ -65,6 +77,9 @@ export function NftManage({ section }: { section: Section }) {
   const [auctions, setAuctions] = useState<NftAuctionData[]>([]);
   const [auctionsStatus, setAuctionsStatus] = useState<"loading" | "ready" | "error">("loading");
   const [treasury, setTreasury] = useState<string | null>(null);
+  // Buying used to fire straight from the card. On a descending auction that
+  // spends real SOL with no chance to read the price first, so confirm.
+  const [confirmBuy, setConfirmBuy] = useState<NftAuctionData | null>(null);
   const [now, setNow] = useState(() => Date.now());
 
   // Real 1-of-1 auctions from the chain — only while this section is open.
@@ -162,7 +177,20 @@ export function NftManage({ section }: { section: Section }) {
             Connect Wallet
           </button>
         </div>
-        <WalletConnectModal open={walletOpen} onClose={() => setWalletOpen(false)} />
+        {confirmBuy && (
+        <BuyConfirm
+          auction={confirmBuy}
+          now={now}
+          onCancel={() => setConfirmBuy(null)}
+          onConfirm={() => {
+            const a = confirmBuy;
+            setConfirmBuy(null);
+            void buyNow(a);
+          }}
+        />
+      )}
+
+      <WalletConnectModal open={walletOpen} onClose={() => setWalletOpen(false)} />
       </Shell>
     );
   }
@@ -342,7 +370,7 @@ export function NftManage({ section }: { section: Section }) {
             ) : (
               <div className="mt-3 grid gap-3 sm:grid-cols-3">
                 {mine.map((a) => (
-                  <AuctionCard key={a.asset} auction={a} now={now} mine onBuy={buyNow} />
+                  <AuctionCard key={a.asset} auction={a} now={now} mine onBuy={setConfirmBuy} />
                 ))}
               </div>
             )}
@@ -350,12 +378,14 @@ export function NftManage({ section }: { section: Section }) {
             <h2 className="mt-8 text-[13px] font-bold">Live market</h2>
             {auctionsStatus === "ready" && market.length === 0 ? (
               <p className="mt-2 rounded-sm border border-dashed border-white/12 p-5 text-center font-mono text-[11px] text-[#6B6B6B]">
-                No open auctions right now — check back soon.
+                {mine.length > 0
+                  ? "No listings from other creators yet — your own are above."
+                  : "No open auctions right now — check back soon."}
               </p>
             ) : (
               <div className="mt-3 grid gap-3 sm:grid-cols-3">
                 {market.map((a) => (
-                  <AuctionCard key={a.asset} auction={a} now={now} onBuy={buyNow} />
+                  <AuctionCard key={a.asset} auction={a} now={now} onBuy={setConfirmBuy} />
                 ))}
               </div>
             )}
@@ -392,7 +422,12 @@ function AuctionCard({
   const span = auction.startPrice - auction.floorPrice;
   const fallen = span > 0n ? auction.startPrice - price : 0n;
   const pct = span > 0n ? Number((fallen * 100n) / span) : 0;
-  const cardData: NftCardData = { kind: "custom", name: short(auction.asset) };
+  const cardData: NftCardData = {
+    kind: "custom",
+    name: auction.name,
+    image: auction.uri,
+  };
+  const secondsLeft = auction.startTime + auction.duration - Math.floor(now / 1000);
   return (
     <div className="group relative z-0 flex flex-col hover:z-10">
       {/* Deck treatment (fanned ghost cards behind, on hover) only for assets
@@ -421,12 +456,16 @@ function AuctionCard({
       {/* details card below the deck */}
       <div className="mt-3 rounded-sm border border-white/[0.08] bg-[#0f1620] p-3.5">
         <div className="flex items-center justify-between">
-          <span className="font-mono text-[12px] font-bold">{short(auction.asset)}</span>
-          <span className="font-mono text-[10px] text-[#6B6B6B]">by {short(auction.creator)}</span>
+          <span className="truncate font-mono text-[12px] font-bold">{auction.name}</span>
+          <span className="shrink-0 font-mono text-[10px] text-[#6B6B6B]">by {short(auction.creator)}</span>
         </div>
         <div className="mt-1.5 font-mono text-[18px] font-bold text-signal">{sol(price)} SOL</div>
         <div className="mt-1 h-1 overflow-hidden rounded-full bg-white/[0.06]">
           <div className="h-full rounded-full bg-signal/70" style={{ width: `${Math.max(4, pct)}%` }} />
+        </div>
+        <div className="mt-1.5 flex justify-between font-mono text-[10px] text-[#6B6B6B]">
+          <span>{secondsLeft > 0 ? `${countdown(secondsLeft)} left` : "ended"}</span>
+          <span>floor {sol(auction.floorPrice)}</span>
         </div>
         {mine ? (
           <div className="mt-3 w-full rounded-sm border border-white/10 py-2 text-center font-mono text-[11px] text-[#6B6B6B]">
@@ -539,6 +578,104 @@ function Row({ k, v, accent }: { k: string; v: string; accent?: boolean }) {
     <div className="flex justify-between border-b border-white/[0.06] pb-2 last:border-0">
       <span className="text-[#6B6B6B]">{k}</span>
       <span className={accent ? "text-signal" : "text-[#F5F4F0]"}>{v}</span>
+    </div>
+  );
+}
+
+/**
+ * Confirmation step for buying a listed 1-of-1.
+ *
+ * A Dutch auction's price moves while you look at it, so this shows the live
+ * price as it ticks and states the max that will actually be authorised — the
+ * purchase spends real SOL and previously fired on a single click with no
+ * chance to read either number.
+ */
+function BuyConfirm({
+  auction,
+  now,
+  onCancel,
+  onConfirm,
+}: {
+  auction: NftAuctionData;
+  now: number;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  useScrollLock(true);
+  const price = currentAuctionPrice(auction, now);
+  // Mirrors buyNow's cushion, so the number shown is the number authorised.
+  const maxPrice = (price * 102n) / 100n;
+  const secondsLeft = auction.startTime + auction.duration - Math.floor(now / 1000);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
+      onClick={onCancel}
+    >
+      <div
+        className="w-full max-w-sm rounded-sm border border-white/[0.1] bg-[#0f1620] p-5"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between">
+          <div>
+            <div className="text-[14px] font-bold">Buy 1-of-1</div>
+            <div className="mt-0.5 truncate font-mono text-[11px] text-[#6B6B6B]">
+              {auction.name}
+            </div>
+          </div>
+          <button onClick={onCancel} aria-label="Close" className="text-[#6B6B6B] hover:text-[#F5F4F0]">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="mt-4 rounded-sm border border-white/[0.08] bg-[#0A0A0A] p-3">
+          <div className="font-mono text-[22px] font-bold text-signal tabular-nums">
+            {sol(price)} <span className="text-[12px] text-[#6B6B6B]">SOL</span>
+          </div>
+          <div className="mt-0.5 font-mono text-[10px] text-[#6B6B6B]">
+            CURRENT PRICE · still falling toward {sol(auction.floorPrice)}
+          </div>
+        </div>
+
+        <dl className="mt-3 flex flex-col gap-2 font-mono text-[11px]">
+          {[
+            ["Max authorised", `${sol(maxPrice)} SOL`],
+            ["Time remaining", secondsLeft > 0 ? countdown(secondsLeft) : "ended"],
+            ["Seller", short(auction.creator)],
+            ["Asset", short(auction.asset)],
+          ].map(([k, v]) => (
+            <div key={k} className="flex justify-between border-b border-white/[0.06] pb-1.5 last:border-0">
+              <span className="text-[#6B6B6B]">{k}</span>
+              <span>{v}</span>
+            </div>
+          ))}
+        </dl>
+
+        <p className="mt-3 font-mono text-[10px] leading-relaxed text-[#4b5563]">
+          The price only falls before the auction ends. The small cushion above
+          the displayed price absorbs clock drift — you are never charged more
+          than the chain&apos;s price at settlement.
+        </p>
+
+        <div className="mt-4 grid grid-cols-2 gap-2">
+          <button
+            onClick={onCancel}
+            className="rounded-sm border border-white/12 py-2.5 font-mono text-[11px] font-bold text-[#6B6B6B] hover:text-[#F5F4F0]"
+          >
+            CANCEL
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={secondsLeft <= 0}
+            className={cn(
+              "rounded-sm bg-signal py-2.5 font-mono text-[11px] font-bold text-[#0A0A0A]",
+              secondsLeft <= 0 && "cursor-not-allowed opacity-40",
+            )}
+          >
+            {secondsLeft <= 0 ? "ENDED" : "CONFIRM BUY"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
