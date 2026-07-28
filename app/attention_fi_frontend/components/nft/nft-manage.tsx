@@ -18,13 +18,13 @@ import { useProgram, useReadonlyProgram } from "@/lib/solana/use-program";
 import { fetchGlobal } from "@/lib/solana/curve";
 import { explorerTx, PROGRAM_ID } from "@/lib/solana/config";
 import { SkinPicker } from "@/components/nft/skin-picker";
+import { useNftPortfolio } from "@/components/nft/use-nft-portfolio";
 import {
   auctionEnded,
   currentAuctionPrice,
   fetchCollections,
   fetchListableNfts,
   fetchNftAuctions,
-  fetchNftPortfolio,
   type CollectionData,
   type NftPortfolio,
   type NftAuctionData,
@@ -73,10 +73,11 @@ export function NftManage({ section }: { section: Section }) {
     explorerUrl?: string;
   } | null>(null);
 
-  // The wallet's real credentials. null while loading or when the read failed;
-  // both render as "nothing held", which is the honest default.
-  const [portfolio, setPortfolio] = useState<NftPortfolio | null>(null);
-  const [portfolioNonce, setPortfolioNonce] = useState(0);
+  // Real on-chain credentials, re-read on tab focus so a verification minted
+  // on /launch shows up here without a reload.
+  const portfolioState = useNftPortfolio();
+  const portfolio = portfolioState.data;
+  const portfolioStatus = portfolioState.status;
 
   const readProgram = useReadonlyProgram();
   const signProgram = useProgram();
@@ -101,19 +102,6 @@ export function NftManage({ section }: { section: Section }) {
   const [collectionsNonce, setCollectionsNonce] = useState(0);
   const [newCollectionName, setNewCollectionName] = useState("");
   const [creatingCollection, setCreatingCollection] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      const p = address
-        ? await fetchNftPortfolio(readProgram, new PublicKey(address)).catch(() => null)
-        : null;
-      if (!cancelled) setPortfolio(p);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [address, readProgram, portfolioNonce]);
 
   // Real 1-of-1 auctions from the chain — only while this section is open.
   useEffect(() => {
@@ -142,6 +130,18 @@ export function NftManage({ section }: { section: Section }) {
       clearInterval(tick);
     };
   }, [section, readProgram]);
+
+  // While the wallet still looks unverified, keep checking: the credential is
+  // minted elsewhere, so this is the only way it appears without a reload.
+  // Stops once it lands, so a verified wallet isn't polling forever. Reads off
+  // `portfolio` rather than the derived `verified`, which is declared below.
+  const hasVerification = portfolio?.verification != null;
+  const refreshPortfolio = portfolioState.refresh;
+  useEffect(() => {
+    if (section !== "verification" || !address || hasVerification) return;
+    const id = setInterval(refreshPortfolio, 15_000);
+    return () => clearInterval(id);
+  }, [section, address, hasVerification, refreshPortfolio]);
 
   // Listable collectibles are a separate, wallet-scoped read: it scans every
   // Core asset the wallet owns, so it stays out of the 10s auction poll.
@@ -324,7 +324,7 @@ export function NftManage({ section }: { section: Section }) {
   // Everything below is read from the chain. There is deliberately no mock
   // fallback: showing a connected wallet credentials it doesn't hold is worse
   // than showing an empty state.
-  const verified = portfolio?.verification !== null && portfolio !== null;
+  const verified = portfolio?.verification != null;
   const handle = portfolio?.verification?.handle ?? "";
   const level = portfolio?.perk?.level ?? 0;
   const discountBps = portfolio?.perk?.discountBps ?? 0;
@@ -357,7 +357,7 @@ export function NftManage({ section }: { section: Section }) {
         signature: short(sig),
         explorerUrl: explorerTx(sig),
       });
-      setPortfolioNonce((n) => n + 1);
+      portfolioState.refresh();
     } catch (e) {
       setTx({
         state: "failed",
@@ -403,7 +403,13 @@ export function NftManage({ section }: { section: Section }) {
 
       {/* VERIFICATION */}
       {section === "verification" &&
-        (verified ? (
+        (portfolioStatus === "loading" ? (
+          // Never fall through to "Get verified" before the read lands — that
+          // tells a verified wallet it isn't.
+          <div className="rounded-sm border border-dashed border-white/12 p-8 text-center font-mono text-[11px] text-[#6B6B6B]">
+            Checking this wallet for a verification credential…
+          </div>
+        ) : verified ? (
           <div className="grid gap-5 sm:grid-cols-[200px_1fr]">
             <div className="mx-auto w-44 sm:mx-0 sm:w-full">
               <NftCard data={{ kind: "verification", handle: handle || "you" }} onClick={() => setSelected({ kind: "verification", handle: handle || "you" })} />
@@ -467,7 +473,11 @@ export function NftManage({ section }: { section: Section }) {
 
       {/* PERK */}
       {section === "perk" &&
-        (level > 0 ? (
+        (portfolioStatus === "loading" ? (
+          <div className="rounded-sm border border-dashed border-white/12 p-8 text-center font-mono text-[11px] text-[#6B6B6B]">
+            Reading this wallet&apos;s on-chain holdings…
+          </div>
+        ) : level > 0 ? (
           <div className="grid gap-5 sm:grid-cols-[200px_1fr]">
             <div className="mx-auto w-44 sm:mx-0 sm:w-full">
               <NftCard
@@ -555,7 +565,11 @@ export function NftManage({ section }: { section: Section }) {
 
       {/* GENESIS */}
       {section === "genesis" &&
-        (genesisNfts.length ? (
+        (portfolioStatus === "loading" ? (
+          <div className="rounded-sm border border-dashed border-white/12 p-8 text-center font-mono text-[11px] text-[#6B6B6B]">
+            Reading this wallet&apos;s on-chain holdings…
+          </div>
+        ) : genesisNfts.length ? (
           <div className="flex flex-col gap-3">
             {genesisNfts.map((g) => {
               const card: NftCardData = { kind: "genesis", shareBps: g.shareBps, id: g.id, ...(g.uri ? { image: g.uri } : {}) };

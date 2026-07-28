@@ -1,38 +1,39 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, ChevronRight, Gavel, Gift, Lock, TrendingUp } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useWallet } from "@/components/wallet/wallet-provider";
 import { WalletConnectModal } from "@/components/wallet/wallet-connect-modal";
 import { Footer } from "@/components/feed/footer";
-import { getNftState } from "@/lib/mock-data";
 import { NftCard, type NftCardData } from "@/components/nft/nft-card";
 import { NftLanyard } from "@/components/nft/nft-lanyard";
 import { useOwnedNfts } from "@/components/nft/use-owned-nfts";
+import { useNftPortfolio } from "@/components/nft/use-nft-portfolio";
 
 export function NftView() {
-  const { connected, address, shortAddress, disconnect } = useWallet();
+  const { connected, shortAddress, disconnect } = useWallet();
   const [walletOpen, setWalletOpen] = useState(false);
   const [selected, setSelected] = useState<NftCardData | null>(null);
 
-  const base = useMemo(() => (address ? getNftState(address) : null), [address]);
   // Real on-chain NFTs once connected — never masked with mock data, so an
   // RPC hiccup reads as "couldn't load", not as a fake collection.
   const owned = useOwnedNfts();
 
-  // Local demo state synced from mock on connect (adjust-state-on-prop-change).
-  const [verified, setVerified] = useState(false);
-  const [level, setLevel] = useState(0);
-  const [syncedFrom, setSyncedFrom] = useState<typeof base>(null);
-  if (base && base !== syncedFrom) {
-    setSyncedFrom(base);
-    setVerified(base.verified);
-    setLevel(base.perk?.level ?? 0);
-  }
+  // The Manage rows used to report mock state, so a wallet holding nothing was
+  // shown a handle and a perk level that existed only in getNftState().
+  const portfolioState = useNftPortfolio();
+  const portfolio = portfolioState.data;
 
-  if (!connected || !base) {
+  const verified = portfolio?.verification != null;
+  const handle = portfolio?.verification?.handle ?? "";
+  const level = portfolio?.perk?.level ?? 0;
+  const discountBps = portfolio?.perk?.discountBps ?? 0;
+  const genesisCount = portfolio?.genesis.length ?? 0;
+  const loadingPortfolio = portfolioState.status === "loading";
+
+  if (!connected) {
     return (
       <div className="flex min-h-screen flex-col">
         <TopBar />
@@ -56,7 +57,6 @@ export function NftView() {
     );
   }
 
-  const discountBps = Math.min(500, level * 100);
   const collection = owned.data;
 
   const manage = [
@@ -65,7 +65,10 @@ export function NftView() {
       icon: <Lock className="h-4 w-4" />,
       title: "Verification",
       tag: "SOULBOUND",
-      status: verified ? `Verified @${base.handle}` : "Not verified",
+      // "Checking…" rather than "Not verified" until the read lands — the
+      // latter is a claim about the wallet, and it would be wrong half a
+      // second later for anyone who is verified.
+      status: loadingPortfolio ? "Checking…" : verified ? `Verified @${handle}` : "Not verified",
       ok: verified,
     },
     {
@@ -73,7 +76,11 @@ export function NftView() {
       icon: <TrendingUp className="h-4 w-4" />,
       title: "Perk NFT",
       tag: "UPGRADEABLE",
-      status: level > 0 ? `Lvl ${level} · ${(discountBps / 100).toFixed(0)}% off` : "Not minted",
+      status: loadingPortfolio
+        ? "Checking…"
+        : level > 0
+          ? `Lvl ${level} · ${(discountBps / 100).toFixed(0)}% off`
+          : "None granted",
       ok: level > 0,
     },
     {
@@ -81,8 +88,8 @@ export function NftView() {
       icon: <Gift className="h-4 w-4" />,
       title: "Genesis (fee-share)",
       tag: "TRANSFERABLE",
-      status: base.genesis.length ? `${base.genesis.length} held` : "None held",
-      ok: base.genesis.length > 0,
+      status: loadingPortfolio ? "Checking…" : genesisCount ? `${genesisCount} held` : "None held",
+      ok: genesisCount > 0,
     },
     {
       href: "/nft/auctions",

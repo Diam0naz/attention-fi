@@ -15,7 +15,8 @@ import { useTokenBalance } from "@/lib/solana/use-token-balance";
 import { USDC_MINT } from "@/lib/solana/config";
 import { myCreatedTokens, type CreatedToken } from "@/lib/solana/registry";
 import { useTokenIndex } from "@/lib/token-index";
-import { getNftState, getPortfolio } from "@/lib/mock-data";
+import { getPortfolio } from "@/lib/mock-data";
+import { useNftPortfolio } from "@/components/nft/use-nft-portfolio";
 
 function usd(n: number): string {
   if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
@@ -35,7 +36,9 @@ export function ProfileView() {
   const usdcBalance = useTokenBalance(USDC_MINT);
   const ownedOnchain = useOwnedNfts();
   const portfolio = useMemo(() => (address ? getPortfolio(address) : null), [address]);
-  const nft = useMemo(() => (address ? getNftState(address) : null), [address]);
+  // Read from the Verification PDA. This line previously reported a mock
+  // handle, i.e. told a wallet it was verified as someone it isn't.
+  const nftPortfolio = useNftPortfolio();
 
   // Tokens actually launched from this browser, merged with live on-chain
   // market caps. The handle↔mint mapping only exists in the local registry
@@ -96,7 +99,9 @@ export function ProfileView() {
     reader.readAsDataURL(file);
   }
 
-  if (!connected || !portfolio || !nft) {
+  // No longer gated on the NFT read: verification is one line of this page, and
+  // a slow or failed credential lookup shouldn't hide the whole profile.
+  if (!connected || !portfolio) {
     return (
       <div className="flex min-h-screen flex-col">
         <TopBar />
@@ -160,9 +165,12 @@ export function ProfileView() {
               </button>
             </div>
             <div className="mt-1 flex items-center gap-2 text-[12px] text-[#6B6B6B]">
-              {nft.verified ? (
+              {nftPortfolio.status === "loading" ? (
+                <span>Checking verification…</span>
+              ) : nftPortfolio.data?.verification ? (
                 <span className="inline-flex items-center gap-1 text-signal">
-                  <BadgeCheck className="h-3.5 w-3.5" /> Verified @{nft.handle}
+                  <BadgeCheck className="h-3.5 w-3.5" /> Verified @
+                  {nftPortfolio.data.verification.handle}
                 </span>
               ) : (
                 <span>Handle not verified</span>
