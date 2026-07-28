@@ -267,6 +267,24 @@ pub struct PerkNft {
     pub bump: u8,
 }
 
+/// A pending perk grant, awaiting the recipient to claim it.
+///
+/// Splits `mint_perk` into authorise-then-claim so the protocol can approve a
+/// batch of task completions cheaply while each recipient pays for their own
+/// Core asset. The authority still decides who gets one — this account IS the
+/// authorisation, and `claim_perk` mints only when it exists.
+#[account]
+#[derive(InitSpace)]
+pub struct PerkGrant {
+    /// Wallet allowed to claim; the only account this grant can mint to.
+    pub recipient: Pubkey,
+    /// Level to mint at (1..=MAX_PERK_LEVEL).
+    pub level: u8,
+    /// Refund target when the grant is consumed — whoever paid to create it.
+    pub granter: Pubkey,
+    pub bump: u8,
+}
+
 /// A fee-share genesis NFT: a transferable Metaplex Core asset minted to an
 /// early participant of a specific token, carrying a `share_bps` claim on that
 /// token's fee stream. One PDA per asset. (Claim routing wires up during the

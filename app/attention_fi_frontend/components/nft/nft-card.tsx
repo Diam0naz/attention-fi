@@ -7,7 +7,7 @@ import { useDominantColor } from "@/lib/use-dominant-color";
 export type NftCardData =
   | { kind: "verification"; handle: string; id?: string }
   | { kind: "perk"; level: number; discountBps: number; id?: string }
-  | { kind: "genesis"; shareBps: number; id: string }
+  | { kind: "genesis"; shareBps: number; id: string; image?: string }
   | { kind: "custom"; name: string; image?: string; id?: string };
 
 // Perk levels map to named tiers with their own palette (bronze → gold).
@@ -77,6 +77,9 @@ export function getNftVisual(data: NftCardData): NftVisual {
       icon: <Gift className="h-6 w-6" />,
       id: data.id,
       blurb: "A transferable fee-share NFT earning a pro-rata cut of the subject's fee stream, forever. Trade it or hold to accrue.",
+      // Optional subject artwork. Left unset, the card keeps the fee-share
+      // gradient above — the default is a designed state, not a placeholder.
+      image: data.image,
     };
   }
   return {

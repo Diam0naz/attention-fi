@@ -171,6 +171,19 @@ pub mod attention_fi {
         mint_perk::mint_perk_handler(ctx, uri)
     }
 
+    /// Authorise a wallet to claim a perk NFT, without minting it. Lets the
+    /// protocol approve a batch of task completions cheaply — each recipient
+    /// pays for their own asset via `claim_perk`.
+    pub fn grant_perk(ctx: Context<GrantPerk>, level: u8) -> Result<()> {
+        grant_perk::grant_perk_handler(ctx, level)
+    }
+
+    /// Claim a perk the protocol authorised via `grant_perk`. The claimant
+    /// signs and funds the mint; the grant is consumed so it can't be replayed.
+    pub fn claim_perk(ctx: Context<ClaimPerk>, uri: String) -> Result<()> {
+        claim_perk::claim_perk_handler(ctx, uri)
+    }
+
     /// Level up a perk NFT: rewrites its on-chain Attributes and raises its fee
     /// discount (program-controlled via the perk authority PDA).
     pub fn level_up(ctx: Context<LevelUp>) -> Result<()> {

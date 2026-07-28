@@ -84,6 +84,8 @@ export function NftCreateFlow() {
   const [tokenHandle, setTokenHandle] = useState("");
   const [sharePct, setSharePct] = useState("1.0");
   const [supply, setSupply] = useState("100");
+  // Optional subject artwork for genesis NFTs; empty keeps the fee-share palette.
+  const [genesisImage, setGenesisImage] = useState("");
   // auction config
   const [assetId, setAssetId] = useState("");
   const [startUsd, setStartUsd] = useState("10000");
@@ -172,6 +174,7 @@ export function NftCreateFlow() {
           kind: "genesis",
           shareBps: Math.max(1, Math.round(+sharePct * 100)),
           id: "GEN-0001",
+          ...(genesisImage.trim() ? { image: genesisImage.trim() } : {}),
         }
       : assetId.startsWith("PERK")
       ? {
@@ -234,7 +237,7 @@ export function NftCreateFlow() {
         if (!subjectMint) throw new Error("Launch this token on-chain first, then issue genesis NFTs.");
         const shareBps = Math.max(1, Math.round((+sharePct || 0) * 100));
         sig = await program.methods
-          .mintGenesis(shareBps, "")
+          .mintGenesis(shareBps, genesisImage.trim().slice(0, 200))
           .accounts({ authority: me, recipient: me, subjectMint, asset: asset.publicKey })
           .signers([asset])
           .rpc();
@@ -533,6 +536,28 @@ export function NftCreateFlow() {
                 </p>
               )}
             </Field>
+            <Field label="Token image (optional)">
+              <input
+                value={genesisImage}
+                onChange={(e) => setGenesisImage(e.target.value.slice(0, 200))}
+                placeholder="https://…/token.png"
+                className="w-full rounded-sm border border-white/10 bg-[#12181f] px-3 py-2.5 font-mono text-[12px] outline-none placeholder:text-[#4b5563]"
+              />
+              <p className="mt-1 text-[11px] leading-relaxed text-[#6B6B6B]">
+                Puts your token&apos;s artwork on the NFT and tints the card to match. Leave it
+                empty to keep the standard fee-share colours.
+              </p>
+            </Field>
+            {genesisImage && (
+              <div className="mt-1 flex justify-center">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={genesisImage}
+                  alt="token artwork preview"
+                  className="h-24 w-24 rounded-md border border-white/10 object-cover"
+                />
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-3">
               <Field label="Share per NFT (%)">
                 <input

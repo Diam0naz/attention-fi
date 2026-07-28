@@ -293,6 +293,116 @@ export async function fetchOwnedNfts(program: Program<AttentionFi>, owner: Publi
 }
 
 /**
+ * A wallet's AttentionFi credentials, read from the program's PDAs.
+ *
+ * Distinct from `fetchOwnedNfts`, which flattens everything into display cards:
+ * the manage screen needs the structured values (level, share, handle) to drive
+ * its detail panels, and needs to distinguish "none" from "not loaded yet".
+ */
+export interface NftPortfolio {
+  verification: { handle: string; asset: string } | null;
+  /** Highest-level perk held; the fee discount applied is this one. */
+  perk: { level: number; discountBps: number; asset: string } | null;
+  genesis: {
+    id: string;
+    shareBps: number;
+    asset: string;
+    claimableLamports: bigint;
+    /** Subject artwork from the Core asset; undefined when the issuer set none. */
+    uri?: string;
+  }[];
+}
+
+/** Matches `revenue::ACC_SCALE` — the accumulator's fixed-point scale. */
+const ACC_SCALE = 1_000_000_000_000n;
+
+/**
+ * Claimable lamports for a genesis NFT, mirroring `claim_genesis_fee`:
+ * `unclaimed + (share_bps * acc_per_share / ACC_SCALE - reward_debt)`.
+ *
+ * Reading `unclaimed` alone would under-report, since revenue accrued since the
+ * holder last interacted is still sitting in the pool accumulator.
+ */
+function genesisClaimable(
+  shareBps: number,
+  unclaimed: bigint,
+  rewardDebt: bigint,
+  accPerShare: bigint,
+): bigint {
+  const accruedTotal = (BigInt(shareBps) * accPerShare) / ACC_SCALE;
+  const pending = accruedTotal > rewardDebt ? accruedTotal - rewardDebt : 0n;
+  return unclaimed + pending;
+}
+
+export async function fetchNftPortfolio(
+  program: Program<AttentionFi>,
+  owner: PublicKey,
+): Promise<NftPortfolio> {
+  const ownerStr = owner.toBase58();
+  const [genesis, perks, verifications, pools] = await Promise.all([
+    program.account.genesisNft.all(),
+    program.account.perkNft.all(),
+    program.account.verification.all(),
+    // Needed to price the accrual half of each genesis claim.
+    program.account.genesisPool.all(),
+  ]);
+  const accByMint = new Map<string, bigint>();
+  for (const p of pools) {
+    accByMint.set(p.account.subjectMint.toBase58(), BigInt(p.account.accPerShare.toString()));
+  }
+
+  const myGenesis = genesis.filter((g) => g.account.owner.toBase58() === ownerStr);
+  // Artwork lives on the Core asset, not the GenesisNft PDA, so it needs a
+  // second read — batched into one call rather than one per NFT.
+  const genesisAssetInfos =
+    myGenesis.length > 0
+      ? await program.provider.connection.getMultipleAccountsInfo(
+          myGenesis.map((g) => g.account.asset),
+        )
+      : [];
+  const genesisUri = new Map<string, string | undefined>();
+  myGenesis.forEach((g, i) => {
+    const info = genesisAssetInfos[i];
+    genesisUri.set(g.account.asset.toBase58(), info ? decodeAsset(info.data)?.uri || undefined : undefined);
+  });
+
+  const mine = verifications.find((v) => v.account.subject.toBase58() === ownerStr);
+  const ownedPerks = perks.filter((p) => p.account.owner.toBase58() === ownerStr);
+  // A wallet could hold more than one perk; the discount that matters is the
+  // best one, so surface that rather than an arbitrary first result.
+  const best = ownedPerks.reduce<(typeof ownedPerks)[number] | null>(
+    (acc, p) => (acc === null || p.account.level > acc.account.level ? p : acc),
+    null,
+  );
+
+  return {
+    verification: mine
+      ? { handle: mine.account.handle, asset: mine.account.asset.toBase58() }
+      : null,
+    perk: best
+      ? {
+          level: best.account.level,
+          discountBps: best.account.discountBps,
+          asset: best.account.asset.toBase58(),
+        }
+      : null,
+    genesis: myGenesis
+      .map((g) => ({
+        id: short(g.account.asset.toBase58()),
+        shareBps: g.account.shareBps,
+        asset: g.account.asset.toBase58(),
+        uri: genesisUri.get(g.account.asset.toBase58()),
+        claimableLamports: genesisClaimable(
+          g.account.shareBps,
+          BigInt(g.account.unclaimed.toString()),
+          BigInt(g.account.rewardDebt.toString()),
+          accByMint.get(g.account.subjectMint.toBase58()) ?? 0n,
+        ),
+      })),
+  };
+}
+
+/**
  * Assets the wallet can put up for auction via `list_nft_auction`.
  *
  * Genesis/perk/verification NFTs are excluded even though they're Core assets

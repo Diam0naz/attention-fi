@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Keypair, PublicKey } from "@solana/web3.js";
 import { BN } from "@anchor-lang/core";
@@ -14,10 +14,9 @@ import { NftCard, NftCardFace, type NftCardData } from "@/components/nft/nft-car
 import { TiltCard } from "@/components/reactbits/tilt-card";
 import { NftLanyard } from "@/components/nft/nft-lanyard";
 import { useScrollLock } from "@/lib/use-scroll-lock";
-import { getNftState } from "@/lib/mock-data";
 import { useProgram, useReadonlyProgram } from "@/lib/solana/use-program";
 import { fetchGlobal } from "@/lib/solana/curve";
-import { explorerTx } from "@/lib/solana/config";
+import { explorerTx, PROGRAM_ID } from "@/lib/solana/config";
 import { SkinPicker } from "@/components/nft/skin-picker";
 import {
   auctionEnded,
@@ -25,7 +24,9 @@ import {
   fetchCollections,
   fetchListableNfts,
   fetchNftAuctions,
+  fetchNftPortfolio,
   type CollectionData,
+  type NftPortfolio,
   type NftAuctionData,
   type OwnedAsset,
 } from "@/lib/solana/nft-data";
@@ -60,11 +61,6 @@ const META: Record<Section, { title: string; icon: React.ReactNode }> = {
   auctions: { title: "1-of-1 Auctions", icon: <Gavel className="h-4 w-4" /> },
 };
 
-function usd(n: number): string {
-  if (n >= 1_000) return `$${(n / 1_000).toFixed(1)}K`;
-  return `$${n.toLocaleString()}`;
-}
-
 export function NftManage({ section }: { section: Section }) {
   const { connected, address, shortAddress, disconnect } = useWallet();
   const [walletOpen, setWalletOpen] = useState(false);
@@ -77,7 +73,10 @@ export function NftManage({ section }: { section: Section }) {
     explorerUrl?: string;
   } | null>(null);
 
-  const base = useMemo(() => (address ? getNftState(address) : null), [address]);
+  // The wallet's real credentials. null while loading or when the read failed;
+  // both render as "nothing held", which is the honest default.
+  const [portfolio, setPortfolio] = useState<NftPortfolio | null>(null);
+  const [portfolioNonce, setPortfolioNonce] = useState(0);
 
   const readProgram = useReadonlyProgram();
   const signProgram = useProgram();
@@ -102,6 +101,19 @@ export function NftManage({ section }: { section: Section }) {
   const [collectionsNonce, setCollectionsNonce] = useState(0);
   const [newCollectionName, setNewCollectionName] = useState("");
   const [creatingCollection, setCreatingCollection] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const p = address
+        ? await fetchNftPortfolio(readProgram, new PublicKey(address)).catch(() => null)
+        : null;
+      if (!cancelled) setPortfolio(p);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [address, readProgram, portfolioNonce]);
 
   // Real 1-of-1 auctions from the chain — only while this section is open.
   useEffect(() => {
@@ -309,27 +321,53 @@ export function NftManage({ section }: { section: Section }) {
     }
   }
 
-  // Local demo state so mint / verify / level-up feel live.
-  const [verified, setVerified] = useState(false);
-  const [level, setLevel] = useState(0);
-  const [handle, setHandle] = useState("");
-  useEffect(() => {
-    if (base) {
-      setVerified(base.verified);
-      setLevel(base.perk?.level ?? 0);
-      setHandle(base.handle ?? "");
-    }
-  }, [base]);
+  // Everything below is read from the chain. There is deliberately no mock
+  // fallback: showing a connected wallet credentials it doesn't hold is worse
+  // than showing an empty state.
+  const verified = portfolio?.verification !== null && portfolio !== null;
+  const handle = portfolio?.verification?.handle ?? "";
+  const level = portfolio?.perk?.level ?? 0;
+  const discountBps = portfolio?.perk?.discountBps ?? 0;
+  const genesisNfts = portfolio?.genesis ?? [];
 
-  function run(title: string, detail: string, after?: () => void) {
-    setTx({ state: "pending", title, detail });
-    setTimeout(() => {
-      setTx({ state: "confirmed", title, detail });
-      after?.();
-    }, 1500);
+  /** Claim accrued fee-share on a genesis NFT. */
+  async function claimGenesis(g: NftPortfolio["genesis"][number]) {
+    if (!signProgram || !address) return setWalletOpen(true);
+    setTx({ state: "pending", title: "Claiming genesis fees…", detail: g.id });
+    try {
+      // The genesis PDA is seeded by the asset, which isn't one of the
+      // instruction's accounts — so Anchor can't resolve it and it has to be
+      // derived here. `pool` then resolves from genesis.subject_mint.
+      const [genesisPda] = PublicKey.findProgramAddressSync(
+        [Buffer.from("genesis"), new PublicKey(g.asset).toBuffer()],
+        PROGRAM_ID,
+      );
+      const sig = await signProgram.methods
+        .claimGenesisFee()
+        .accountsPartial({
+          holder: new PublicKey(address),
+          owner: new PublicKey(address),
+          genesis: genesisPda,
+        })
+        .rpc();
+      setTx({
+        state: "confirmed",
+        title: "Claimed",
+        detail: `${g.id} · ${sol(g.claimableLamports)} SOL`,
+        signature: short(sig),
+        explorerUrl: explorerTx(sig),
+      });
+      setPortfolioNonce((n) => n + 1);
+    } catch (e) {
+      setTx({
+        state: "failed",
+        title: "Claim failed",
+        detail: e instanceof Error ? e.message : "Transaction failed",
+      });
+    }
   }
 
-  if (!connected || !base) {
+  if (!connected) {
     return (
       <Shell title={META[section].title}>
         <div className="rounded-sm border border-white/[0.08] bg-[#0f1620] p-8 text-center">
@@ -348,7 +386,6 @@ export function NftManage({ section }: { section: Section }) {
     );
   }
 
-  const discountBps = Math.min(500, level * 100);
 
   return (
     <Shell title={META[section].title} icon={META[section].icon} shortAddress={shortAddress} onDisconnect={disconnect}>
@@ -412,22 +449,19 @@ export function NftManage({ section }: { section: Section }) {
                 </li>
               ))}
             </ol>
-            <div className="mt-4 flex items-center rounded-sm border border-white/10 bg-[#12181f] px-3">
-              <span className="text-[#6B6B6B]">@</span>
-              <input
-                value={handle}
-                onChange={(e) => setHandle(e.target.value.replace(/[^a-zA-Z0-9_]/g, ""))}
-                placeholder="handle"
-                className="w-full bg-transparent px-1.5 py-2.5 text-[13px] outline-none placeholder:text-[#4b5563]"
-              />
-            </div>
-            <button
-              onClick={() => handle && run("Minting verification…", `@${handle}`, () => setVerified(true))}
-              disabled={!handle}
-              className="mt-3 w-full rounded-sm bg-signal py-3 font-mono text-[12px] font-bold text-[#0A0A0A] disabled:opacity-40"
+            {/* Verification runs through X OAuth and a SAS attestation before
+                verify_handle will mint. That whole flow lives on the launch
+                page; duplicating a handle box here could only be a facsimile
+                of it. */}
+            <Link
+              href="/launch"
+              className="mt-4 block w-full rounded-sm bg-signal py-3 text-center font-mono text-[12px] font-bold text-[#0A0A0A]"
             >
-              SIGN & VERIFY
-            </button>
+              START VERIFICATION →
+            </Link>
+            <p className="mt-2 text-center font-mono text-[10px] leading-relaxed text-[#4b5563]">
+              Takes one wallet signature and an X authorisation. No gas beyond the mint.
+            </p>
           </div>
         ))}
 
@@ -521,28 +555,31 @@ export function NftManage({ section }: { section: Section }) {
 
       {/* GENESIS */}
       {section === "genesis" &&
-        (base.genesis.length ? (
+        (genesisNfts.length ? (
           <div className="flex flex-col gap-3">
-            {base.genesis.map((g) => (
-              <div key={g.id} className="flex flex-col gap-4 rounded-sm border border-white/[0.08] bg-[#0f1620] p-4 sm:flex-row sm:items-center">
-                <button onClick={() => setSelected({ kind: "genesis", shareBps: g.shareBps, id: g.id })} className="w-28 shrink-0 self-center sm:self-auto">
-                  <NftCardFace data={{ kind: "genesis", shareBps: g.shareBps, id: g.id }} />
+            {genesisNfts.map((g) => {
+              const card: NftCardData = { kind: "genesis", shareBps: g.shareBps, id: g.id, ...(g.uri ? { image: g.uri } : {}) };
+              return (
+              <div key={g.asset} className="flex flex-col gap-4 rounded-sm border border-white/[0.08] bg-[#0f1620] p-4 sm:flex-row sm:items-center">
+                <button onClick={() => setSelected(card)} className="w-28 shrink-0 self-center sm:self-auto">
+                  <NftCardFace data={card} />
                 </button>
                 <div className="flex-1">
                   <div className="font-mono text-[13px] font-bold">{g.id}</div>
                   <div className="mt-0.5 font-mono text-[11px] text-[#6B6B6B]">{(g.shareBps / 100).toFixed(1)}% revenue share</div>
                   <div className="mt-2 font-mono text-[10px] text-[#6B6B6B]">CLAIMABLE</div>
-                  <div className="font-mono text-[18px] font-bold text-signal">{usd(g.claimableUsd)}</div>
+                  <div className="font-mono text-[18px] font-bold text-signal">{sol(g.claimableLamports)} SOL</div>
                 </div>
                 <button
-                  onClick={() => run("Claiming genesis fees…", `${g.id} · ${usd(g.claimableUsd)}`)}
-                  disabled={g.claimableUsd === 0}
+                  onClick={() => void claimGenesis(g)}
+                  disabled={g.claimableLamports === 0n}
                   className="rounded-sm bg-signal px-5 py-2.5 font-mono text-[11px] font-bold text-[#0A0A0A] disabled:opacity-40"
                 >
                   CLAIM
                 </button>
               </div>
-            ))}
+              );
+            })}
           </div>
         ) : (
           <div className="rounded-sm border border-white/[0.08] bg-[#0f1620] p-6 text-center">

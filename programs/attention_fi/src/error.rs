@@ -50,4 +50,6 @@ pub enum AttentionError {
     NotReadyToGraduate,
     #[msg("Not enough trading volume or deposits to reach the next perk level")]
     InsufficientActivity,
+    #[msg("Perk level must be between 1 and MAX_PERK_LEVEL")]
+    InvalidPerkLevel,
 }
