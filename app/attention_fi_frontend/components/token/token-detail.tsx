@@ -16,6 +16,8 @@ import { useWallet } from "@/components/wallet/wallet-provider";
 import { useLiveTokenDetail } from "@/components/token/use-live-token";
 import { MindshareSourceBadge } from "@/components/feed/mindshare-source";
 import { AuctionPanel } from "@/components/token/auction-panel";
+import { ConvictionPanel } from "@/components/token/conviction-panel";
+import { RevenuePanel } from "@/components/token/revenue-panel";
 import { useTokenIndex } from "@/lib/token-index";
 import { useProgram } from "@/lib/solana/use-program";
 import { useSolBalance } from "@/lib/solana/use-sol-balance";
@@ -71,16 +73,15 @@ export function TokenDetailTerminal({ token: tokenProp }: { token: TokenDetail }
 
   const up = token.delta24h >= 0;
   const gradPct = Math.min(100, Math.round((token.raisedUsd / token.targetUsd) * 100));
-  // The trade panel implements the bonding curve's constant-product buy/sell.
-  // A live token on another mechanism reads fine but can't trade through this
-  // panel yet, so lock it with a clear label rather than firing the wrong ix.
+  // Every mechanism now has its own panel, so this one is only ever reached for
+  // a bonding curve (or a catalog token that isn't launched yet) — it
+  // implements the constant-product buy/sell and nothing else.
   const MECH_LABEL: Record<NonNullable<TokenDetail["mechanism"]>, string> = {
     bonding: "Bonding curve · constant-product",
     conviction: "Conviction curve · time-locked",
     dutch: "Dutch auction · descending price",
     revenue: "Revenue share · fixed price",
   };
-  const tradeLocked = Boolean(token.mechanism && token.mechanism !== "bonding");
   const mechLabel = token.mechanism ? MECH_LABEL[token.mechanism] : MECH_LABEL.bonding;
   const amt = parseFloat(amount) || 0;
   // Price estimate (SOL/token) from market cap (works for live + mock); the real
@@ -93,7 +94,7 @@ export function TokenDetailTerminal({ token: tokenProp }: { token: TokenDetail }
 
   async function submit() {
     if (!connected) return setWalletOpen(true);
-    if (amt <= 0 || tradeLocked) return;
+    if (amt <= 0) return;
 
     const mint = handleToMint(token.handle);
     setTx("pending");
@@ -371,6 +372,10 @@ export function TokenDetailTerminal({ token: tokenProp }: { token: TokenDetail }
         <div className="p-5 sm:p-7">
           {token.mechanism === "dutch" ? (
             <AuctionPanel mint={tokenMint} symbol={token.symbol} />
+          ) : token.mechanism === "conviction" ? (
+            <ConvictionPanel mint={tokenMint} symbol={token.symbol} />
+          ) : token.mechanism === "revenue" ? (
+            <RevenuePanel mint={tokenMint} symbol={token.symbol} />
           ) : (
           <div className="rounded-sm border border-white/[0.08] bg-[#0f1620] p-4">
             {/* buy/sell toggle */}
@@ -450,18 +455,12 @@ export function TokenDetailTerminal({ token: tokenProp }: { token: TokenDetail }
 
             <button
               onClick={submit}
-              disabled={tradeLocked}
               className={cn(
                 "mt-4 w-full rounded-sm py-3 font-mono text-[13px] font-bold tracking-wide text-[#0A0A0A]",
                 side === "buy" ? "bg-signal" : "bg-noise",
-                tradeLocked && "cursor-not-allowed opacity-40",
               )}
             >
-              {tradeLocked
-                ? `${token.mechanism?.toUpperCase()} — TRADING SOON`
-                : connected
-                  ? `${side.toUpperCase()} $${token.symbol}`
-                  : "CONNECT TO TRADE"}
+              {connected ? `${side.toUpperCase()} $${token.symbol}` : "CONNECT TO TRADE"}
             </button>
             <div className="mt-2 text-center font-mono text-[10px] text-[#4b5563]">{mechLabel}</div>
 

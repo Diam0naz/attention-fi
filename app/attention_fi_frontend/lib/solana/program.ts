@@ -64,6 +64,20 @@ export const auctionPda = (mint: PublicKey): PublicKey =>
 export const revenuePda = (mint: PublicKey): PublicKey =>
   PublicKey.findProgramAddressSync([enc.encode("revenue"), mint.toBytes()], PROGRAM_ID)[0];
 
+/** A holder's locked conviction stake in `mint`. */
+export const positionPda = (mint: PublicKey, owner: PublicKey): PublicKey =>
+  PublicKey.findProgramAddressSync(
+    [enc.encode("position"), mint.toBytes(), owner.toBytes()],
+    PROGRAM_ID,
+  )[0];
+
+/** A holder's revenue-share stake in `mint`. */
+export const revStakePda = (mint: PublicKey, owner: PublicKey): PublicKey =>
+  PublicKey.findProgramAddressSync(
+    [enc.encode("revstake"), mint.toBytes(), owner.toBytes()],
+    PROGRAM_ID,
+  )[0];
+
 /** Verification is keyed by the subject wallet, not the handle. */
 export const verificationPda = (subject: PublicKey): PublicKey =>
   PublicKey.findProgramAddressSync([enc.encode("verify"), subject.toBytes()], PROGRAM_ID)[0];

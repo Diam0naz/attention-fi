@@ -1,7 +1,15 @@
 import { PublicKey } from "@solana/web3.js";
 import type { Program } from "@anchor-lang/core";
 import type { AttentionFi } from "@/lib/idl/attention_fi";
-import { auctionPda, convictionPda, curvePda, globalPda, revenuePda } from "./program";
+import {
+  auctionPda,
+  convictionPda,
+  curvePda,
+  globalPda,
+  positionPda,
+  revenuePda,
+  revStakePda,
+} from "./program";
 
 export const LAMPORTS_PER_SOL = 1_000_000_000;
 
@@ -402,4 +410,175 @@ export function auctionQuote(
   const costLamports = scale === 0n ? 0n : (numerator + scale - 1n) / scale;
   const feeLamports = (costLamports * BigInt(feeBps)) / 10_000n;
   return { costLamports, feeLamports, totalLamports: costLamports + feeLamports };
+}
+
+/* ── conviction ─────────────────────────────────────────────────────────── */
+
+/**
+ * A conviction curve plus the caller's locked position.
+ *
+ * Conviction trades on the same constant-product maths as the bonding curve —
+ * `quoteBuy`/`quoteSell` apply unchanged — but every buy locks the position,
+ * and selling before it unlocks forfeits a slice of the proceeds. Those two
+ * facts are what the panel has to surface, so they're read together here.
+ */
+export interface ConvictionDetail {
+  mint: string;
+  creator: string;
+  /** Reserve state in the shape the shared quote helpers expect. */
+  curve: CurveState;
+  spotSol: number;
+  lockPeriodSeconds: number;
+  earlyExitPenaltyBps: number;
+  complete: boolean;
+  tier: number;
+  /** Null when the wallet holds no position (or none was requested). */
+  position: {
+    amountBaseUnits: bigint;
+    amountTokens: number;
+    unlockTime: number;
+  } | null;
+}
+
+export async function fetchConvictionDetail(
+  program: Program<AttentionFi>,
+  mint: PublicKey,
+  decimals: number,
+  owner?: PublicKey | null,
+): Promise<ConvictionDetail | null> {
+  const raw = await program.account.convictionCurve.fetchNullable(convictionPda(mint)).catch(() => null);
+  if (!raw) return null;
+
+  const curve: CurveState = {
+    mint: raw.mint.toBase58(),
+    creator: raw.creator.toBase58(),
+    virtualSolReserves: BigInt(raw.virtualSolReserves.toString()),
+    virtualTokenReserves: BigInt(raw.virtualTokenReserves.toString()),
+    realSolReserves: BigInt(raw.realSolReserves.toString()),
+    realTokenReserves: BigInt(raw.realTokenReserves.toString()),
+    tokenTotalSupply: BigInt(raw.tokenTotalSupply.toString()),
+    // Conviction curves don't accrue a separate creator-fee balance.
+    creatorFees: 0n,
+    tier: raw.tier,
+    complete: raw.complete,
+  };
+
+  let position: ConvictionDetail["position"] = null;
+  if (owner) {
+    const p = await program.account.convictionPosition
+      .fetchNullable(positionPda(mint, owner))
+      .catch(() => null);
+    if (p) {
+      const amount = BigInt(p.amount.toString());
+      position = {
+        amountBaseUnits: amount,
+        amountTokens: Number(amount) / 10 ** decimals,
+        unlockTime: Number(p.unlockTime.toString()),
+      };
+    }
+  }
+
+  const { spot } = reservePrice(raw as unknown as HasReserves, decimals);
+  return {
+    mint: raw.mint.toBase58(),
+    creator: raw.creator.toBase58(),
+    curve,
+    spotSol: spot,
+    lockPeriodSeconds: Number(raw.lockPeriod.toString()),
+    earlyExitPenaltyBps: raw.earlyExitPenaltyBps,
+    complete: raw.complete,
+    tier: raw.tier,
+    position,
+  };
+}
+
+/* ── revenue share ──────────────────────────────────────────────────────── */
+
+/** Fixed-point scale for `acc_revenue_per_share` (mirrors the program). */
+const ACC_SCALE = 1_000_000_000_000n;
+
+/**
+ * A revenue-share offering plus the caller's stake.
+ *
+ * Shares sell at a fixed price rather than along a curve, and holders accrue a
+ * pro-rata cut of deposited revenue. Unlike every other mechanism here, shares
+ * are tracked in a PDA rather than as SPL tokens — `buy_revenue` takes no token
+ * accounts at all.
+ */
+export interface RevenueDetail {
+  mint: string;
+  creator: string;
+  sharePriceLamports: bigint;
+  sharePriceSol: number;
+  totalSupplyBaseUnits: bigint;
+  sharesSoldBaseUnits: bigint;
+  remainingBaseUnits: bigint;
+  remainingShares: number;
+  soldPct: number;
+  revenueReservesSol: number;
+  totalStakedShares: number;
+  tier: number;
+  /** Null when the wallet holds no stake. */
+  stake: {
+    stakedBaseUnits: bigint;
+    stakedShares: number;
+    /** Already-settled revenue waiting to be claimed, in SOL. */
+    unclaimedSol: number;
+    /** Settled + still-accruing, i.e. what a claim would actually pay. */
+    claimableSol: number;
+  } | null;
+}
+
+export async function fetchRevenueDetail(
+  program: Program<AttentionFi>,
+  mint: PublicKey,
+  decimals: number,
+  owner?: PublicKey | null,
+): Promise<RevenueDetail | null> {
+  const raw = await program.account.revenueShare.fetchNullable(revenuePda(mint)).catch(() => null);
+  if (!raw) return null;
+
+  const supply = BigInt(raw.tokenTotalSupply.toString());
+  const sold = BigInt(raw.sharesSold.toString());
+  const remaining = supply > sold ? supply - sold : 0n;
+  const acc = BigInt(raw.accRevenuePerShare.toString());
+
+  let stake: RevenueDetail["stake"] = null;
+  if (owner) {
+    const s = await program.account.revenueStake
+      .fetchNullable(revStakePda(mint, owner))
+      .catch(() => null);
+    if (s) {
+      const staked = BigInt(s.stakedAmount.toString());
+      const unclaimed = BigInt(s.unclaimed.toString());
+      // Mirrors the program's `pending()`: revenue accrued since the stake was
+      // last settled, which a claim pays out on top of `unclaimed`.
+      const debt = BigInt(s.rewardDebt.toString());
+      const gross = (staked * acc) / ACC_SCALE;
+      const pending = gross > debt ? gross - debt : 0n;
+      stake = {
+        stakedBaseUnits: staked,
+        stakedShares: Number(staked) / 10 ** decimals,
+        unclaimedSol: Number(unclaimed) / LAMPORTS_PER_SOL,
+        claimableSol: Number(unclaimed + pending) / LAMPORTS_PER_SOL,
+      };
+    }
+  }
+
+  const price = BigInt(raw.sharePrice.toString());
+  return {
+    mint: raw.mint.toBase58(),
+    creator: raw.creator.toBase58(),
+    sharePriceLamports: price,
+    sharePriceSol: Number(price) / LAMPORTS_PER_SOL,
+    totalSupplyBaseUnits: supply,
+    sharesSoldBaseUnits: sold,
+    remainingBaseUnits: remaining,
+    remainingShares: Number(remaining) / 10 ** decimals,
+    soldPct: supply === 0n ? 0 : Number((sold * 10_000n) / supply) / 100,
+    revenueReservesSol: Number(BigInt(raw.revenueReserves.toString())) / LAMPORTS_PER_SOL,
+    totalStakedShares: Number(BigInt(raw.totalStaked.toString())) / 10 ** decimals,
+    tier: raw.tier,
+    stake,
+  };
 }

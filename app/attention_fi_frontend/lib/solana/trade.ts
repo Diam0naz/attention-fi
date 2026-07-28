@@ -1,14 +1,25 @@
 import { BN, type Program } from "@anchor-lang/core";
 import type { PublicKey } from "@solana/web3.js";
 import type { AttentionFi } from "@/lib/idl/attention_fi";
-import { ata, auctionPda, curvePda, globalPda } from "./program";
+import {
+  ata,
+  auctionPda,
+  convictionPda,
+  curvePda,
+  globalPda,
+  positionPda,
+  revenuePda,
+  revStakePda,
+} from "./program";
 import {
   LAMPORTS_PER_SOL,
   auctionQuote,
   fetchAuctionDetail,
+  fetchConvictionDetail,
   fetchCurve,
   quoteBuy,
   quoteSell,
+  type ConvictionDetail,
 } from "./curve";
 
 /**
@@ -174,5 +185,155 @@ export async function settleAuction(
   return program.methods
     .settleAuction()
     .accountsPartial({ caller, auction: auctionPda(mint), mint })
+    .rpc();
+}
+
+/* ── conviction ─────────────────────────────────────────────────────────── */
+
+/**
+ * Buy into a conviction curve. Same constant-product pricing as `buyTokens`,
+ * but the resulting position is locked.
+ *
+ * Note for callers: the program sets `unlock_time = now + lock_period` on every
+ * buy, so adding to a position re-locks the whole thing — not just the new
+ * tokens. The panel warns about this before submitting.
+ */
+export async function buyConviction(
+  program: Program<AttentionFi>,
+  buyer: PublicKey,
+  mint: PublicKey,
+  solAmount: number,
+  slippageBps = 100,
+): Promise<string> {
+  const global = await program.account.global.fetch(globalPda());
+  const detail = await fetchConvictionDetail(program, mint, global.tokenDecimals);
+  if (!detail) throw new Error("This token isn't live on a conviction curve.");
+
+  const lamports = Math.floor(solAmount * LAMPORTS_PER_SOL);
+  const minOut = Math.max(
+    0,
+    Math.floor(quoteBuy(detail.curve, solAmount) * (1 - slippageBps / 10_000)),
+  );
+  const curveKey = convictionPda(mint);
+
+  return program.methods
+    .buyConviction(new BN(lamports), new BN(minOut))
+    .accountsPartial({
+      buyer,
+      treasury: global.treasury,
+      curve: curveKey,
+      mint,
+      vault: ata(curveKey, mint),
+      buyerTokenAccount: ata(buyer, mint),
+      position: positionPda(mint, buyer),
+    })
+    .rpc();
+}
+
+/**
+ * Sell out of a conviction position.
+ *
+ * `minSolOut` is checked by the program against the amount *after* the
+ * early-exit penalty, so the slippage floor is computed from the penalised
+ * proceeds — otherwise every locked sell would trip it.
+ */
+export async function sellConviction(
+  program: Program<AttentionFi>,
+  seller: PublicKey,
+  mint: PublicKey,
+  tokenAmount: number,
+  decimals: number,
+  slippageBps = 100,
+): Promise<string> {
+  const global = await program.account.global.fetch(globalPda());
+  const detail = await fetchConvictionDetail(program, mint, decimals, seller);
+  if (!detail) throw new Error("This token isn't live on a conviction curve.");
+
+  const raw = BigInt(Math.floor(tokenAmount * 10 ** decimals));
+  const grossSol = quoteSell(detail.curve, Number(raw));
+  const afterFee = grossSol * (1 - global.feeBps / 10_000);
+  const locked = detail.position !== null && Date.now() / 1000 < detail.position.unlockTime;
+  const afterPenalty = locked
+    ? afterFee * (1 - detail.earlyExitPenaltyBps / 10_000)
+    : afterFee;
+  const minOut = Math.max(
+    0,
+    Math.floor(afterPenalty * LAMPORTS_PER_SOL * (1 - slippageBps / 10_000)),
+  );
+  const curveKey = convictionPda(mint);
+
+  return program.methods
+    .sellConviction(new BN(raw.toString()), new BN(minOut))
+    .accountsPartial({
+      seller,
+      treasury: global.treasury,
+      curve: curveKey,
+      mint,
+      vault: ata(curveKey, mint),
+      sellerTokenAccount: ata(seller, mint),
+      position: positionPda(mint, seller),
+    })
+    .rpc();
+}
+
+/** What a conviction sell actually pays out, split so the UI can show the cut. */
+export function quoteConvictionSell(
+  detail: ConvictionDetail,
+  tokenAmount: number,
+  decimals: number,
+  feeBps: number,
+  nowSeconds: number,
+): { grossSol: number; feeSol: number; penaltySol: number; netSol: number; locked: boolean } {
+  if (tokenAmount <= 0) {
+    return { grossSol: 0, feeSol: 0, penaltySol: 0, netSol: 0, locked: false };
+  }
+  const grossSol = quoteSell(detail.curve, tokenAmount * 10 ** decimals);
+  const feeSol = grossSol * (feeBps / 10_000);
+  const afterFee = grossSol - feeSol;
+  const locked = detail.position !== null && nowSeconds < detail.position.unlockTime;
+  const penaltySol = locked ? afterFee * (detail.earlyExitPenaltyBps / 10_000) : 0;
+  return { grossSol, feeSol, penaltySol, netSol: afterFee - penaltySol, locked };
+}
+
+/* ── revenue share ──────────────────────────────────────────────────────── */
+
+/** Buy `shares` whole shares at the offering's fixed price. */
+export async function buyRevenue(
+  program: Program<AttentionFi>,
+  buyer: PublicKey,
+  mint: PublicKey,
+  shares: number,
+  decimals: number,
+): Promise<string> {
+  const global = await program.account.global.fetch(globalPda());
+  const raw = BigInt(Math.floor(shares * 10 ** decimals));
+
+  return program.methods
+    .buyRevenue(new BN(raw.toString()))
+    .accountsPartial({
+      buyer,
+      treasury: global.treasury,
+      revenue: revenuePda(mint),
+      mint,
+      position: revStakePda(mint, buyer),
+    })
+    .rpc();
+}
+
+/** Claim accrued revenue on a stake. */
+export async function claimRevenue(
+  program: Program<AttentionFi>,
+  holder: PublicKey,
+  mint: PublicKey,
+): Promise<string> {
+  return program.methods
+    .claimRevenue()
+    .accountsPartial({
+      holder,
+      revenue: revenuePda(mint),
+      mint,
+      position: revStakePda(mint, holder),
+      owner: holder,
+    })
     .rpc();
 }
