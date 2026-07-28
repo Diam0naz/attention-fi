@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { X, RotateCw } from "lucide-react";
 import { NftCardFace, getNftVisual, type NftCardData } from "@/components/nft/nft-card";
 import { useScrollLock } from "@/lib/use-scroll-lock";
+import { useDominantColor } from "@/lib/use-dominant-color";
 
 /**
  * A dangling, flippable NFT viewer shown in a side panel. Click the card to flip
@@ -51,8 +52,17 @@ export function NftLanyard({ data, onClose }: { data: NftCardData | null; onClos
     return () => window.removeEventListener("keydown", onKey);
   }, [data, onClose]);
 
+  // Read before the early return — hooks can't be called conditionally. Only
+  // custom collectibles carry artwork; everything else keeps its designed
+  // palette, so there's nothing to sample.
+  const artwork = data && data.kind === "custom" ? data.image : undefined;
+  const derived = useDominantColor(artwork);
+
   if (!data) return null;
   const v = getNftVisual(data);
+  // Strap, back face and header all track the artwork so the whole viewer
+  // reads as one object rather than a tinted front on a fixed-colour shell.
+  const accent = derived ?? v.accent;
 
   return (
     <div className="fixed inset-0 z-[110] flex bg-black/70 backdrop-blur-sm" onClick={onClose}>
@@ -61,7 +71,7 @@ export function NftLanyard({ data, onClose }: { data: NftCardData | null; onClos
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center">
-          <span className="font-mono text-[12px] font-bold" style={{ color: v.accent }}>
+          <span className="font-mono text-[12px] font-bold" style={{ color: accent }}>
             {v.label} NFT
           </span>
           <button
@@ -82,7 +92,7 @@ export function NftLanyard({ data, onClose }: { data: NftCardData | null; onClos
             {/* lanyard strap */}
             <div
               className="h-24 w-8 rounded-b-sm"
-              style={{ background: `linear-gradient(180deg, ${v.accent}, ${v.accent}22)` }}
+              style={{ background: `linear-gradient(180deg, ${accent}, ${accent}22)` }}
             />
             {/* clasp */}
             <div className="-mt-1 h-3 w-5 rounded-sm border border-white/20 bg-[#1a222c]" />
@@ -110,15 +120,23 @@ export function NftLanyard({ data, onClose }: { data: NftCardData | null; onClos
               {/* back */}
               <div
                 className="absolute inset-0 flex flex-col rounded-xl border p-5 [backface-visibility:hidden] [transform:rotateY(180deg)]"
-                style={{ background: v.grad, borderColor: `${v.accent}55` }}
+                style={{
+                  // Tinted from the artwork when we could read it. Kept dark
+                  // and low-alpha rather than reusing the front's vivid
+                  // gradient, since the back is mostly body text.
+                  background: derived
+                    ? `linear-gradient(140deg, ${derived}2e, #0b1017 55%, ${derived}1f)`
+                    : v.grad,
+                  borderColor: `${accent}55`,
+                }}
               >
-                <div className="font-mono text-[10px] uppercase tracking-[0.1em]" style={{ color: v.accent }}>
+                <div className="font-mono text-[10px] uppercase tracking-[0.1em]" style={{ color: accent }}>
                   {v.label} · {v.tag}
                 </div>
                 <p className="mt-3 text-[12px] leading-relaxed text-[#d7dde3]">{v.blurb}</p>
                 <dl className="mt-auto flex flex-col gap-1.5 font-mono text-[10px]">
                   <Row k="TIER" v={v.tier} />
-                  <Row k={v.statLabel} v={v.stat} accent={v.accent} />
+                  <Row k={v.statLabel} v={v.stat} accent={accent} />
                   <Row k="ASSET ID" v={v.id} />
                   <Row k="STANDARD" v="Metaplex Core" />
                 </dl>

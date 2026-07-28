@@ -50,6 +50,9 @@ export type Section = "verification" | "perk" | "genesis" | "auctions";
 
 const MAX_LEVEL = 5;
 
+/** Mirrors PERK_TIERS in nft-card.tsx, indexed by level - 1. */
+const PERK_TIER_NAMES = ["Initiate", "Trader", "Pro", "Elite", "Apex"];
+
 const META: Record<Section, { title: string; icon: React.ReactNode }> = {
   verification: { title: "Verification", icon: <Lock className="h-4 w-4" /> },
   perk: { title: "Perk NFTs", icon: <TrendingUp className="h-4 w-4" /> },
@@ -66,7 +69,6 @@ export function NftManage({ section }: { section: Section }) {
   const { connected, address, shortAddress, disconnect } = useWallet();
   const [walletOpen, setWalletOpen] = useState(false);
   const [selected, setSelected] = useState<NftCardData | null>(null);
-  const [perkModal, setPerkModal] = useState(false);
   const [tx, setTx] = useState<{
     state: TxState;
     title: string;
@@ -432,25 +434,88 @@ export function NftManage({ section }: { section: Section }) {
       {/* PERK */}
       {section === "perk" &&
         (level > 0 ? (
-          <div>
-            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-              <NftCard data={{ kind: "perk", level, discountBps }} onClick={() => setPerkModal(true)} />
+          <div className="grid gap-5 sm:grid-cols-[200px_1fr]">
+            <div className="mx-auto w-44 sm:mx-0 sm:w-full">
+              <NftCard
+                data={{ kind: "perk", level, discountBps }}
+                onClick={() => setSelected({ kind: "perk", level, discountBps })}
+              />
             </div>
-            <p className="mt-3 font-mono text-[11px] text-[#6B6B6B]">Tap your perk to upgrade it.</p>
+            <div className="rounded-sm border border-white/[0.08] bg-[#0f1620] p-5">
+              <div className="flex items-center gap-2 text-[15px] font-bold text-signal">
+                <TrendingUp className="h-5 w-5" /> {PERK_TIER_NAMES[level - 1] ?? "Perk"} · Level{" "}
+                {level}
+              </div>
+              <p className="mt-2 text-[12px] leading-relaxed text-[#6B6B6B]">
+                Cuts the protocol fee on every trade you make. The discount lives in the
+                asset&apos;s on-chain Attributes, which only the program can rewrite — so it
+                can&apos;t be edited, and it can&apos;t be sold away from you.
+              </p>
+
+              <dl className="mt-4 flex flex-col gap-2 font-mono text-[11px]">
+                <Row k="FEE DISCOUNT" v={`${(discountBps / 100).toFixed(0)}% off every trade`} accent />
+                <Row k="STANDARD" v="Metaplex Core · Attributes" />
+                <Row k="TRANSFERABLE" v="No (soulbound)" />
+                <Row k="APPLIES TO" v="Buys, sells and bids" />
+                <Row
+                  k="NEXT LEVEL"
+                  v={
+                    level >= MAX_LEVEL
+                      ? "Max level reached"
+                      : `Level ${level + 1} · ${((discountBps + 100) / 100).toFixed(0)}% off`
+                  }
+                />
+              </dl>
+
+              {/* tier ladder */}
+              <div className="mt-4">
+                <div className="flex gap-1">
+                  {Array.from({ length: MAX_LEVEL }).map((_, i) => (
+                    <div
+                      key={i}
+                      className={cn(
+                        "h-1.5 flex-1 rounded-full",
+                        i < level ? "bg-signal" : "bg-white/10",
+                      )}
+                    />
+                  ))}
+                </div>
+                <div className="mt-1.5 flex justify-between font-mono text-[10px] text-[#6B6B6B]">
+                  <span>Level {level} of {MAX_LEVEL}</span>
+                  <span>{(MAX_LEVEL - level) * 1}% more available</span>
+                </div>
+              </div>
+
+              <p className="mt-4 border-t border-white/[0.06] pt-3 text-[11px] leading-relaxed text-[#6B6B6B]">
+                Levels are granted by the protocol as you complete tasks — they can&apos;t be
+                bought or self-minted, which is why a perk is worth holding.
+              </p>
+            </div>
           </div>
         ) : (
-          <div className="rounded-sm border border-white/[0.08] bg-[#0f1620] p-6 text-center">
-            <TrendingUp className="mx-auto h-6 w-6 text-signal" />
-            <div className="mt-3 text-[14px] font-bold">Mint a perk NFT</div>
-            <p className="mx-auto mt-1 max-w-sm text-[12px] leading-relaxed text-[#6B6B6B]">
-              Cut your trading fees with an upgradeable perk — +1% discount per level, capped at 5%.
+          <div className="rounded-sm border border-white/[0.08] bg-[#0f1620] p-6">
+            <TrendingUp className="h-6 w-6 text-signal" />
+            <div className="mt-3 text-[14px] font-bold">Perks are earned, not minted</div>
+            <p className="mt-1 max-w-lg text-[12px] leading-relaxed text-[#6B6B6B]">
+              A perk cuts the protocol fee on every trade you make — +1% per level, capped at{" "}
+              {MAX_LEVEL}%. Because that discount costs the protocol real revenue, perks are
+              granted for completing tasks rather than sold: the on-chain instruction only
+              accepts the protocol authority as signer, so nobody can mint themselves one.
             </p>
-            <button
-              onClick={() => run("Minting perk NFT…", "Perk · Level 1", () => setLevel(1))}
-              className="mt-4 rounded-sm bg-signal px-6 py-2.5 font-mono text-[12px] font-bold text-[#0A0A0A]"
-            >
-              MINT PERK
-            </button>
+            <p className="mt-3 max-w-lg text-[12px] leading-relaxed text-[#6B6B6B]">
+              Once granted, a perk is soulbound to your wallet and its discount is stored in
+              on-chain Attributes only the program can rewrite.
+            </p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              {PERK_TIER_NAMES.map((name, i) => (
+                <div
+                  key={name}
+                  className="rounded-sm border border-white/10 px-2.5 py-1.5 font-mono text-[10px] text-[#6B6B6B]"
+                >
+                  <span className="text-[#F5F4F0]">{name}</span> · {i + 1}% off
+                </div>
+              ))}
+            </div>
           </div>
         ))}
 
@@ -628,14 +693,6 @@ export function NftManage({ section }: { section: Section }) {
       })()}
 
       <NftLanyard data={selected} onClose={() => setSelected(null)} />
-      {perkModal && (
-        <PerkModal
-          level={level}
-          discountBps={discountBps}
-          onClose={() => setPerkModal(false)}
-          onLevelUp={() => run("Leveling up perk…", `Level ${level} → ${level + 1}`, () => setLevel((l) => Math.min(MAX_LEVEL, l + 1)))}
-        />
-      )}
       {confirmBuy && (
         <BuyConfirm
           auction={confirmBuy}
@@ -744,58 +801,6 @@ function AuctionCard({
             BUY NOW
           </button>
         )}
-      </div>
-    </div>
-  );
-}
-
-function PerkModal({
-  level,
-  discountBps,
-  onClose,
-  onLevelUp,
-}: {
-  level: number;
-  discountBps: number;
-  onClose: () => void;
-  onLevelUp: () => void;
-}) {
-  useScrollLock(true);
-  return (
-    <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm" onClick={onClose}>
-      <div className="w-full max-w-lg overflow-hidden rounded-lg border border-white/10 bg-[#0d141c] shadow-2xl" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center border-b border-white/[0.08] px-5 py-4">
-          <span className="font-mono text-[13px] font-bold">Manage perk</span>
-          <button onClick={onClose} className="ml-auto rounded-md p-1 text-[#6B6B6B] hover:bg-white/10 hover:text-[#F5F4F0]" aria-label="Close">
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-        <div className="flex flex-col items-center gap-5 p-5 sm:flex-row sm:items-start">
-          <div className="w-44 max-w-full shrink-0">
-            <NftCardFace data={{ kind: "perk", level, discountBps }} />
-          </div>
-          <div className="w-full flex-1">
-            <div className="font-mono text-[11px] text-[#6B6B6B]">CURRENT DISCOUNT</div>
-            <div className="font-mono text-[22px] font-bold text-signal">{(discountBps / 100).toFixed(0)}% off</div>
-            <div className="mt-3 flex gap-1">
-              {Array.from({ length: MAX_LEVEL }).map((_, i) => (
-                <div key={i} className={cn("h-1.5 flex-1 rounded-full", i < level ? "bg-signal" : "bg-white/10")} />
-              ))}
-            </div>
-            <div className="mt-1 font-mono text-[10px] text-[#6B6B6B]">Level {level} of {MAX_LEVEL}</div>
-            <button
-              onClick={onLevelUp}
-              disabled={level >= MAX_LEVEL}
-              className="mt-4 w-full rounded-sm bg-signal py-2.5 font-mono text-[11px] font-bold text-[#0A0A0A] disabled:opacity-40"
-            >
-              {level >= MAX_LEVEL ? "MAX LEVEL" : "LEVEL UP → +1% OFF"}
-            </button>
-          </div>
-        </div>
-        <p className="border-t border-white/[0.06] px-5 py-3 text-[11px] leading-relaxed text-[#6B6B6B]">
-          Leveling up rewrites the NFT&apos;s on-chain Attributes for a higher fee discount. The
-          asset stays in your wallet — only its plugin data changes.
-        </p>
       </div>
     </div>
   );

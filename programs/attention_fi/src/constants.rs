@@ -15,6 +15,7 @@ pub const MINDSHARE_SEED: &[u8] = b"mindshare";
 pub const TRADER_SEED: &[u8] = b"trader";
 pub const PERK_SEED: &[u8] = b"perk";
 pub const PERK_AUTH_SEED: &[u8] = b"perkauth";
+pub const PERKGRANT_SEED: &[u8] = b"perkgrant";
 pub const GENESIS_SEED: &[u8] = b"genesis";
 pub const GENPOOL_SEED: &[u8] = b"genpool";
 pub const NFTAUCTION_SEED: &[u8] = b"nftauction";

@@ -1,5 +1,8 @@
+"use client";
+
 import { BadgeCheck, TrendingUp, Gift, Image as ImageIcon } from "lucide-react";
 import { TiltCard } from "@/components/reactbits/tilt-card";
+import { useDominantColor } from "@/lib/use-dominant-color";
 
 export type NftCardData =
   | { kind: "verification"; handle: string; id?: string }
@@ -94,10 +97,15 @@ export function getNftVisual(data: NftCardData): NftVisual {
 /** The card visual only (no tilt) — reused by the tilt card and the lanyard. */
 export function NftCardFace({ data }: { data: NftCardData }) {
   const v = getNftVisual(data);
+  // Artwork-derived accent, when the image is readable. The designed accent is
+  // the fallback, not a placeholder — most hosts don't send CORS headers, so
+  // this stays null often and the card must look right either way.
+  const derived = useDominantColor(v.image);
+  const accent = derived ?? v.accent;
   return (
     <div
-      className="af-nft-grad relative aspect-[3/4] w-full overflow-hidden rounded-xl border p-4 shadow-xl"
-      style={{ background: v.grad, borderColor: `${v.accent}77` }}
+      className="af-nft-grad relative aspect-[3/4] w-full overflow-hidden rounded-xl border p-4 shadow-xl transition-colors duration-500"
+      style={{ background: v.grad, borderColor: `${accent}77` }}
     >
       {/* full-bleed artwork (standalone collectibles / skins) */}
       {v.image && (
@@ -121,11 +129,11 @@ export function NftCardFace({ data }: { data: NftCardData }) {
       {/* bottom scrim keeps the footer text readable over the vivid gradient */}
       <div className="pointer-events-none absolute inset-x-0 bottom-0 h-2/5 bg-gradient-to-t from-black/55 to-transparent" />
       <div className="relative flex items-center justify-between">
-        <span className="inline-flex items-center gap-1.5 font-mono text-[10px] font-bold uppercase tracking-wide" style={{ color: v.accent }}>
+        <span className="inline-flex items-center gap-1.5 font-mono text-[10px] font-bold uppercase tracking-wide" style={{ color: accent }}>
           {v.icon}
           {v.label}
         </span>
-        <span className="rounded-full border px-2 py-0.5 font-mono text-[7px] tracking-[0.1em]" style={{ borderColor: `${v.accent}55`, color: v.accent }}>
+        <span className="rounded-full border px-2 py-0.5 font-mono text-[7px] tracking-[0.1em]" style={{ borderColor: `${accent}55`, color: accent }}>
           {v.tag}
         </span>
       </div>
@@ -134,7 +142,7 @@ export function NftCardFace({ data }: { data: NftCardData }) {
         <div className="relative mt-7 flex flex-col items-center" style={{ transform: "translateZ(40px)" }}>
           <div
             className="flex h-16 w-16 items-center justify-center rounded-full border-2"
-            style={{ borderColor: v.accent, color: v.accent, boxShadow: `0 0 24px ${v.accent}44` }}
+            style={{ borderColor: accent, color: accent, boxShadow: `0 0 24px ${accent}44` }}
           >
             {v.icon}
           </div>
@@ -143,7 +151,7 @@ export function NftCardFace({ data }: { data: NftCardData }) {
       )}
       <div className="absolute inset-x-4 bottom-4">
         <div className="font-mono text-[8px] uppercase tracking-[0.1em] text-white/45">{v.statLabel}</div>
-        <div className="truncate font-mono text-[15px] font-bold" style={{ color: v.accent }}>
+        <div className="truncate font-mono text-[15px] font-bold" style={{ color: accent }}>
           {v.stat}
         </div>
         <div className="mt-1 font-mono text-[8px] text-white/30">{v.id} · AttentionFi</div>

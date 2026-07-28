@@ -16,14 +16,9 @@ import nacl from "tweetnacl";
 import { getReadonlyProgram } from "@/lib/solana/program";
 import { PROGRAM_ID } from "@/lib/solana/config";
 import { getSkin, putSkin, skinDbConfigured } from "@/lib/skin-db";
-import { isValidSkinId } from "@/lib/nft-skins";
+import { isValidSkinId, skinMessage } from "@/lib/nft-skins";
 
 const VERIFY_SEED = Buffer.from("verify");
-
-/** The exact message a wallet must sign to change its skin. */
-export function skinMessage(subject: string, skin: string): string {
-  return `Set my AttentionFi verification skin to "${skin}" for ${subject}.`;
-}
 
 export async function GET(request: Request) {
   const subject = new URL(request.url).searchParams.get("subject");

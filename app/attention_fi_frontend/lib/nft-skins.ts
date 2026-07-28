@@ -80,3 +80,14 @@ export function skinById(id: string | null | undefined): Skin {
 export function isValidSkinId(id: string): boolean {
   return SKINS.some((s) => s.id === id);
 }
+
+/**
+ * The exact message a wallet signs to change its skin.
+ *
+ * Lives here rather than in the route module because Next only permits route
+ * handlers and a fixed set of config exports from a `route.ts`; it also has to
+ * be byte-identical on both sides, so a single definition is the point.
+ */
+export function skinMessage(subject: string, skin: string): string {
+  return `Set my AttentionFi verification skin to "${skin}" for ${subject}.`;
+}

@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 use mpl_core::instructions::CreateV2CpiBuilder;
-use mpl_core::types::{DataState, Plugin, PluginAuthorityPair};
+use mpl_core::types::{DataState, PermanentFreezeDelegate, Plugin, PluginAuthorityPair};
 
 use crate::constants::{GLOBAL_SEED, PERK_AUTH_SEED, PERK_SEED};
 use crate::error::AttentionError;
@@ -47,12 +47,26 @@ pub struct MintPerk<'info> {
 pub fn mint_perk_handler(ctx: Context<MintPerk>, uri: String) -> Result<()> {
     let level: u8 = 1;
 
-    // Attributes controlled by the program's perk authority PDA, so only the
-    // program can level the NFT up later.
-    let plugins = vec![PluginAuthorityPair {
-        plugin: Plugin::Attributes(perk_attributes(level)),
-        authority: None,
-    }];
+    // Soulbound, mirroring `verify_handle`. A perk's value is a trading-fee
+    // discount, so its cost to the protocol scales with the holder's volume:
+    // if perks were transferable they would predictably accumulate in the
+    // highest-volume wallets, which is exactly where they cost the most, and
+    // buying one would dominate earning it. Freezing binds the perk to the
+    // wallet that earned it.
+    //
+    // Attributes are controlled by the program's perk authority PDA, so only
+    // the program can level the NFT up later — a holder must not be able to
+    // rewrite their own discount.
+    let plugins = vec![
+        PluginAuthorityPair {
+            plugin: Plugin::PermanentFreezeDelegate(PermanentFreezeDelegate { frozen: true }),
+            authority: None,
+        },
+        PluginAuthorityPair {
+            plugin: Plugin::Attributes(perk_attributes(level)),
+            authority: None,
+        },
+    ];
 
     CreateV2CpiBuilder::new(&ctx.accounts.mpl_core_program.to_account_info())
         .asset(&ctx.accounts.asset.to_account_info())
