@@ -12,7 +12,9 @@ export default function robots(): MetadataRoute.Robots {
   const allowIndexing = process.env.NEXT_PUBLIC_ALLOW_INDEXING === "true";
   return {
     rules: allowIndexing
-      ? { userAgent: "*", allow: "/" }
+      ? // /admin stays disallowed even after launch — it's unlinked, and
+        // listing it in search would be the one thing that surfaces it.
+        { userAgent: "*", allow: "/", disallow: "/admin" }
       : { userAgent: "*", disallow: "/" },
   };
 }
