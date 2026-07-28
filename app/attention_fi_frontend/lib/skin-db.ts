@@ -59,12 +59,23 @@ function ensureSchema(): Promise<void> {
         updated_at timestamptz not null default now()
       )`;
     // Signature as primary key is the replay guard: the same paid transaction
-    // can't be submitted twice to buy a second skin change.
+    // can't be submitted twice to buy two different skins.
     await sql`
       create table if not exists skin_payment (
         signature text primary key,
         subject text not null,
         paid_at timestamptz not null default now()
+      )`;
+    // Skins are bought once and kept: this records what a wallet has unlocked,
+    // separately from which one it's currently wearing. Switching back to an
+    // owned skin is free, so ownership can't live in verification_skin — that
+    // holds a single current value.
+    await sql`
+      create table if not exists skin_ownership (
+        subject text not null,
+        skin text not null,
+        acquired_at timestamptz not null default now(),
+        primary key (subject, skin)
       )`;
   })().catch((e) => {
     schemaReady = null; // allow retry on transient failure
@@ -126,10 +137,61 @@ export async function redeemSkinPayment(
       values (${signature}, ${subject}, now())
       on conflict (signature) do nothing
       returning signature
+    ),
+    -- Unlocking is the durable half of the purchase: the wearer can switch
+    -- away and back for free afterwards, so this must land in the same
+    -- statement as the payment claim.
+    own as (
+      insert into skin_ownership (subject, skin, acquired_at)
+      select ${subject}, ${skin}, now() from claim
+      on conflict (subject, skin) do nothing
     )
     insert into verification_skin (subject, skin, updated_at)
     select ${subject}, ${skin}, now() from claim
     on conflict (subject) do update set skin = excluded.skin, updated_at = now()
     returning subject`)) as { subject: string }[];
   return rows.length > 0;
+}
+
+/** Every skin this wallet has unlocked. */
+export async function getOwnedSkins(subject: string): Promise<string[]> {
+  if (!skinDbConfigured()) return [];
+  await ensureSchema();
+  const rows = (await sql`
+    select skin from skin_ownership where subject = ${subject}`) as { skin: string }[];
+  return rows.map((r) => r.skin);
+}
+
+/**
+ * Wear a skin the wallet already owns, at no charge.
+ *
+ * Ownership is re-checked in the same statement that applies the change rather
+ * than in a prior query, so a skin can't be applied on the strength of a
+ * check that was true a moment earlier. Returns false when unowned.
+ */
+export async function applyOwnedSkin(subject: string, skin: string): Promise<boolean> {
+  await withRetry(() => ensureSchema());
+  const rows = (await withRetry(() => sql`
+    insert into verification_skin (subject, skin, updated_at)
+    select ${subject}, ${skin}, now()
+    where exists (
+      select 1 from skin_ownership where subject = ${subject} and skin = ${skin}
+    )
+    on conflict (subject) do update set skin = excluded.skin, updated_at = now()
+    returning subject`)) as { subject: string }[];
+  return rows.length > 0;
+}
+
+/**
+ * Grant a skin without payment.
+ *
+ * Used for the default skin, which everyone wears before they buy anything and
+ * must always be free to return to.
+ */
+export async function grantSkin(subject: string, skin: string): Promise<void> {
+  await withRetry(() => ensureSchema());
+  await withRetry(() => sql`
+    insert into skin_ownership (subject, skin, acquired_at)
+    values (${subject}, ${skin}, now())
+    on conflict (subject, skin) do nothing`);
 }

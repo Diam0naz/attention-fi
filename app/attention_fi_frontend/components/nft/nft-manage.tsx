@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Keypair, PublicKey } from "@solana/web3.js";
 import { BN } from "@anchor-lang/core";
-import { ArrowLeft, BadgeCheck, Gavel, Gift, Lock, Plus, TrendingUp, X } from "lucide-react";
+import { ArrowLeft, BadgeCheck, Gavel, Gift, Loader2, Lock, Plus, TrendingUp, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useWallet } from "@/components/wallet/wallet-provider";
 import { WalletConnectModal } from "@/components/wallet/wallet-connect-modal";
@@ -96,6 +96,10 @@ export function NftManage({ section }: { section: Section }) {
     assets: [],
   });
   const [listOpen, setListOpen] = useState(false);
+  // Mirrors the picker so the badge restyles as soon as a change lands, and
+  // shows a loading state while one is in flight.
+  const [badgeSkin, setBadgeSkin] = useState<string | null>(null);
+  const [skinBusy, setSkinBusy] = useState(false);
   const listableAssets = address && listable.owner === address ? listable.assets : [];
   // Collections this wallet is the update authority for.
   const [collections, setCollections] = useState<CollectionData[]>([]);
@@ -411,8 +415,24 @@ export function NftManage({ section }: { section: Section }) {
           </div>
         ) : verified ? (
           <div className="grid gap-5 sm:grid-cols-[200px_1fr]">
-            <div className="mx-auto w-44 sm:mx-0 sm:w-full">
-              <NftCard data={{ kind: "verification", handle: handle || "you" }} onClick={() => setSelected({ kind: "verification", handle: handle || "you" })} />
+            <div className="relative mx-auto w-44 sm:mx-0 sm:w-full">
+              <NftCard
+                data={{ kind: "verification", handle: handle || "you", skinId: badgeSkin }}
+                onClick={() =>
+                  setSelected({ kind: "verification", handle: handle || "you", skinId: badgeSkin })
+                }
+              />
+              {/* The new look isn't instant — it spans a wallet prompt, a
+                  confirmation and a write — so the card says so instead of
+                  sitting on the old art as though nothing happened. */}
+              {skinBusy && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 rounded-xl bg-[#0A0A0A]/75 backdrop-blur-[2px]">
+                  <Loader2 className="h-5 w-5 animate-spin text-signal" />
+                  <span className="px-3 text-center font-mono text-[10px] leading-relaxed text-[#F5F4F0]">
+                    Restyling your badge…
+                  </span>
+                </div>
+              )}
             </div>
             <div className="rounded-sm border border-white/[0.08] bg-[#0f1620] p-5">
               <div className="flex items-center gap-2 text-[15px] font-bold text-signal">
@@ -428,7 +448,13 @@ export function NftManage({ section }: { section: Section }) {
                 <Row k="TRANSFERABLE" v="No (soulbound)" />
                 <Row k="GATES" v="Creator-fee claims" />
               </dl>
-              {address && <SkinPicker subject={address} />}
+              {address && (
+                <SkinPicker
+                  subject={address}
+                  onSkinChange={setBadgeSkin}
+                  onBusyChange={setSkinBusy}
+                />
+              )}
             </div>
           </div>
         ) : (

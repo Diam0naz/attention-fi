@@ -3,9 +3,11 @@
 import { BadgeCheck, TrendingUp, Gift, Image as ImageIcon } from "lucide-react";
 import { TiltCard } from "@/components/reactbits/tilt-card";
 import { useDominantColor } from "@/lib/use-dominant-color";
+import { skinById } from "@/lib/nft-skins";
 
 export type NftCardData =
-  | { kind: "verification"; handle: string; id?: string }
+  /** `skinId` restyles the badge; omitted or unknown falls back to the default. */
+  | { kind: "verification"; handle: string; id?: string; skinId?: string | null }
   | { kind: "perk"; level: number; discountBps: number; id?: string }
   | { kind: "genesis"; shareBps: number; id: string; image?: string }
   | { kind: "custom"; name: string; image?: string; id?: string };
@@ -37,11 +39,15 @@ export interface NftVisual {
 
 export function getNftVisual(data: NftCardData): NftVisual {
   if (data.kind === "verification") {
+    // The badge's palette is the one part of it that's mutable; skinById
+    // degrades an unknown or removed id to the default rather than rendering
+    // a half-styled card.
+    const s = skinById(data.skinId);
     return {
       label: "Verification",
       tag: "SOULBOUND",
-      grad: "linear-gradient(120deg,#062b22,#0f7a54,#063d2f)",
-      accent: "#00ff85",
+      grad: `linear-gradient(120deg,${s.from},${s.accent}33,${s.to})`,
+      accent: s.accent,
       tier: "Verified",
       stat: `@${data.handle}`,
       statLabel: "BOUND HANDLE",

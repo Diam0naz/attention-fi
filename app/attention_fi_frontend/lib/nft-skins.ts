@@ -93,12 +93,27 @@ export function isValidSkinId(id: string): boolean {
 }
 
 /**
- * The exact message a wallet signs to change its skin.
+ * How long a signed skin message stays valid.
+ *
+ * Re-applying an owned skin is authorised by a signature rather than a payment,
+ * so the message carries a timestamp and the server refuses stale ones. The
+ * action is idempotent and only ever affects the signer's own badge, so this is
+ * hygiene rather than a security boundary — the window is generous enough to
+ * survive a slow wallet prompt.
+ */
+export const SKIN_MESSAGE_TTL_MS = 10 * 60_000;
+
+/**
+ * The exact message a wallet signs to re-apply a skin it already owns.
  *
  * Lives here rather than in the route module because Next only permits route
  * handlers and a fixed set of config exports from a `route.ts`; it also has to
  * be byte-identical on both sides, so a single definition is the point.
  */
-export function skinMessage(subject: string, skin: string): string {
-  return `Set my AttentionFi verification skin to "${skin}" for ${subject}.`;
+export function skinMessage(subject: string, skin: string, issuedAt: number): string {
+  return [
+    `Set my AttentionFi verification skin to "${skin}" for ${subject}.`,
+    `Issued at: ${new Date(issuedAt).toISOString()}`,
+    "This is free and does not authorise a payment.",
+  ].join("\n");
 }

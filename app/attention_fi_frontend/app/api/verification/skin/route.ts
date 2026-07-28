@@ -13,10 +13,25 @@
  */
 import { NextResponse } from "next/server";
 import { Connection, PublicKey } from "@solana/web3.js";
+import bs58 from "bs58";
+import nacl from "tweetnacl";
 import { getReadonlyProgram } from "@/lib/solana/program";
 import { PROGRAM_ID, RPC_ENDPOINT } from "@/lib/solana/config";
-import { getSkin, redeemSkinPayment, skinDbConfigured } from "@/lib/skin-db";
-import { isValidSkinId, SKIN_FEE_LAMPORTS } from "@/lib/nft-skins";
+import {
+  applyOwnedSkin,
+  getOwnedSkins,
+  getSkin,
+  grantSkin,
+  redeemSkinPayment,
+  skinDbConfigured,
+} from "@/lib/skin-db";
+import {
+  DEFAULT_SKIN_ID,
+  isValidSkinId,
+  SKIN_FEE_LAMPORTS,
+  SKIN_MESSAGE_TTL_MS,
+  skinMessage,
+} from "@/lib/nft-skins";
 
 const VERIFY_SEED = Buffer.from("verify");
 const GLOBAL_SEED = Buffer.from("global");
@@ -28,11 +43,15 @@ export async function GET(request: Request) {
   const subject = new URL(request.url).searchParams.get("subject");
   if (!subject) return NextResponse.json({ error: "missing subject" }, { status: 400 });
   try {
-    return NextResponse.json({ skin: await getSkin(subject) });
+    const [skin, owned] = await Promise.all([getSkin(subject), getOwnedSkins(subject)]);
+    // The default is always owned — it's what a badge wears before anything is
+    // bought, so charging to go back to it would be charging twice for nothing.
+    if (!owned.includes(DEFAULT_SKIN_ID)) owned.push(DEFAULT_SKIN_ID);
+    return NextResponse.json({ skin, owned });
   } catch {
     // A skin lookup failing is not worth failing the page over — the badge
     // renders with the default.
-    return NextResponse.json({ skin: null });
+    return NextResponse.json({ skin: null, owned: [DEFAULT_SKIN_ID] });
   }
 }
 
@@ -45,16 +64,22 @@ export async function POST(request: Request) {
       );
     }
 
-    let body: { subject?: unknown; skin?: unknown; signature?: unknown };
+    let body: {
+      subject?: unknown;
+      skin?: unknown;
+      signature?: unknown;
+      messageSignature?: unknown;
+      issuedAt?: unknown;
+    };
     try {
       body = await request.json();
     } catch {
       return NextResponse.json({ error: "invalid json" }, { status: 400 });
     }
-    const { subject, skin, signature } = body;
+    const { subject, skin, signature, messageSignature, issuedAt } = body;
 
-    if (typeof subject !== "string" || typeof skin !== "string" || typeof signature !== "string") {
-      return NextResponse.json({ error: "missing subject, skin or signature" }, { status: 400 });
+    if (typeof subject !== "string" || typeof skin !== "string") {
+      return NextResponse.json({ error: "missing subject or skin" }, { status: 400 });
     }
     if (!isValidSkinId(skin)) {
       return NextResponse.json({ error: "unknown skin" }, { status: 400 });
@@ -65,6 +90,52 @@ export async function POST(request: Request) {
       subjectKey = new PublicKey(subject);
     } catch {
       return NextResponse.json({ error: "invalid subject address" }, { status: 400 });
+    }
+
+    // ── free path: wearing a skin this wallet already bought ──────────────
+    //
+    // Skins are bought once and kept, so switching back to one must not charge
+    // again. There's no payment here to double as proof of wallet control, so
+    // a signed message stands in for it.
+    if (typeof signature !== "string") {
+      if (typeof messageSignature !== "string" || typeof issuedAt !== "number") {
+        return NextResponse.json(
+          { error: "missing signature or messageSignature" },
+          { status: 400 },
+        );
+      }
+      if (Math.abs(Date.now() - issuedAt) > SKIN_MESSAGE_TTL_MS) {
+        return NextResponse.json(
+          { error: "That request expired — try again." },
+          { status: 400 },
+        );
+      }
+
+      let ok = false;
+      try {
+        ok = nacl.sign.detached.verify(
+          new TextEncoder().encode(skinMessage(subject, skin, issuedAt)),
+          bs58.decode(messageSignature),
+          subjectKey.toBytes(),
+        );
+      } catch {
+        ok = false;
+      }
+      if (!ok) {
+        return NextResponse.json({ error: "Signature didn't match." }, { status: 403 });
+      }
+
+      // The default skin is free for everyone, so make sure it's owned rather
+      // than rejecting a wallet that never explicitly bought it.
+      if (skin === DEFAULT_SKIN_ID) await grantSkin(subject, skin);
+
+      if (!(await applyOwnedSkin(subject, skin))) {
+        return NextResponse.json(
+          { error: "You don't own that skin yet." },
+          { status: 402 },
+        );
+      }
+      return NextResponse.json({ ok: true, skin, charged: false });
     }
 
     // Must actually hold a credential — otherwise there's nothing to restyle.
@@ -129,7 +200,7 @@ export async function POST(request: Request) {
         { status: 409 },
       );
     }
-    return NextResponse.json({ ok: true, skin });
+    return NextResponse.json({ ok: true, skin, charged: true });
   } catch (e) {
     // Anything unhandled here previously escaped as an empty 500 body, which
     // the client then failed to parse as JSON.
