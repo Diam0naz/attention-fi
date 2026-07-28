@@ -12,7 +12,8 @@ import { NftCardFace, type NftCardData } from "@/components/nft/nft-card";
 import { getNftState } from "@/lib/mock-data";
 import { Keypair, PublicKey } from "@solana/web3.js";
 import { BN } from "@anchor-lang/core";
-import { useProgram } from "@/lib/solana/use-program";
+import { useProgram, useReadonlyProgram } from "@/lib/solana/use-program";
+import { fetchCollections, type CollectionData } from "@/lib/solana/nft-data";
 import { handleToMint, myCreatedTokens } from "@/lib/solana/registry";
 import { solUsd } from "@/lib/solana/sol-usd";
 import { explorerTx } from "@/lib/solana/config";
@@ -92,6 +93,57 @@ export function NftCreateFlow() {
   const [nftName, setNftName] = useState("");
   const [nftImage, setNftImage] = useState("");
   const [listForSale, setListForSale] = useState(false);
+  // collection config — a mint may join one collection the wallet controls.
+  const [collections, setCollections] = useState<CollectionData[]>([]);
+  const [collection, setCollection] = useState<string | null>(null);
+  const [newCollectionName, setNewCollectionName] = useState("");
+  const [creatingCollection, setCreatingCollection] = useState(false);
+
+  const readProgram = useReadonlyProgram();
+  // Bumped after a successful create so the list re-reads without a callback
+  // indirection the effect lint can't see through.
+  const [collectionsNonce, setCollectionsNonce] = useState(0);
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const list = address
+        ? await fetchCollections(readProgram, new PublicKey(address)).catch(() => [])
+        : [];
+      if (!cancelled) setCollections(list);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [address, readProgram, collectionsNonce]);
+
+  /**
+   * Create a Core collection owned by this wallet. The collection account is a
+   * fresh keypair that signs its own creation, so it can't be a PDA and has to
+   * be generated client-side.
+   */
+  async function createCollection() {
+    if (!program || !address) return setWalletOpen(true);
+    const name = newCollectionName.trim();
+    if (!name) return;
+    setCreatingCollection(true);
+    setTxErr(null);
+    try {
+      const kp = Keypair.generate();
+      await program.methods
+        .createCollection(name.slice(0, 64), "")
+        .accounts({ payer: new PublicKey(address), collection: kp.publicKey })
+        .signers([kp])
+        .rpc();
+      setNewCollectionName("");
+      // Select it immediately — creating one is only ever a prelude to using it.
+      setCollection(kp.publicKey.toBase58());
+      setCollectionsNonce((n) => n + 1);
+    } catch (e) {
+      setTxErr(e instanceof Error ? e.message : "Could not create collection");
+    } finally {
+      setCreatingCollection(false);
+    }
+  }
 
   const nft = useMemo(() => (address ? getNftState(address) : null), [address]);
   const ownedAssets = useMemo(() => {
@@ -167,7 +219,14 @@ export function NftCreateFlow() {
       } else if (kind === "nft") {
         sig = await program.methods
           .mintNft(nftName.slice(0, 64), nftImage.slice(0, 200))
-          .accounts({ payer: me, recipient: me, asset: asset.publicKey, collection: null })
+          .accounts({
+            payer: me,
+            recipient: me,
+            asset: asset.publicKey,
+            // Joining a collection is a mint-time decision for Core; passing
+            // null mints a standalone asset.
+            collection: collection ? new PublicKey(collection) : null,
+          })
           .signers([asset])
           .rpc();
       } else if (kind === "genesis") {
@@ -304,6 +363,77 @@ export function NftCreateFlow() {
                 <img src={nftImage} alt="preview" className="h-28 w-28 rounded-md border border-white/10 object-cover" />
               </div>
             )}
+
+            {/* Collection membership is fixed at mint time by Core, so it has
+                to be chosen here rather than added afterwards. */}
+            <div className="mt-4 border-t border-white/[0.08] pt-4">
+              <div className="text-[12px] font-bold">Collection</div>
+              {listForSale ? (
+                // start_nft_auction mints and escrows in one instruction and
+                // takes no collection account, so the two can't be combined.
+                <p className="mt-1 text-[11px] leading-relaxed text-[#6B6B6B]">
+                  Not available when listing at mint — the listing instruction mints the
+                  asset itself and takes no collection. To do both, turn this off, mint
+                  into a collection, then list it from the{" "}
+                  <Link href="/nft/auctions" className="text-signal">
+                    1-of-1 Auctions
+                  </Link>{" "}
+                  page.
+                </p>
+              ) : (
+              <>
+              <p className="mt-1 text-[11px] leading-relaxed text-[#6B6B6B]">
+                Optional. Assets in a collection get the stacked-deck treatment in the
+                marketplace and share one on-chain parent.
+              </p>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setCollection(null)}
+                  className={cn(
+                    "rounded-sm border px-2.5 py-1.5 font-mono text-[11px] transition-colors",
+                    collection === null
+                      ? "border-signal bg-signal/10 text-signal"
+                      : "border-white/10 text-[#6B6B6B] hover:border-white/25",
+                  )}
+                >
+                  None
+                </button>
+                {collections.map((c) => (
+                  <button
+                    key={c.address}
+                    type="button"
+                    onClick={() => setCollection(c.address)}
+                    className={cn(
+                      "rounded-sm border px-2.5 py-1.5 font-mono text-[11px] transition-colors",
+                      collection === c.address
+                        ? "border-signal bg-signal/10 text-signal"
+                        : "border-white/10 text-[#6B6B6B] hover:border-white/25",
+                    )}
+                  >
+                    {c.name} <span className="opacity-60">· {c.size}</span>
+                  </button>
+                ))}
+              </div>
+              <div className="mt-2 flex gap-1.5">
+                <input
+                  value={newCollectionName}
+                  onChange={(e) => setNewCollectionName(e.target.value.slice(0, 64))}
+                  placeholder="New collection name"
+                  className="min-w-0 flex-1 rounded-sm border border-white/10 bg-[#12181f] px-3 py-2 text-[12px] outline-none placeholder:text-[#4b5563]"
+                />
+                <button
+                  type="button"
+                  onClick={() => void createCollection()}
+                  disabled={creatingCollection || newCollectionName.trim() === ""}
+                  className="shrink-0 rounded-sm border border-signal/40 bg-signal/10 px-3 py-2 font-mono text-[11px] font-bold text-signal disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  {creatingCollection ? "CREATING…" : "CREATE"}
+                </button>
+              </div>
+              </>
+              )}
+            </div>
 
             <div className="mt-4 border-t border-white/[0.08] pt-4">
               <label className="flex items-center justify-between">

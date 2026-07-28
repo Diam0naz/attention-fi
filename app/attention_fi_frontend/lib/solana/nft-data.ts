@@ -9,6 +9,8 @@ const short = (a: string) => `${a.slice(0, 4)}…${a.slice(-4)}`;
 const MPL_CORE_PROGRAM_ID = new PublicKey("CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d");
 /** mpl-core's `Key` enum discriminant for a plain (non-collection) asset account. */
 const KEY_ASSET_V1 = 1;
+/** `Key::CollectionV1` — the same enum, variant 5. */
+const KEY_COLLECTION_V1 = 5;
 
 /**
  * Decode just enough of a Core `BaseAssetV1` account (borsh: 1-byte key +
@@ -41,6 +43,72 @@ function decodeAsset(data: Buffer): { name: string; uri: string; collection: str
   } catch {
     return null;
   }
+}
+
+/** An mpl-core collection this wallet controls. */
+export interface CollectionData {
+  address: string;
+  name: string;
+  uri?: string;
+  /** How many assets currently belong to it. */
+  size: number;
+}
+
+/**
+ * Decode a Core `BaseCollectionV1` (borsh: 1-byte key + 32-byte update
+ * authority + name: String + uri: String + num_minted: u32 + current_size:
+ * u32). Simpler than an asset: the authority is a bare Pubkey here, not the
+ * `UpdateAuthority` enum an asset carries.
+ */
+function decodeCollection(data: Buffer): { name: string; uri: string; size: number } | null {
+  try {
+    let offset = 1 + 32; // key + update_authority
+    const nameLen = data.readUInt32LE(offset);
+    offset += 4;
+    const name = data.subarray(offset, offset + nameLen).toString("utf8");
+    offset += nameLen;
+
+    const uriLen = data.readUInt32LE(offset);
+    offset += 4;
+    const uri = data.subarray(offset, offset + uriLen).toString("utf8");
+    offset += uriLen;
+
+    offset += 4; // num_minted — cumulative, so it overcounts after a burn
+    const size = data.readUInt32LE(offset);
+    return { name, uri, size };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Collections whose update authority is `authority` — the ones this wallet may
+ * mint into. Read by memcmp on mpl-core's account layout, matching the
+ * approach used for assets above.
+ */
+export async function fetchCollections(
+  program: Program<AttentionFi>,
+  authority: PublicKey,
+): Promise<CollectionData[]> {
+  const accounts = await program.provider.connection.getProgramAccounts(MPL_CORE_PROGRAM_ID, {
+    filters: [
+      { memcmp: { offset: 0, bytes: bs58.encode(Buffer.from([KEY_COLLECTION_V1])) } },
+      { memcmp: { offset: 1, bytes: authority.toBase58() } },
+    ],
+  });
+
+  const out: CollectionData[] = [];
+  for (const { pubkey, account } of accounts) {
+    const decoded = decodeCollection(account.data);
+    if (!decoded) continue;
+    out.push({
+      address: pubkey.toBase58(),
+      name: decoded.name || short(pubkey.toBase58()),
+      uri: decoded.uri || undefined,
+      size: decoded.size,
+    });
+  }
+  return out;
 }
 
 /** A 1-of-1 Dutch auction, read straight from its on-chain `NftAuction` PDA. */
