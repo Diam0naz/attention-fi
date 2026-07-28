@@ -15,6 +15,7 @@ import { PublicKey } from "@solana/web3.js";
 import { useWallet } from "@/components/wallet/wallet-provider";
 import { useLiveTokenDetail } from "@/components/token/use-live-token";
 import { MindshareSourceBadge } from "@/components/feed/mindshare-source";
+import { AuctionPanel } from "@/components/token/auction-panel";
 import { useTokenIndex } from "@/lib/token-index";
 import { useProgram } from "@/lib/solana/use-program";
 import { useSolBalance } from "@/lib/solana/use-sol-balance";
@@ -365,8 +366,12 @@ export function TokenDetailTerminal({ token: tokenProp }: { token: TokenDetail }
           )}
         </div>
 
-        {/* right: order panel */}
+        {/* right: order panel — a Dutch auction gets its own controls rather
+            than buy/sell tabs, which would misdescribe what it does. */}
         <div className="p-5 sm:p-7">
+          {token.mechanism === "dutch" ? (
+            <AuctionPanel mint={tokenMint} symbol={token.symbol} />
+          ) : (
           <div className="rounded-sm border border-white/[0.08] bg-[#0f1620] p-4">
             {/* buy/sell toggle */}
             <div className="grid grid-cols-2 gap-1 rounded-sm bg-white/[0.04] p-1">
@@ -503,6 +508,7 @@ export function TokenDetailTerminal({ token: tokenProp }: { token: TokenDetail }
               ))}
             </div>
           </div>
+          )}
         </div>
       </div>
 

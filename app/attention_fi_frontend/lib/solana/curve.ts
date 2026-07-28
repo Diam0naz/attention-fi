@@ -130,7 +130,7 @@ interface HasReserves {
 }
 
 /** Dutch-auction price at `nowSec`, mirroring the program's linear descent. */
-function linearDescentLamports(
+export function linearDescentLamports(
   startPrice: bigint,
   floorPrice: bigint,
   startTime: bigint,
@@ -308,4 +308,98 @@ export async function fetchGlobal(program: Program<AttentionFi>) {
   } catch {
     return null;
   }
+}
+
+/**
+ * Dutch-auction detail for the trade panel. `AnyCurve` deliberately flattens
+ * every mechanism to a common display shape; bidding needs the auction's own
+ * schedule (descent, remaining allocation, end time), so it's read separately.
+ */
+export interface AuctionDetail {
+  mint: string;
+  creator: string;
+  /** Lamports per whole token. */
+  startPriceLamports: bigint;
+  floorPriceLamports: bigint;
+  /** Current price on the descent, lamports per whole token. */
+  priceLamports: bigint;
+  priceSol: number;
+  startTime: number;
+  /** Seconds. */
+  duration: number;
+  endTime: number;
+  /** Base units. */
+  totalForSale: bigint;
+  tokensSold: bigint;
+  remaining: bigint;
+  /** Whole tokens, for display. */
+  remainingTokens: number;
+  soldPct: number;
+  proceedsSol: number;
+  complete: boolean;
+  ended: boolean;
+}
+
+export async function fetchAuctionDetail(
+  program: Program<AttentionFi>,
+  mint: PublicKey,
+  decimals: number,
+): Promise<AuctionDetail | null> {
+  const raw = await program.account.dutchAuction
+    .fetchNullable(auctionPda(mint))
+    .catch(() => null);
+  if (!raw) return null;
+
+  const nowSec = Math.floor(Date.now() / 1000);
+  const startTime = Number(raw.startTime.toString());
+  const duration = Number(raw.duration.toString());
+  const priceLamports = linearDescentLamports(
+    BigInt(raw.startPrice.toString()),
+    BigInt(raw.floorPrice.toString()),
+    BigInt(startTime),
+    BigInt(duration),
+    BigInt(nowSec),
+  );
+  const totalForSale = BigInt(raw.totalForSale.toString());
+  const tokensSold = BigInt(raw.tokensSold.toString());
+  const remaining = totalForSale > tokensSold ? totalForSale - tokensSold : 0n;
+  const endTime = startTime + duration;
+
+  return {
+    mint: mint.toBase58(),
+    creator: raw.creator.toBase58(),
+    startPriceLamports: BigInt(raw.startPrice.toString()),
+    floorPriceLamports: BigInt(raw.floorPrice.toString()),
+    priceLamports,
+    priceSol: Number(priceLamports) / LAMPORTS_PER_SOL,
+    startTime,
+    duration,
+    endTime,
+    totalForSale,
+    tokensSold,
+    remaining,
+    remainingTokens: Number(remaining) / 10 ** decimals,
+    soldPct: totalForSale === 0n ? 0 : Number((tokensSold * 10_000n) / totalForSale) / 100,
+    proceedsSol: Number(BigInt(raw.realSolReserves.toString())) / LAMPORTS_PER_SOL,
+    complete: raw.complete,
+    ended: nowSec >= endTime,
+  };
+}
+
+/**
+ * Cost of buying `amountBaseUnits` at `priceLamports`, mirroring the program's
+ * `auction_quote` exactly — including its round-UP, so the client never quotes
+ * less than the chain will charge.
+ */
+export function auctionQuote(
+  priceLamports: bigint,
+  amountBaseUnits: bigint,
+  decimals: number,
+  feeBps: number,
+): { costLamports: bigint; feeLamports: bigint; totalLamports: bigint } {
+  const scale = 10n ** BigInt(decimals);
+  const numerator = priceLamports * amountBaseUnits;
+  const costLamports = scale === 0n ? 0n : (numerator + scale - 1n) / scale;
+  const feeLamports = (costLamports * BigInt(feeBps)) / 10_000n;
+  return { costLamports, feeLamports, totalLamports: costLamports + feeLamports };
 }
