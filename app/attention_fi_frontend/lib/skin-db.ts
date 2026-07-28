@@ -77,6 +77,22 @@ function ensureSchema(): Promise<void> {
         acquired_at timestamptz not null default now(),
         primary key (subject, skin)
       )`;
+    // Record which skin a payment bought. Older rows predate the column and
+    // stay null — the backfill below is what covers them.
+    await sql`alter table skin_payment add column if not exists skin text`;
+
+    // Backfill ownership for wallets that paid before skins were durable.
+    //
+    // skin_payment doesn't say which skin each payment bought, so the only
+    // provable claim is the one each subject is currently wearing — they paid
+    // for that. Anyone who bought several and switched away can't be
+    // reconstructed from this schema; they'd re-buy an older one. Charging
+    // again for the skin actually on their badge would be the visible wrong,
+    // and this prevents it. Idempotent, so it's safe on every cold start.
+    await sql`
+      insert into skin_ownership (subject, skin, acquired_at)
+      select subject, skin, updated_at from verification_skin
+      on conflict (subject, skin) do nothing`;
   })().catch((e) => {
     schemaReady = null; // allow retry on transient failure
     throw e;
@@ -133,8 +149,8 @@ export async function redeemSkinPayment(
   await withRetry(() => ensureSchema());
   const rows = (await withRetry(() => sql`
     with claim as (
-      insert into skin_payment (signature, subject, paid_at)
-      values (${signature}, ${subject}, now())
+      insert into skin_payment (signature, subject, skin, paid_at)
+      values (${signature}, ${subject}, ${skin}, now())
       on conflict (signature) do nothing
       returning signature
     ),
