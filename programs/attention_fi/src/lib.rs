@@ -227,6 +227,25 @@ pub mod attention_fi {
         buy_nft::buy_nft_handler(ctx, max_price)
     }
 
+    /// List an NFT the caller already owns as a descending 1-of-1 auction.
+    /// `start_nft_auction` mints its asset, so it can only list something
+    /// created in the same transaction; this escrows an existing one.
+    pub fn list_nft_auction(
+        ctx: Context<ListNftAuction>,
+        start_price: u64,
+        floor_price: u64,
+        duration: i64,
+    ) -> Result<()> {
+        list_nft_auction::list_nft_auction_handler(ctx, start_price, floor_price, duration)
+    }
+
+    /// Return an unsold 1-of-1 to its lister once the auction window closes.
+    /// Without this an expired auction locks the NFT in escrow permanently —
+    /// `buy_nft` refuses after the deadline and nothing else can move it.
+    pub fn reclaim_nft_auction(ctx: Context<ReclaimNftAuction>) -> Result<()> {
+        reclaim_nft_auction::reclaim_nft_auction_handler(ctx)
+    }
+
     /// Route a token's fees to its genesis NFT holders (split pro-rata by share).
     pub fn deposit_genesis_fee(ctx: Context<DepositGenesisFee>, amount: u64) -> Result<()> {
         deposit_genesis_fee::deposit_genesis_fee_handler(ctx, amount)

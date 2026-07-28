@@ -2809,6 +2809,118 @@ export type AttentionFi = {
       "args": []
     },
     {
+      "name": "listNftAuction",
+      "docs": [
+        "List an NFT the caller already owns as a descending 1-of-1 auction.",
+        "`start_nft_auction` mints its asset, so it can only list something",
+        "created in the same transaction; this escrows an existing one."
+      ],
+      "discriminator": [
+        255,
+        215,
+        240,
+        168,
+        197,
+        68,
+        106,
+        71
+      ],
+      "accounts": [
+        {
+          "name": "creator",
+          "docs": [
+            "Current owner of the asset; must sign to hand it into escrow."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "global",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  108,
+                  111,
+                  98,
+                  97,
+                  108
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "auction",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  110,
+                  102,
+                  116,
+                  97,
+                  117,
+                  99,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "asset"
+              }
+            ]
+          }
+        },
+        {
+          "name": "asset",
+          "docs": [
+            "rejects the transfer unless `creator` is the current owner \u2014 the same",
+            "guarantee an `owner =` constraint would give, without decoding Core's",
+            "account layout here."
+          ],
+          "writable": true
+        },
+        {
+          "name": "collection",
+          "docs": [
+            "passed for a transfer when the asset is part of one."
+          ],
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "mplCoreProgram",
+          "address": "CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d"
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "startPrice",
+          "type": "u64"
+        },
+        {
+          "name": "floorPrice",
+          "type": "u64"
+        },
+        {
+          "name": "duration",
+          "type": "i64"
+        }
+      ]
+    },
+    {
       "name": "mintGenesis",
       "docs": [
         "Mint a transferable fee-share genesis NFT (Metaplex Core) for a token,",
@@ -3131,6 +3243,83 @@ export type AttentionFi = {
           "type": "string"
         }
       ]
+    },
+    {
+      "name": "reclaimNftAuction",
+      "docs": [
+        "Return an unsold 1-of-1 to its lister once the auction window closes.",
+        "Without this an expired auction locks the NFT in escrow permanently \u2014",
+        "`buy_nft` refuses after the deadline and nothing else can move it."
+      ],
+      "discriminator": [
+        25,
+        122,
+        34,
+        249,
+        35,
+        48,
+        3,
+        119
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "docs": [
+            "Pays the transaction. Reclaiming is permissionless \u2014 the asset can only",
+            "ever go back to `auction.creator`, so anyone may trigger the return",
+            "(a keeper, or the lister themselves)."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "creator",
+          "writable": true
+        },
+        {
+          "name": "auction",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  110,
+                  102,
+                  116,
+                  97,
+                  117,
+                  99,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "asset"
+              }
+            ]
+          }
+        },
+        {
+          "name": "asset",
+          "writable": true,
+          "relations": [
+            "auction"
+          ]
+        },
+        {
+          "name": "mplCoreProgram",
+          "address": "CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d"
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
     },
     {
       "name": "sell",

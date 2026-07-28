@@ -48,4 +48,6 @@ pub enum AttentionError {
     NoCreatorFees,
     #[msg("Curve has not reached the graduation threshold")]
     NotReadyToGraduate,
+    #[msg("Not enough trading volume or deposits to reach the next perk level")]
+    InsufficientActivity,
 }
