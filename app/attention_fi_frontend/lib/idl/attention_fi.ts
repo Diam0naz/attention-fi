@@ -1171,7 +1171,7 @@ export type AttentionFi = {
     {
       "name": "claimCreatorFee",
       "docs": [
-        "Claim a token's accrued creator fees \u2014 gated on the creator being",
+        "Claim a token's accrued creator fees — gated on the creator being",
         "SAS-verified (they must hold a `Verification` record)."
       ],
       "discriminator": [
@@ -1225,7 +1225,7 @@ export type AttentionFi = {
           "name": "verification",
           "docs": [
             "The creator's SAS verification record. Its existence at this PDA gates the",
-            "claim \u2014 an unverified creator cannot construct a valid transaction, which",
+            "claim — an unverified creator cannot construct a valid transaction, which",
             "is exactly the brief's \"claimable by the X account owner once they verify\"."
           ],
           "pda": {
@@ -1330,6 +1330,139 @@ export type AttentionFi = {
         }
       ],
       "args": []
+    },
+    {
+      "name": "claimPerk",
+      "docs": [
+        "Claim a perk the protocol authorised via `grant_perk`. The claimant",
+        "signs and funds the mint; the grant is consumed so it can't be replayed."
+      ],
+      "discriminator": [
+        177,
+        211,
+        55,
+        37,
+        254,
+        158,
+        206,
+        245
+      ],
+      "accounts": [
+        {
+          "name": "recipient",
+          "docs": [
+            "The granted wallet. Signs and funds its own asset."
+          ],
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "grant"
+          ]
+        },
+        {
+          "name": "grant",
+          "docs": [
+            "The authorisation, consumed by this claim. `has_one = recipient` binds",
+            "it to the signer, so one wallet can't spend another's grant."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  101,
+                  114,
+                  107,
+                  103,
+                  114,
+                  97,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "recipient"
+              }
+            ]
+          }
+        },
+        {
+          "name": "granter",
+          "docs": [
+            "that actually paid to create it."
+          ],
+          "writable": true
+        },
+        {
+          "name": "perkAuthority",
+          "docs": [
+            "program can level the NFT up later. Validated by seeds."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  101,
+                  114,
+                  107,
+                  97,
+                  117,
+                  116,
+                  104
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "perk",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  101,
+                  114,
+                  107
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "asset"
+              }
+            ]
+          }
+        },
+        {
+          "name": "asset",
+          "docs": [
+            "The new Core asset (client-generated keypair, signs its creation)."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "mplCoreProgram",
+          "address": "CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d"
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "uri",
+          "type": "string"
+        }
+      ]
     },
     {
       "name": "claimRevenue",
@@ -1883,6 +2016,95 @@ export type AttentionFi = {
       "args": []
     },
     {
+      "name": "grantPerk",
+      "docs": [
+        "Authorise a wallet to claim a perk NFT, without minting it. Lets the",
+        "protocol approve a batch of task completions cheaply — each recipient",
+        "pays for their own asset via `claim_perk`."
+      ],
+      "discriminator": [
+        132,
+        103,
+        163,
+        32,
+        164,
+        190,
+        39,
+        81
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "global",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  108,
+                  111,
+                  98,
+                  97,
+                  108
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "recipient",
+          "docs": [
+            "is that the protocol grants ahead of the recipient showing up."
+          ]
+        },
+        {
+          "name": "grant",
+          "docs": [
+            "One outstanding grant per recipient: `init` fails if they already have",
+            "an unclaimed one, so a double-grant can't mint two perks."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  101,
+                  114,
+                  107,
+                  103,
+                  114,
+                  97,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "recipient"
+              }
+            ]
+          }
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "level",
+          "type": "u8"
+        }
+      ]
+    },
+    {
       "name": "initialize",
       "docs": [
         "Create the one-time protocol config (fees, treasury, curve defaults)."
@@ -2179,7 +2401,7 @@ export type AttentionFi = {
           "name": "feed",
           "docs": [
             "Switchboard program) is checked in the handler, then parsed +",
-            "staleness-validated \u2014 a single `owner =` constraint can't accept either",
+            "staleness-validated — a single `owner =` constraint can't accept either",
             "cluster's program id."
           ]
         },
@@ -2882,7 +3104,7 @@ export type AttentionFi = {
         {
           "name": "asset",
           "docs": [
-            "rejects the transfer unless `creator` is the current owner \u2014 the same",
+            "rejects the transfer unless `creator` is the current owner — the same",
             "guarantee an `owner =` constraint would give, without decoding Core's",
             "account layout here."
           ],
@@ -2972,7 +3194,7 @@ export type AttentionFi = {
         {
           "name": "curve",
           "docs": [
-            "The subject token's bonding curve \u2014 gates issuance to its creator."
+            "The subject token's bonding curve — gates issuance to its creator."
           ],
           "pda": {
             "seeds": [
@@ -3248,7 +3470,7 @@ export type AttentionFi = {
       "name": "reclaimNftAuction",
       "docs": [
         "Return an unsold 1-of-1 to its lister once the auction window closes.",
-        "Without this an expired auction locks the NFT in escrow permanently \u2014",
+        "Without this an expired auction locks the NFT in escrow permanently —",
         "`buy_nft` refuses after the deadline and nothing else can move it."
       ],
       "discriminator": [
@@ -3265,7 +3487,7 @@ export type AttentionFi = {
         {
           "name": "payer",
           "docs": [
-            "Pays the transaction. Reclaiming is permissionless \u2014 the asset can only",
+            "Pays the transaction. Reclaiming is permissionless — the asset can only",
             "ever go back to `auction.creator`, so anyone may trigger the return",
             "(a keeper, or the lister themselves)."
           ],
@@ -4712,7 +4934,7 @@ export type AttentionFi = {
     {
       "name": "verifyHandle",
       "docs": [
-        "Verify an X handle\u2194wallet binding against a Solana Attestation Service",
+        "Verify an X handle↔wallet binding against a Solana Attestation Service",
         "attestation and mint a soulbound verification NFT (Metaplex Core)."
       ],
       "discriminator": [
@@ -4729,7 +4951,7 @@ export type AttentionFi = {
         {
           "name": "payer",
           "docs": [
-            "Pays for the credential accounts. Can be anyone (subject or a relayer) \u2014",
+            "Pays for the credential accounts. Can be anyone (subject or a relayer) —",
             "trust comes from the attestation, not from who submits the transaction."
           ],
           "writable": true,
@@ -4979,6 +5201,19 @@ export type AttentionFi = {
         212,
         3,
         98
+      ]
+    },
+    {
+      "name": "perkGrant",
+      "discriminator": [
+        118,
+        20,
+        144,
+        208,
+        23,
+        126,
+        230,
+        122
       ]
     },
     {
@@ -5234,6 +5469,11 @@ export type AttentionFi = {
       "code": 6023,
       "name": "insufficientActivity",
       "msg": "Not enough trading volume or deposits to reach the next perk level"
+    },
+    {
+      "code": 6024,
+      "name": "invalidPerkLevel",
+      "msg": "Perk level must be between 1 and MAX_PERK_LEVEL"
     }
   ],
   "types": [
@@ -6002,6 +6242,47 @@ export type AttentionFi = {
           {
             "name": "complete",
             "type": "bool"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "perkGrant",
+      "docs": [
+        "A pending perk grant, awaiting the recipient to claim it.",
+        "",
+        "Splits `mint_perk` into authorise-then-claim so the protocol can approve a",
+        "batch of task completions cheaply while each recipient pays for their own",
+        "Core asset. The authority still decides who gets one — this account IS the",
+        "authorisation, and `claim_perk` mints only when it exists."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "recipient",
+            "docs": [
+              "Wallet allowed to claim; the only account this grant can mint to."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "level",
+            "docs": [
+              "Level to mint at (1..=MAX_PERK_LEVEL)."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "granter",
+            "docs": [
+              "Refund target when the grant is consumed — whoever paid to create it."
+            ],
+            "type": "pubkey"
           },
           {
             "name": "bump",
