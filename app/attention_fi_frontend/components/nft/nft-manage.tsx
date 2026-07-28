@@ -21,8 +21,10 @@ import { explorerTx } from "@/lib/solana/config";
 import {
   auctionEnded,
   currentAuctionPrice,
+  fetchListableNfts,
   fetchNftAuctions,
   type NftAuctionData,
+  type OwnedAsset,
 } from "@/lib/solana/nft-data";
 
 const LAMPORTS_PER_SOL = 1_000_000_000;
@@ -81,6 +83,15 @@ export function NftManage({ section }: { section: Section }) {
   // spends real SOL with no chance to read the price first, so confirm.
   const [confirmBuy, setConfirmBuy] = useState<NftAuctionData | null>(null);
   const [now, setNow] = useState(() => Date.now());
+  // Collectibles the wallet holds that aren't escrowed anywhere — the pool
+  // `list_nft_auction` can draw from. Tagged with the wallet it was read for,
+  // so a wallet switch can't briefly offer the previous owner's assets.
+  const [listable, setListable] = useState<{ owner: string; assets: OwnedAsset[] }>({
+    owner: "",
+    assets: [],
+  });
+  const [listOpen, setListOpen] = useState(false);
+  const listableAssets = address && listable.owner === address ? listable.assets : [];
 
   // Real 1-of-1 auctions from the chain — only while this section is open.
   useEffect(() => {
@@ -109,6 +120,23 @@ export function NftManage({ section }: { section: Section }) {
       clearInterval(tick);
     };
   }, [section, readProgram]);
+
+  // Listable collectibles are a separate, wallet-scoped read: it scans every
+  // Core asset the wallet owns, so it stays out of the 10s auction poll.
+  useEffect(() => {
+    if (section !== "auctions" || !address) return;
+    let cancelled = false;
+    fetchListableNfts(readProgram, new PublicKey(address))
+      .then((assets) => {
+        if (!cancelled) setListable({ owner: address, assets });
+      })
+      .catch(() => {
+        if (!cancelled) setListable({ owner: address, assets: [] });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [section, address, readProgram]);
 
   async function buyNow(a: NftAuctionData) {
     if (!signProgram || !address) return setWalletOpen(true);
@@ -140,6 +168,86 @@ export function NftManage({ section }: { section: Section }) {
       setTx({
         state: "failed",
         title: "Buy failed",
+        detail: e instanceof Error ? e.message : "Transaction failed",
+      });
+    }
+  }
+
+  /**
+   * Return an unsold 1-of-1 to its lister once the window has closed.
+   * Permissionless on-chain (the asset can only go back to `auction.creator`),
+   * so this is offered on any expired listing, not just the caller's own.
+   */
+  async function reclaim(a: NftAuctionData) {
+    if (!signProgram || !address) return setWalletOpen(true);
+    setTx({ state: "pending", title: "Reclaiming asset…", detail: a.name });
+    try {
+      const sig = await signProgram.methods
+        .reclaimNftAuction()
+        .accountsPartial({
+          payer: new PublicKey(address),
+          creator: new PublicKey(a.creator),
+          asset: new PublicKey(a.asset),
+        })
+        .rpc();
+      setTx({
+        state: "confirmed",
+        title: "Reclaimed",
+        detail: `${a.name} → ${short(a.creator)}`,
+        signature: short(sig),
+        explorerUrl: explorerTx(sig),
+      });
+      setAuctions((prev) => prev.map((x) => (x.asset === a.asset ? { ...x, complete: true } : x)));
+    } catch (e) {
+      setTx({
+        state: "failed",
+        title: "Reclaim failed",
+        detail: e instanceof Error ? e.message : "Transaction failed",
+      });
+    }
+  }
+
+  /** Escrow an already-minted collectible as a new descending auction. */
+  async function listExisting(
+    asset: OwnedAsset,
+    startPrice: number,
+    floorPrice: number,
+    durationHours: number,
+  ) {
+    if (!signProgram || !address) return setWalletOpen(true);
+    setTx({ state: "pending", title: "Listing asset…", detail: asset.name });
+    try {
+      const toLamports = (n: number) => new BN(Math.round(n * LAMPORTS_PER_SOL).toString());
+      const sig = await signProgram.methods
+        .listNftAuction(
+          toLamports(startPrice),
+          toLamports(floorPrice),
+          new BN(Math.round(durationHours * 3600).toString()),
+        )
+        .accountsPartial({
+          creator: new PublicKey(address),
+          asset: new PublicKey(asset.asset),
+          // Core refuses a transfer of a collection member unless the
+          // collection is passed; standalone assets must pass null instead.
+          collection: asset.collection ? new PublicKey(asset.collection) : null,
+        })
+        .rpc();
+      setTx({
+        state: "confirmed",
+        title: "Listed",
+        detail: `${asset.name} · ${startPrice} → ${floorPrice} SOL`,
+        signature: short(sig),
+        explorerUrl: explorerTx(sig),
+      });
+      setListOpen(false);
+      void fetchNftAuctions(readProgram).then(setAuctions).catch(() => undefined);
+      // The asset now belongs to the auction PDA, so drop it from the pool
+      // rather than waiting on a full re-scan of the wallet.
+      setListable((prev) => ({ ...prev, assets: prev.assets.filter((x) => x.asset !== asset.asset) }));
+    } catch (e) {
+      setTx({
+        state: "failed",
+        title: "Listing failed",
         detail: e instanceof Error ? e.message : "Transaction failed",
       });
     }
@@ -177,20 +285,9 @@ export function NftManage({ section }: { section: Section }) {
             Connect Wallet
           </button>
         </div>
-        {confirmBuy && (
-        <BuyConfirm
-          auction={confirmBuy}
-          now={now}
-          onCancel={() => setConfirmBuy(null)}
-          onConfirm={() => {
-            const a = confirmBuy;
-            setConfirmBuy(null);
-            void buyNow(a);
-          }}
-        />
-      )}
-
-      <WalletConnectModal open={walletOpen} onClose={() => setWalletOpen(false)} />
+        {/* No auction cards render on this branch, so no buy can be pending
+            here — the confirm modal lives with the connected view. */}
+        <WalletConnectModal open={walletOpen} onClose={() => setWalletOpen(false)} />
       </Shell>
     );
   }
@@ -347,13 +444,27 @@ export function NftManage({ section }: { section: Section }) {
         const live = auctions.filter((a) => !a.complete && !auctionEnded(a, now));
         const mine = address ? live.filter((a) => a.creator === address) : [];
         const market = address ? live.filter((a) => a.creator !== address) : live;
+        // Expired-but-unsold listings still hold the asset in escrow. They used
+        // to be filtered out with `live`, which hid the fact that the NFT was
+        // stuck and gave no way to get it back.
+        const expired = auctions.filter((a) => !a.complete && auctionEnded(a, now));
+        const mineExpired = address ? expired.filter((a) => a.creator === address) : [];
         return (
           <div>
             <div className="flex items-center justify-between">
               <h2 className="text-[13px] font-bold">Your listings</h2>
-              <Link href="/nft/create" className="inline-flex items-center gap-1 font-mono text-[11px] font-bold text-signal">
-                <Plus className="h-3 w-3" /> List a 1-of-1
-              </Link>
+              {listableAssets.length > 0 ? (
+                <button
+                  onClick={() => setListOpen(true)}
+                  className="inline-flex items-center gap-1 font-mono text-[11px] font-bold text-signal"
+                >
+                  <Plus className="h-3 w-3" /> List a 1-of-1
+                </button>
+              ) : (
+                <Link href="/nft/create" className="inline-flex items-center gap-1 font-mono text-[11px] font-bold text-signal">
+                  <Plus className="h-3 w-3" /> Mint a 1-of-1
+                </Link>
+              )}
             </div>
             {auctionsStatus === "loading" ? (
               <p className="mt-2 rounded-sm border border-dashed border-white/12 p-5 text-center font-mono text-[11px] text-[#6B6B6B]">
@@ -389,6 +500,30 @@ export function NftManage({ section }: { section: Section }) {
                 ))}
               </div>
             )}
+
+            {expired.length > 0 && (
+              <>
+                <h2 className="mt-8 text-[13px] font-bold">Ended without a buyer</h2>
+                <p className="mt-1 font-mono text-[10px] leading-relaxed text-[#6B6B6B]">
+                  The asset is still held in escrow by the auction. Reclaiming returns it to
+                  whoever listed it — anyone can trigger it, and it can only ever go back to
+                  the lister.
+                </p>
+                <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                  {/* the lister's own first — they're the ones waiting on it */}
+                  {[...mineExpired, ...expired.filter((a) => !mineExpired.includes(a))].map((a) => (
+                    <AuctionCard
+                      key={a.asset}
+                      auction={a}
+                      now={now}
+                      mine={a.creator === address}
+                      onBuy={setConfirmBuy}
+                      onReclaim={reclaim}
+                    />
+                  ))}
+                </div>
+              </>
+            )}
           </div>
         );
       })()}
@@ -402,6 +537,25 @@ export function NftManage({ section }: { section: Section }) {
           onLevelUp={() => run("Leveling up perk…", `Level ${level} → ${level + 1}`, () => setLevel((l) => Math.min(MAX_LEVEL, l + 1)))}
         />
       )}
+      {confirmBuy && (
+        <BuyConfirm
+          auction={confirmBuy}
+          now={now}
+          onCancel={() => setConfirmBuy(null)}
+          onConfirm={() => {
+            const a = confirmBuy;
+            setConfirmBuy(null);
+            void buyNow(a);
+          }}
+        />
+      )}
+      {listOpen && (
+        <ListExistingModal
+          assets={listableAssets}
+          onCancel={() => setListOpen(false)}
+          onList={(asset, s, f, h) => void listExisting(asset, s, f, h)}
+        />
+      )}
       <WalletConnectModal open={walletOpen} onClose={() => setWalletOpen(false)} />
     </Shell>
   );
@@ -412,11 +566,14 @@ function AuctionCard({
   now,
   mine,
   onBuy,
+  onReclaim,
 }: {
   auction: NftAuctionData;
   now: number;
   mine?: boolean;
   onBuy: (a: NftAuctionData) => void;
+  /** Present only for ended listings, where buying is no longer possible. */
+  onReclaim?: (a: NftAuctionData) => void;
 }) {
   const price = currentAuctionPrice(auction, now);
   const span = auction.startPrice - auction.floorPrice;
@@ -467,7 +624,16 @@ function AuctionCard({
           <span>{secondsLeft > 0 ? `${countdown(secondsLeft)} left` : "ended"}</span>
           <span>floor {sol(auction.floorPrice)}</span>
         </div>
-        {mine ? (
+        {onReclaim ? (
+          // An ended auction can't be bought at any price, so offering BUY NOW
+          // here would only produce a guaranteed on-chain rejection.
+          <button
+            onClick={() => onReclaim(auction)}
+            className="mt-3 w-full rounded-sm border border-signal/40 bg-signal/10 py-2 font-mono text-[11px] font-bold text-signal"
+          >
+            {mine ? "RECLAIM ASSET" : "RETURN TO LISTER"}
+          </button>
+        ) : mine ? (
           <div className="mt-3 w-full rounded-sm border border-white/10 py-2 text-center font-mono text-[11px] text-[#6B6B6B]">
             LISTED BY YOU
           </div>
@@ -570,6 +736,133 @@ function Shell({
       <div className="mx-auto w-full max-w-4xl flex-1 px-5 py-7">{children}</div>
       <Footer />
     </div>
+  );
+}
+
+/**
+ * List an already-minted collectible as a descending auction.
+ *
+ * `start_nft_auction` can only list an asset it mints in the same transaction,
+ * so anything from `mint_nft` was previously unlistable — this drives
+ * `list_nft_auction`, which escrows an existing asset instead.
+ */
+function ListExistingModal({
+  assets,
+  onCancel,
+  onList,
+}: {
+  assets: OwnedAsset[];
+  onCancel: () => void;
+  onList: (asset: OwnedAsset, start: number, floor: number, hours: number) => void;
+}) {
+  useScrollLock(true);
+  const [picked, setPicked] = useState<OwnedAsset | null>(assets[0] ?? null);
+  const [start, setStart] = useState("1");
+  const [floor, setFloor] = useState("0.1");
+  const [hours, setHours] = useState("24");
+
+  const startNum = Number(start);
+  const floorNum = Number(floor);
+  const hoursNum = Number(hours);
+  // Mirrors the program's require!s, so an invalid listing is rejected here
+  // rather than costing a failed transaction.
+  const invalid =
+    !picked ||
+    !Number.isFinite(startNum) ||
+    !Number.isFinite(floorNum) ||
+    !Number.isFinite(hoursNum) ||
+    floorNum <= 0 ||
+    startNum < floorNum ||
+    hoursNum <= 0;
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
+      onClick={onCancel}
+    >
+      <div
+        className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-sm border border-white/[0.1] bg-[#0f1620] p-5"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between">
+          <div>
+            <div className="text-[14px] font-bold">List a 1-of-1</div>
+            <div className="mt-0.5 font-mono text-[11px] text-[#6B6B6B]">
+              Escrows the asset until it sells or the window closes.
+            </div>
+          </div>
+          <button onClick={onCancel} aria-label="Close" className="text-[#6B6B6B] hover:text-[#F5F4F0]">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="mt-4 font-mono text-[10px] uppercase tracking-[0.12em] text-[#6B6B6B]">
+          Choose an asset
+        </div>
+        <div className="mt-2 grid grid-cols-3 gap-2">
+          {assets.map((a) => (
+            <button
+              key={a.asset}
+              onClick={() => setPicked(a)}
+              className={cn(
+                "overflow-hidden rounded-sm border p-1.5 text-left transition-colors",
+                picked?.asset === a.asset
+                  ? "border-signal bg-signal/10"
+                  : "border-white/[0.08] hover:border-white/25",
+              )}
+            >
+              <div className="truncate font-mono text-[10px] font-bold">{a.name}</div>
+              <div className="truncate font-mono text-[9px] text-[#6B6B6B]">{short(a.asset)}</div>
+            </button>
+          ))}
+        </div>
+
+        <div className="mt-4 grid grid-cols-3 gap-2">
+          <Field label="Start (SOL)" value={start} onChange={setStart} />
+          <Field label="Floor (SOL)" value={floor} onChange={setFloor} />
+          <Field label="Hours" value={hours} onChange={setHours} />
+        </div>
+
+        {startNum < floorNum && (
+          <p className="mt-2 font-mono text-[10px] text-noise">
+            Start price must be at or above the floor — the price only descends.
+          </p>
+        )}
+
+        <button
+          disabled={invalid}
+          onClick={() => picked && onList(picked, startNum, floorNum, hoursNum)}
+          className="mt-4 w-full rounded-sm bg-signal py-2.5 font-mono text-[11px] font-bold text-[#0A0A0A] disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          LIST FOR AUCTION
+        </button>
+        <p className="mt-2 text-center font-mono text-[10px] leading-relaxed text-[#4b5563]">
+          If nobody buys, reclaim it from &ldquo;Ended without a buyer&rdquo; once the window closes.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function Field({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <label className="block">
+      <span className="font-mono text-[10px] text-[#6B6B6B]">{label}</span>
+      <input
+        inputMode="decimal"
+        value={value}
+        onChange={(e) => onChange(e.target.value.replace(/[^0-9.]/g, ""))}
+        className="mt-1 w-full rounded-sm border border-white/[0.08] bg-[#0A0A0A] px-2 py-1.5 font-mono text-[12px] outline-none focus:border-signal/50"
+      />
+    </label>
   );
 }
 

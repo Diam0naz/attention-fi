@@ -120,18 +120,34 @@ export function auctionEnded(a: NftAuctionData, nowMs: number): boolean {
 }
 
 /**
+ * A plain Core asset held by a wallet, carrying the pubkey needed to act on
+ * it. `fetchOwnedNfts` renders to `NftCardData`, which deliberately has no
+ * address field — but listing an asset for auction needs one, so the raw form
+ * is kept separate rather than widening the card type.
+ */
+export interface OwnedAsset {
+  asset: string;
+  name: string;
+  uri?: string;
+  collection: string | null;
+}
+
+/**
  * Standalone `mint_nft` collectibles owned by a wallet — plain Core assets
  * with no AttentionFi PDA of their own, so they're invisible to the
  * program-account queries above. Reads mpl-core's account layout directly
  * (memcmp on key + owner) rather than pulling in the full mpl-core JS SDK.
  * `exclude` filters out assets already surfaced via genesis/perk/verification
  * (those are Core assets too, just ones we already have a richer card for).
+ *
+ * Assets escrowed in a live auction are owned by the auction PDA, not the
+ * wallet, so the owner memcmp already excludes them — no extra filtering.
  */
-async function fetchStandaloneNfts(
+async function fetchStandaloneAssets(
   program: Program<AttentionFi>,
   owner: PublicKey,
   exclude: Set<string>,
-): Promise<NftCardData[]> {
+): Promise<OwnedAsset[]> {
   const accounts = await program.provider.connection.getProgramAccounts(MPL_CORE_PROGRAM_ID, {
     filters: [
       { memcmp: { offset: 0, bytes: bs58.encode(Buffer.from([KEY_ASSET_V1])) } },
@@ -139,15 +155,58 @@ async function fetchStandaloneNfts(
     ],
   });
 
-  const out: NftCardData[] = [];
+  const out: OwnedAsset[] = [];
   for (const { pubkey, account } of accounts) {
     const key = pubkey.toBase58();
     if (exclude.has(key)) continue;
     const decoded = decodeAsset(account.data);
     if (!decoded) continue;
-    out.push({ kind: "custom", name: decoded.name, image: decoded.uri || undefined, id: short(key) });
+    out.push({
+      asset: key,
+      name: decoded.name || short(key),
+      uri: decoded.uri || undefined,
+      collection: decoded.collection,
+    });
   }
   return out;
+}
+
+/**
+ * The wallet's program-tracked NFTs, as display cards plus the set of asset
+ * addresses they cover. Split out because listing and rendering need the same
+ * scan for different halves of its result.
+ */
+async function fetchProgramNfts(
+  program: Program<AttentionFi>,
+  ownerStr: string,
+): Promise<{ cards: NftCardData[]; tracked: Set<string> }> {
+  const [genesis, perks, verifications] = await Promise.all([
+    program.account.genesisNft.all(),
+    program.account.perkNft.all(),
+    program.account.verification.all(),
+  ]);
+
+  const cards: NftCardData[] = [];
+  const tracked = new Set<string>();
+  for (const v of verifications) {
+    if (v.account.subject.toBase58() === ownerStr) {
+      cards.push({ kind: "verification", handle: v.account.handle });
+      tracked.add(v.account.asset.toBase58());
+    }
+  }
+  for (const p of perks) {
+    if (p.account.owner.toBase58() === ownerStr) {
+      cards.push({ kind: "perk", level: p.account.level, discountBps: p.account.discountBps });
+      tracked.add(p.account.asset.toBase58());
+    }
+  }
+  for (const g of genesis) {
+    if (g.account.owner.toBase58() === ownerStr) {
+      cards.push({ kind: "genesis", shareBps: g.account.shareBps, id: short(g.account.asset.toBase58()) });
+      tracked.add(g.account.asset.toBase58());
+    }
+  }
+  return { cards, tracked };
 }
 
 /**
@@ -157,35 +216,26 @@ async function fetchStandaloneNfts(
  * Returns [] when the wallet holds none.
  */
 export async function fetchOwnedNfts(program: Program<AttentionFi>, owner: PublicKey): Promise<NftCardData[]> {
-  const ownerStr = owner.toBase58();
-  const [genesis, perks, verifications] = await Promise.all([
-    program.account.genesisNft.all(),
-    program.account.perkNft.all(),
-    program.account.verification.all(),
-  ]);
+  const { cards, tracked } = await fetchProgramNfts(program, owner.toBase58());
+  const standalone = await fetchStandaloneAssets(program, owner, tracked).catch(() => []);
+  return [
+    ...cards,
+    ...standalone.map((a) => ({ kind: "custom" as const, name: a.name, image: a.uri, id: short(a.asset) })),
+  ];
+}
 
-  const out: NftCardData[] = [];
-  const trackedAssets = new Set<string>();
-  for (const v of verifications) {
-    if (v.account.subject.toBase58() === ownerStr) {
-      out.push({ kind: "verification", handle: v.account.handle });
-      trackedAssets.add(v.account.asset.toBase58());
-    }
-  }
-  for (const p of perks) {
-    if (p.account.owner.toBase58() === ownerStr) {
-      out.push({ kind: "perk", level: p.account.level, discountBps: p.account.discountBps });
-      trackedAssets.add(p.account.asset.toBase58());
-    }
-  }
-  for (const g of genesis) {
-    if (g.account.owner.toBase58() === ownerStr) {
-      out.push({ kind: "genesis", shareBps: g.account.shareBps, id: short(g.account.asset.toBase58()) });
-      trackedAssets.add(g.account.asset.toBase58());
-    }
-  }
-
-  const standalone = await fetchStandaloneNfts(program, owner, trackedAssets).catch(() => []);
-  out.push(...standalone);
-  return out;
+/**
+ * Assets the wallet can put up for auction via `list_nft_auction`.
+ *
+ * Genesis/perk/verification NFTs are excluded even though they're Core assets
+ * the wallet owns: each has a program PDA recording an owner, and escrowing
+ * the asset would move it without updating that record, desyncing fee shares
+ * and discounts. Only plain collectibles are listable.
+ */
+export async function fetchListableNfts(
+  program: Program<AttentionFi>,
+  owner: PublicKey,
+): Promise<OwnedAsset[]> {
+  const { tracked } = await fetchProgramNfts(program, owner.toBase58());
+  return fetchStandaloneAssets(program, owner, tracked);
 }
