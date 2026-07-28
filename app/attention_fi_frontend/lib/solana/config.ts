@@ -14,6 +14,27 @@ export const PROGRAM_ID = new PublicKey(process.env.NEXT_PUBLIC_PROGRAM_ID ?? id
 export const USDC_MINT =
   process.env.NEXT_PUBLIC_USDC_MINT ?? "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDaSh";
 
+/**
+ * Canonical public origin, used to build NFT metadata URIs.
+ *
+ * This matters more than a normal base-url setting: a verification NFT's `uri`
+ * is written on-chain at mint time and is effectively permanent. Deriving it
+ * from `window.location.origin` would bake whatever host the user happened to
+ * mint from — a preview deployment, or localhost — into the asset forever. So
+ * set NEXT_PUBLIC_APP_URL on any deployment that mints; the origin fallback is
+ * only a convenience for local development.
+ */
+export function appOrigin(): string {
+  const configured = process.env.NEXT_PUBLIC_APP_URL;
+  if (configured) return configured.replace(/\/+$/, "");
+  if (typeof window !== "undefined") return window.location.origin;
+  return "http://localhost:3000";
+}
+
+/** Metadata URI for a verification NFT, resolved dynamically so skins can change. */
+export const verificationMetadataUri = (subject: string) =>
+  `${appOrigin()}/api/verification/${subject}`;
+
 const explorerSuffix = CLUSTER === "mainnet-beta" ? "" : `?cluster=${CLUSTER}`;
 
 export const explorerTx = (sig: string) => `https://explorer.solana.com/tx/${sig}${explorerSuffix}`;

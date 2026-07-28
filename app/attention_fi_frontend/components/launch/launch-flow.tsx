@@ -13,7 +13,7 @@ import { Keypair, PublicKey } from "@solana/web3.js";
 import { BN } from "@anchor-lang/core";
 import { useProgram } from "@/lib/solana/use-program";
 import { registerToken } from "@/lib/solana/registry";
-import { explorerTx } from "@/lib/solana/config";
+import { explorerTx, verificationMetadataUri } from "@/lib/solana/config";
 import { verificationPda } from "@/lib/solana/program";
 import { mindshareFeedEnabled, launchFromFeed } from "@/lib/solana/mindshare-feed";
 import { verifyMessage } from "@/lib/sas/config";
@@ -295,7 +295,10 @@ export function LaunchFlow() {
       const subject = new PublicKey(address);
       const asset = Keypair.generate();
       await program.methods
-        .verifyHandle(handle, "")
+        // Points at our own metadata route rather than a static file, so the
+        // badge's artwork can be restyled later by updating a row instead of
+        // rewriting an on-chain uri nobody but the update authority can touch.
+        .verifyHandle(handle, verificationMetadataUri(subject.toBase58()))
         .accounts({
           payer: subject,
           subject,

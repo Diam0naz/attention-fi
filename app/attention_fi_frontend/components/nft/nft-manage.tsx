@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { PublicKey } from "@solana/web3.js";
+import { Keypair, PublicKey } from "@solana/web3.js";
 import { BN } from "@anchor-lang/core";
 import { ArrowLeft, BadgeCheck, Gavel, Gift, Lock, Plus, TrendingUp, X } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -18,11 +18,14 @@ import { getNftState } from "@/lib/mock-data";
 import { useProgram, useReadonlyProgram } from "@/lib/solana/use-program";
 import { fetchGlobal } from "@/lib/solana/curve";
 import { explorerTx } from "@/lib/solana/config";
+import { SkinPicker } from "@/components/nft/skin-picker";
 import {
   auctionEnded,
   currentAuctionPrice,
+  fetchCollections,
   fetchListableNfts,
   fetchNftAuctions,
+  type CollectionData,
   type NftAuctionData,
   type OwnedAsset,
 } from "@/lib/solana/nft-data";
@@ -92,6 +95,11 @@ export function NftManage({ section }: { section: Section }) {
   });
   const [listOpen, setListOpen] = useState(false);
   const listableAssets = address && listable.owner === address ? listable.assets : [];
+  // Collections this wallet is the update authority for.
+  const [collections, setCollections] = useState<CollectionData[]>([]);
+  const [collectionsNonce, setCollectionsNonce] = useState(0);
+  const [newCollectionName, setNewCollectionName] = useState("");
+  const [creatingCollection, setCreatingCollection] = useState(false);
 
   // Real 1-of-1 auctions from the chain — only while this section is open.
   useEffect(() => {
@@ -170,6 +178,52 @@ export function NftManage({ section }: { section: Section }) {
         title: "Buy failed",
         detail: e instanceof Error ? e.message : "Transaction failed",
       });
+    }
+  }
+
+  useEffect(() => {
+    if (section !== "auctions" || !address) return;
+    let cancelled = false;
+    void (async () => {
+      const list = await fetchCollections(readProgram, new PublicKey(address)).catch(() => []);
+      if (!cancelled) setCollections(list);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [section, address, readProgram, collectionsNonce]);
+
+  /** Create a Core collection owned by this wallet. */
+  async function createCollection() {
+    if (!signProgram || !address) return setWalletOpen(true);
+    const name = newCollectionName.trim();
+    if (!name) return;
+    setCreatingCollection(true);
+    try {
+      // The collection account signs its own creation, so it can't be a PDA.
+      const kp = Keypair.generate();
+      const sig = await signProgram.methods
+        .createCollection(name.slice(0, 64), "")
+        .accounts({ payer: new PublicKey(address), collection: kp.publicKey })
+        .signers([kp])
+        .rpc();
+      setNewCollectionName("");
+      setCollectionsNonce((n) => n + 1);
+      setTx({
+        state: "confirmed",
+        title: "Collection created",
+        detail: name,
+        signature: short(sig),
+        explorerUrl: explorerTx(sig),
+      });
+    } catch (e) {
+      setTx({
+        state: "failed",
+        title: "Could not create collection",
+        detail: e instanceof Error ? e.message : "Transaction failed",
+      });
+    } finally {
+      setCreatingCollection(false);
     }
   }
 
@@ -329,6 +383,7 @@ export function NftManage({ section }: { section: Section }) {
                 <Row k="TRANSFERABLE" v="No (soulbound)" />
                 <Row k="GATES" v="Creator-fee claims" />
               </dl>
+              {address && <SkinPicker subject={address} />}
             </div>
           </div>
         ) : (
@@ -500,6 +555,50 @@ export function NftManage({ section }: { section: Section }) {
                 ))}
               </div>
             )}
+
+            {/* Collections — the parent assets a mint can join. Built here as
+                well as in the create flow, so a deck can be set up before
+                there's anything to put in it. */}
+            <h2 className="mt-8 text-[13px] font-bold">Collections</h2>
+            <p className="mt-1 font-mono text-[10px] leading-relaxed text-[#6B6B6B]">
+              Assets minted into a collection share one on-chain parent and get the stacked-deck
+              treatment on their cards. Membership is set when the asset is minted, so create the
+              collection first, then pick it on the{" "}
+              <Link href="/nft/create" className="text-signal">
+                mint page
+              </Link>
+              .
+            </p>
+            {collections.length > 0 && (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {collections.map((c) => (
+                  <div
+                    key={c.address}
+                    className="rounded-sm border border-white/[0.08] bg-[#0f1620] px-3 py-2"
+                  >
+                    <div className="font-mono text-[11px] font-bold">{c.name}</div>
+                    <div className="mt-0.5 font-mono text-[10px] text-[#6B6B6B]">
+                      {c.size} {c.size === 1 ? "asset" : "assets"} · {short(c.address)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="mt-3 flex max-w-md gap-1.5">
+              <input
+                value={newCollectionName}
+                onChange={(e) => setNewCollectionName(e.target.value.slice(0, 64))}
+                placeholder="New collection name"
+                className="min-w-0 flex-1 rounded-sm border border-white/10 bg-[#12181f] px-3 py-2 text-[12px] outline-none placeholder:text-[#4b5563]"
+              />
+              <button
+                onClick={() => void createCollection()}
+                disabled={creatingCollection || newCollectionName.trim() === ""}
+                className="shrink-0 rounded-sm border border-signal/40 bg-signal/10 px-3 py-2 font-mono text-[11px] font-bold text-signal disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {creatingCollection ? "CREATING…" : "CREATE"}
+              </button>
+            </div>
 
             {expired.length > 0 && (
               <>
