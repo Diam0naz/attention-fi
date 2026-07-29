@@ -484,3 +484,34 @@ export async function fetchNftOutcomes(
   });
   return out.sort((x, y) => y.endedAt - x.endedAt);
 }
+
+/** A perk the protocol has authorised for a wallet but which isn't minted yet. */
+export interface PerkGrantData {
+  recipient: string;
+  level: number;
+  granter: string;
+}
+
+/**
+ * The pending perk grant for a wallet, if any.
+ *
+ * A grant is an entitlement, not the NFT: `claim_perk` is what mints it, paid
+ * for by the recipient. Returns null once claimed (the grant account closes) or
+ * when none was ever issued.
+ */
+export async function fetchPerkGrant(
+  program: Program<AttentionFi>,
+  recipient: PublicKey,
+): Promise<PerkGrantData | null> {
+  const [pda] = PublicKey.findProgramAddressSync(
+    [new TextEncoder().encode("perkgrant"), recipient.toBytes()],
+    program.programId,
+  );
+  const g = await program.account.perkGrant.fetchNullable(pda).catch(() => null);
+  if (!g) return null;
+  return {
+    recipient: g.recipient.toBase58(),
+    level: g.level,
+    granter: g.granter.toBase58(),
+  };
+}

@@ -18,6 +18,7 @@ import { useProgram, useReadonlyProgram } from "@/lib/solana/use-program";
 import { fetchGlobal } from "@/lib/solana/curve";
 import { explorerTx, PROGRAM_ID } from "@/lib/solana/config";
 import { SkinPicker } from "@/components/nft/skin-picker";
+import { AssetSkinPicker } from "@/components/nft/asset-skin-picker";
 import { RefreshButton } from "@/components/ui/refresh-button";
 import { useNftPortfolio } from "@/components/nft/use-nft-portfolio";
 import {
@@ -26,7 +27,9 @@ import {
   fetchCollections,
   fetchListableNfts,
   fetchNftAuctions,
+  fetchPerkGrant,
   type CollectionData,
+  type PerkGrantData,
   type NftPortfolio,
   type NftAuctionData,
   type OwnedAsset,
@@ -100,6 +103,15 @@ export function NftManage({ section }: { section: Section }) {
   // Mirrors the picker so the badge restyles as soon as a change lands, and
   // shows a loading state while one is in flight.
   const [badgeSkin, setBadgeSkin] = useState<string | null>(null);
+  // Mirrors the perk picker so the card restyles the moment a skin lands.
+  const [perkSkin, setPerkSkin] = useState<string | null>(null);
+  // Keyed by asset: a wallet can hold several genesis NFTs, each skinned
+  // independently.
+  const [genesisSkins, setGenesisSkins] = useState<Record<string, string | null>>({});
+  // A granted-but-unclaimed perk. The grant is an entitlement; claiming is what
+  // mints the NFT, and the recipient pays for it.
+  const [perkGrant, setPerkGrant] = useState<PerkGrantData | null>(null);
+  const [claiming, setClaiming] = useState(false);
   const [skinBusy, setSkinBusy] = useState(false);
   const listableAssets = address && listable.owner === address ? listable.assets : [];
   // Collections this wallet is the update authority for.
@@ -164,6 +176,56 @@ export function NftManage({ section }: { section: Section }) {
       cancelled = true;
     };
   }, [section, address, readProgram]);
+
+  useEffect(() => {
+    if (section !== "perk" || !address) return;
+    let cancelled = false;
+    void (async () => {
+      const g = await fetchPerkGrant(readProgram, new PublicKey(address)).catch(() => null);
+      if (!cancelled) setPerkGrant(g);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [section, address, readProgram, portfolioStatus]);
+
+  /** Mint a granted perk. The asset keypair is generated here, so its metadata
+   *  URL is known before the mint and can be baked into the asset. */
+  async function claimPerk() {
+    if (!signProgram || !address || !perkGrant) return setWalletOpen(true);
+    setClaiming(true);
+    setTx({ state: "pending", title: "Claiming perk…", detail: `Level ${perkGrant.level}` });
+    try {
+      const asset = Keypair.generate();
+      const uri = `${window.location.origin}/api/nft/perk/${asset.publicKey.toBase58()}`;
+      const sig = await signProgram.methods
+        .claimPerk(uri)
+        .accountsPartial({
+          recipient: new PublicKey(address),
+          granter: new PublicKey(perkGrant.granter),
+          asset: asset.publicKey,
+        })
+        .signers([asset])
+        .rpc();
+      setTx({
+        state: "confirmed",
+        title: "Perk claimed",
+        detail: `Level ${perkGrant.level} · ${perkGrant.level}% off every trade`,
+        signature: short(sig),
+        explorerUrl: explorerTx(sig),
+      });
+      setPerkGrant(null);
+      refreshPortfolio();
+    } catch (e) {
+      setTx({
+        state: "failed",
+        title: "Claim failed",
+        detail: e instanceof Error ? e.message : "Transaction failed",
+      });
+    } finally {
+      setClaiming(false);
+    }
+  }
 
   /** Re-read everything the auctions view shows, on demand. */
   async function refreshAuctions() {
@@ -523,8 +585,8 @@ export function NftManage({ section }: { section: Section }) {
           <div className="grid gap-5 sm:grid-cols-[200px_1fr]">
             <div className="mx-auto w-44 sm:mx-0 sm:w-full">
               <NftCard
-                data={{ kind: "perk", level, discountBps }}
-                onClick={() => setSelected({ kind: "perk", level, discountBps })}
+                data={{ kind: "perk", level, discountBps, skinId: perkSkin }}
+                onClick={() => setSelected({ kind: "perk", level, discountBps, skinId: perkSkin })}
               />
             </div>
             <div className="rounded-sm border border-white/[0.08] bg-[#0f1620] p-5">
@@ -576,7 +638,38 @@ export function NftManage({ section }: { section: Section }) {
                 Levels are granted by the protocol as you complete tasks — they can&apos;t be
                 bought or self-minted, which is why a perk is worth holding.
               </p>
+
+              {address && portfolio?.perk && (
+                <AssetSkinPicker
+                  cls="perk"
+                  asset={portfolio.perk.asset}
+                  owner={address}
+                  onSkinChange={setPerkSkin}
+                />
+              )}
             </div>
+          </div>
+        ) : perkGrant ? (
+          // Granted but unclaimed: the entitlement exists on-chain and the
+          // recipient mints it themselves. Without this the grant was
+          // unreachable — nothing in the app called claim_perk.
+          <div className="rounded-sm border border-signal/30 bg-signal/[0.04] p-6 text-center">
+            <TrendingUp className="mx-auto h-6 w-6 text-signal" />
+            <div className="mt-3 text-[15px] font-bold">
+              You&apos;ve been granted a Level {perkGrant.level} perk
+            </div>
+            <p className="mx-auto mt-1.5 max-w-md text-[12px] leading-relaxed text-[#6B6B6B]">
+              {PERK_TIER_NAMES[perkGrant.level - 1] ?? "Perk"} · {perkGrant.level}% off every
+              trade, forever. Claiming mints it to your wallet — you pay only the network cost
+              of the mint, and it&apos;s soulbound once claimed.
+            </p>
+            <button
+              onClick={() => void claimPerk()}
+              disabled={claiming}
+              className="mt-5 rounded-sm bg-signal px-6 py-2.5 font-mono text-[12px] font-bold text-[#0A0A0A] disabled:opacity-50"
+            >
+              {claiming ? "CLAIMING…" : "CLAIM YOUR PERK"}
+            </button>
           </div>
         ) : (
           <div className="rounded-sm border border-white/[0.08] bg-[#0f1620] p-6">
@@ -614,9 +707,16 @@ export function NftManage({ section }: { section: Section }) {
         ) : genesisNfts.length ? (
           <div className="flex flex-col gap-3">
             {genesisNfts.map((g) => {
-              const card: NftCardData = { kind: "genesis", shareBps: g.shareBps, id: g.id, ...(g.uri ? { image: g.uri } : {}) };
+              const card: NftCardData = {
+                kind: "genesis",
+                shareBps: g.shareBps,
+                id: g.id,
+                skinId: genesisSkins[g.asset] ?? null,
+                ...(g.uri ? { image: g.uri } : {}),
+              };
               return (
-              <div key={g.asset} className="flex flex-col gap-4 rounded-sm border border-white/[0.08] bg-[#0f1620] p-4 sm:flex-row sm:items-center">
+              <div key={g.asset} className="rounded-sm border border-white/[0.08] bg-[#0f1620] p-4">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
                 <button onClick={() => setSelected(card)} className="w-28 shrink-0 self-center sm:self-auto">
                   <NftCardFace data={card} />
                 </button>
@@ -633,6 +733,17 @@ export function NftManage({ section }: { section: Section }) {
                 >
                   CLAIM
                 </button>
+              </div>
+              {address && (
+                <AssetSkinPicker
+                  cls="genesis"
+                  asset={g.asset}
+                  owner={address}
+                  onSkinChange={(id) =>
+                    setGenesisSkins((prev) => ({ ...prev, [g.asset]: id }))
+                  }
+                />
+              )}
               </div>
               );
             })}

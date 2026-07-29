@@ -231,8 +231,13 @@ export function NftCreateFlow() {
         const subjectMint = handleToMint(tokenHandle);
         if (!subjectMint) throw new Error("Launch this token on-chain first, then issue genesis NFTs.");
         const shareBps = Math.max(1, Math.round((+sharePct || 0) * 100));
+        // Point the asset at the dynamic metadata endpoint so the genesis card
+        // can be restyled later without a transaction. A creator-supplied
+        // image wins — that's a deliberate choice of artwork, not a default.
+        const genesisUri =
+          genesisImage.trim() || `${window.location.origin}/api/nft/genesis/${asset.publicKey.toBase58()}`;
         sig = await program.methods
-          .mintGenesis(shareBps, genesisImage.trim().slice(0, 200))
+          .mintGenesis(shareBps, genesisUri.slice(0, 200))
           .accounts({ authority: me, recipient: me, subjectMint, asset: asset.publicKey })
           .signers([asset])
           .rpc();

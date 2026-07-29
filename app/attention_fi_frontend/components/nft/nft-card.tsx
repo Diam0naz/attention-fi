@@ -8,8 +8,8 @@ import { skinById } from "@/lib/nft-skins";
 export type NftCardData =
   /** `skinId` restyles the badge; omitted or unknown falls back to the default. */
   | { kind: "verification"; handle: string; id?: string; skinId?: string | null }
-  | { kind: "perk"; level: number; discountBps: number; id?: string }
-  | { kind: "genesis"; shareBps: number; id: string; image?: string }
+  | { kind: "perk"; level: number; discountBps: number; id?: string; skinId?: string | null }
+  | { kind: "genesis"; shareBps: number; id: string; image?: string; skinId?: string | null }
   | { kind: "custom"; name: string; image?: string; id?: string };
 
 // Perk levels map to named tiers with their own palette (bronze → gold).
@@ -58,11 +58,14 @@ export function getNftVisual(data: NftCardData): NftVisual {
   }
   if (data.kind === "perk") {
     const t = PERK_TIERS[Math.min(PERK_TIERS.length, Math.max(1, data.level)) - 1]!;
+    // A chosen skin replaces the tier palette; without one the level still
+    // colours the card, which is a default worth keeping.
+    const sk = data.skinId ? skinById(data.skinId) : null;
     return {
       label: "Perk",
       tag: "UPGRADEABLE",
-      grad: t.grad,
-      accent: t.accent,
+      grad: sk ? `linear-gradient(120deg,${sk.from},${sk.accent}33,${sk.to})` : t.grad,
+      accent: sk ? sk.accent : t.accent,
       tier: `${t.name} · Lvl ${data.level}`,
       stat: `${(data.discountBps / 100).toFixed(0)}% off`,
       statLabel: "FEE DISCOUNT",
@@ -72,11 +75,14 @@ export function getNftVisual(data: NftCardData): NftVisual {
     };
   }
   if (data.kind === "genesis") {
+    const sk = data.skinId ? skinById(data.skinId) : null;
     return {
       label: "Genesis",
       tag: "TRANSFERABLE",
-      grad: "linear-gradient(120deg,#05302a,#1fe0b8,#0a4038)",
-      accent: "#3fe9c4",
+      grad: sk
+        ? `linear-gradient(120deg,${sk.from},${sk.accent}33,${sk.to})`
+        : "linear-gradient(120deg,#05302a,#1fe0b8,#0a4038)",
+      accent: sk ? sk.accent : "#3fe9c4",
       tier: "Fee-share",
       stat: `${(data.shareBps / 100).toFixed(1)}%`,
       statLabel: "REVENUE SHARE",

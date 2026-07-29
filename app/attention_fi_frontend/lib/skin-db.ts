@@ -93,6 +93,20 @@ function ensureSchema(): Promise<void> {
       insert into skin_ownership (subject, skin, acquired_at)
       select subject, skin, updated_at from verification_skin
       on conflict (subject, skin) do nothing`;
+
+    // Skins for perk and genesis NFTs. Keyed by (class, asset) rather than by
+    // wallet: those PDAs are keyed by asset and a wallet can hold several, so
+    // one row per wallet — the shape verification_skin uses — can't address
+    // them individually. Ownership stays wallet-scoped in skin_ownership: you
+    // buy a skin once and may wear it on any NFT you hold.
+    await sql`
+      create table if not exists nft_skin (
+        class text not null,
+        asset text not null,
+        skin text not null,
+        updated_at timestamptz not null default now(),
+        primary key (class, asset)
+      )`;
   })().catch((e) => {
     schemaReady = null; // allow retry on transient failure
     throw e;
@@ -210,4 +224,45 @@ export async function grantSkin(subject: string, skin: string): Promise<void> {
     insert into skin_ownership (subject, skin, acquired_at)
     values (${subject}, ${skin}, now())
     on conflict (subject, skin) do nothing`);
+}
+
+
+/* ── per-asset skins (perk / genesis) ─────────────────────────────────── */
+
+/** NFT classes that carry an individually-skinnable asset. */
+export type SkinClass = "perk" | "genesis";
+
+/** The skin worn by one asset, or null when unset / db unavailable. */
+export async function getAssetSkin(cls: SkinClass, asset: string): Promise<string | null> {
+  if (!skinDbConfigured()) return null;
+  await ensureSchema();
+  const rows = (await sql`
+    select skin from nft_skin where class = ${cls} and asset = ${asset}`) as { skin: string }[];
+  return rows[0]?.skin ?? null;
+}
+
+/**
+ * Wear `skin` on one asset, provided `owner` has unlocked that skin.
+ *
+ * Ownership is checked inside the same statement that applies the change, so a
+ * skin can't be applied on the strength of a check that was true a moment
+ * earlier. The caller must separately have proven it controls `owner` and that
+ * `owner` holds `asset` — this only enforces the skin entitlement.
+ */
+export async function applyAssetSkin(
+  cls: SkinClass,
+  asset: string,
+  skin: string,
+  owner: string,
+): Promise<boolean> {
+  await withRetry(() => ensureSchema());
+  const rows = (await withRetry(() => sql`
+    insert into nft_skin (class, asset, skin, updated_at)
+    select ${cls}, ${asset}, ${skin}, now()
+    where exists (
+      select 1 from skin_ownership where subject = ${owner} and skin = ${skin}
+    )
+    on conflict (class, asset) do update set skin = excluded.skin, updated_at = now()
+    returning asset`)) as { asset: string }[];
+  return rows.length > 0;
 }
