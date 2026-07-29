@@ -3,6 +3,7 @@ use mpl_core::instructions::TransferV1CpiBuilder;
 
 use crate::constants::NFTAUCTION_SEED;
 use crate::error::AttentionError;
+use crate::events::{NftAuctionEvent, NFT_RECLAIMED};
 use crate::state::NftAuction;
 
 /// Return an unsold 1-of-1 to its lister once the auction window has closed.
@@ -69,5 +70,15 @@ pub fn reclaim_nft_auction_handler(ctx: Context<ReclaimNftAuction>) -> Result<()
 
     // Close the auction so the asset can't be reclaimed twice.
     ctx.accounts.auction.complete = true;
+
+    emit!(NftAuctionEvent {
+        asset: asset_key,
+        creator: ctx.accounts.creator.key(),
+        counterparty: ctx.accounts.creator.key(),
+        outcome: NFT_RECLAIMED,
+        price: 0,
+        fee: 0,
+        timestamp: now,
+    });
     Ok(())
 }

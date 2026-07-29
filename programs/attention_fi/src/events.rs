@@ -77,3 +77,38 @@ pub struct AmmSwapEvent {
     pub token_reserves: u64,
     pub timestamp: i64,
 }
+
+// How a 1-of-1 listing ended, carried in `NftAuctionEvent`.
+pub const NFT_SOLD: u8 = 0;
+pub const NFT_RECLAIMED: u8 = 1;
+
+/// Emitted when a 1-of-1 auction ends — sold to a buyer, or returned unsold.
+///
+/// `NftAuction.complete` is set by both paths, so account state alone can't
+/// distinguish them after the fact; without this, an indexer had nothing to
+/// read and a lister got no notice that their asset had sold.
+#[event]
+pub struct NftAuctionEvent {
+    pub asset: Pubkey,
+    pub creator: Pubkey,
+    /// The buyer on a sale; equal to `creator` on a reclaim.
+    pub counterparty: Pubkey,
+    /// One of the `NFT_*` discriminants.
+    pub outcome: u8,
+    /// Descending price actually paid, in lamports. Zero on a reclaim.
+    pub price: u64,
+    /// Protocol fee charged on top of `price`. Zero on a reclaim.
+    pub fee: u64,
+    pub timestamp: i64,
+}
+
+/// Emitted when a 1-of-1 is listed, whether freshly minted or already owned.
+#[event]
+pub struct NftListedEvent {
+    pub asset: Pubkey,
+    pub creator: Pubkey,
+    pub start_price: u64,
+    pub floor_price: u64,
+    pub duration: i64,
+    pub timestamp: i64,
+}

@@ -5271,6 +5271,32 @@ export type AttentionFi = {
   ],
   "events": [
     {
+      "name": "NftAuctionEvent",
+      "discriminator": [
+        123,
+        100,
+        93,
+        131,
+        133,
+        209,
+        126,
+        38
+      ]
+    },
+    {
+      "name": "NftListedEvent",
+      "discriminator": [
+        209,
+        171,
+        3,
+        47,
+        191,
+        120,
+        133,
+        103
+      ]
+    },
+    {
       "name": "ammSwapEvent",
       "discriminator": [
         190,
@@ -5477,6 +5503,96 @@ export type AttentionFi = {
     }
   ],
   "types": [
+    {
+      "name": "NftAuctionEvent",
+      "docs": [
+        "Emitted when a 1-of-1 auction ends \u2014 sold to a buyer, or returned unsold.",
+        "",
+        "`NftAuction.complete` is set by both paths, so account state alone can't",
+        "distinguish them after the fact; without this, an indexer had nothing to",
+        "read and a lister got no notice that their asset had sold."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "asset",
+            "type": "pubkey"
+          },
+          {
+            "name": "creator",
+            "type": "pubkey"
+          },
+          {
+            "name": "counterparty",
+            "docs": [
+              "The buyer on a sale; equal to `creator` on a reclaim."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "outcome",
+            "docs": [
+              "One of the `NFT_*` discriminants."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "price",
+            "docs": [
+              "Descending price actually paid, in lamports. Zero on a reclaim."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "fee",
+            "docs": [
+              "Protocol fee charged on top of `price`. Zero on a reclaim."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "NftListedEvent",
+      "docs": [
+        "Emitted when a 1-of-1 is listed, whether freshly minted or already owned."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "asset",
+            "type": "pubkey"
+          },
+          {
+            "name": "creator",
+            "type": "pubkey"
+          },
+          {
+            "name": "startPrice",
+            "type": "u64"
+          },
+          {
+            "name": "floorPrice",
+            "type": "u64"
+          },
+          {
+            "name": "duration",
+            "type": "i64"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
     {
       "name": "ammPool",
       "docs": [

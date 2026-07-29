@@ -19,8 +19,11 @@ const KEY_COLLECTION_V1 = 5;
  * this narrow. `collection` is set only when UpdateAuthority::Collection(_) —
  * i.e. the asset genuinely belongs to an mpl-core collection, tag byte 2.
  */
-function decodeAsset(data: Buffer): { name: string; uri: string; collection: string | null } | null {
+function decodeAsset(
+  data: Buffer,
+): { owner: string; name: string; uri: string; collection: string | null } | null {
   try {
+    const owner = new PublicKey(data.subarray(1, 33)).toBase58();
     let offset = 1 + 32; // key + owner
     const authorityTag = data.readUInt8(offset);
     offset += 1;
@@ -39,7 +42,7 @@ function decodeAsset(data: Buffer): { name: string; uri: string; collection: str
     offset += 4;
     const uri = data.subarray(offset, offset + uriLen).toString("utf8");
 
-    return { name, uri, collection };
+    return { owner, name, uri, collection };
   } catch {
     return null;
   }
@@ -416,4 +419,68 @@ export async function fetchListableNfts(
 ): Promise<OwnedAsset[]> {
   const { tracked } = await fetchProgramNfts(program, owner.toBase58());
   return fetchStandaloneAssets(program, owner, tracked);
+}
+
+/**
+ * A finished listing of the caller's, and how it finished.
+ *
+ * `NftAuction.complete` is set by both `buy_nft` and `reclaim_nft_auction`, so
+ * the flag alone can't say whether a listing sold or simply came back. The
+ * asset's current owner settles it: still with the lister means reclaimed,
+ * anyone else means sold.
+ *
+ * Derived from account state rather than events because `buy_nft` emits none —
+ * so there is nothing for the indexer to pick up. An `NftSaleEvent` would give
+ * this a real timestamp and sale price; until then, outcome is all that's
+ * knowable without a per-listing transaction lookup.
+ */
+export interface NftOutcome {
+  asset: string;
+  name: string;
+  uri?: string;
+  outcome: "sold" | "reclaimed";
+  /** Present for sales: whoever holds the asset now. */
+  buyer: string | null;
+  /** Floor price, i.e. the least it can have gone for. */
+  floorPrice: bigint;
+  startPrice: bigint;
+  endedAt: number;
+}
+
+export async function fetchNftOutcomes(
+  program: Program<AttentionFi>,
+  creator: PublicKey,
+): Promise<NftOutcome[]> {
+  const creatorStr = creator.toBase58();
+  const all = await program.account.nftAuction.all();
+  const mine = all.filter(
+    (a) => a.account.complete && a.account.creator.toBase58() === creatorStr,
+  );
+  if (mine.length === 0) return [];
+
+  const infos = await program.provider.connection.getMultipleAccountsInfo(
+    mine.map((a) => a.account.asset),
+  );
+
+  const out: NftOutcome[] = [];
+  mine.forEach((a, i) => {
+    const info = infos[i];
+    const decoded = info ? decodeAsset(info.data) : null;
+    const key = a.account.asset.toBase58();
+    // A burned/missing asset can't be attributed either way; treat it as sold
+    // rather than telling the lister it's back when it isn't in their wallet.
+    const owner = decoded?.owner ?? null;
+    const reclaimed = owner === creatorStr;
+    out.push({
+      asset: key,
+      name: decoded?.name || short(key),
+      uri: decoded?.uri || undefined,
+      outcome: reclaimed ? "reclaimed" : "sold",
+      buyer: reclaimed ? null : owner,
+      floorPrice: BigInt(a.account.floorPrice.toString()),
+      startPrice: BigInt(a.account.startPrice.toString()),
+      endedAt: Number(a.account.startTime.toString()) + Number(a.account.duration.toString()),
+    });
+  });
+  return out.sort((x, y) => y.endedAt - x.endedAt);
 }

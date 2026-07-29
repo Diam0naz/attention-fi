@@ -3,6 +3,7 @@ use mpl_core::instructions::TransferV1CpiBuilder;
 
 use crate::constants::{GLOBAL_SEED, NFTAUCTION_SEED};
 use crate::error::AttentionError;
+use crate::events::NftListedEvent;
 use crate::state::{Global, NftAuction};
 
 /// List an NFT the caller already owns as a descending 1-of-1 auction.
@@ -100,5 +101,13 @@ pub fn list_nft_auction_handler(
     auction.complete = false;
     auction.bump = ctx.bumps.auction;
 
+    emit!(NftListedEvent {
+        asset: ctx.accounts.asset.key(),
+        creator: ctx.accounts.creator.key(),
+        start_price,
+        floor_price,
+        duration,
+        timestamp: now,
+    });
     Ok(())
 }

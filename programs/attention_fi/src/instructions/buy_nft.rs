@@ -5,6 +5,7 @@ use mpl_core::instructions::TransferV1CpiBuilder;
 use crate::auction::current_price;
 use crate::constants::{GLOBAL_SEED, NFTAUCTION_SEED};
 use crate::error::AttentionError;
+use crate::events::{NftAuctionEvent, NFT_SOLD};
 use crate::state::{Global, NftAuction};
 
 #[derive(Accounts)]
@@ -103,5 +104,15 @@ pub fn buy_nft_handler(ctx: Context<BuyNft>, max_price: u64) -> Result<()> {
         .invoke_signed(signer_seeds)?;
 
     ctx.accounts.auction.complete = true;
+
+    emit!(NftAuctionEvent {
+        asset: asset_key,
+        creator: ctx.accounts.creator.key(),
+        counterparty: ctx.accounts.buyer.key(),
+        outcome: NFT_SOLD,
+        price,
+        fee,
+        timestamp: Clock::get()?.unix_timestamp,
+    });
     Ok(())
 }

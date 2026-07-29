@@ -115,6 +115,35 @@ function normalize(name: string, data: Record<string, unknown>, ctx: Ctx): Chain
         feeLamports: null,
       };
     }
+    // NFT events key off `asset`, not `mint`. Storing it in the mint column
+    // keeps ?mint= filtering working for a 1-of-1; the token-registry join
+    // simply misses, which is correct — an asset isn't a launched token.
+    case "NftAuctionEvent": {
+      const sold = Number(pick(data, "outcome") ?? 0) === 0;
+      return {
+        ...base,
+        mint: b58(pick(data, "asset")),
+        kind: sold ? "nft_sale" : "nft_reclaim",
+        // The counterparty is who acted on the listing: the buyer on a sale,
+        // and the lister themselves on a reclaim.
+        actor: b58(pick(data, "counterparty")),
+        isBuy: sold ? true : null,
+        solLamports: toBig(pick(data, "price")),
+        tokenAmount: null,
+        feeLamports: toBig(pick(data, "fee")),
+      };
+    }
+    case "NftListedEvent":
+      return {
+        ...base,
+        mint: b58(pick(data, "asset")),
+        kind: "nft_listed",
+        actor: b58(pick(data, "creator")),
+        isBuy: null,
+        solLamports: toBig(pick(data, "startPrice", "start_price")),
+        tokenAmount: null,
+        feeLamports: null,
+      };
     case "CreatorClaimEvent":
       return {
         ...base,

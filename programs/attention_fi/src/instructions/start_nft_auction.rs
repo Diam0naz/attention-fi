@@ -4,6 +4,7 @@ use mpl_core::types::DataState;
 
 use crate::constants::{GLOBAL_SEED, NFTAUCTION_SEED};
 use crate::error::AttentionError;
+use crate::events::NftListedEvent;
 use crate::state::{Global, NftAuction};
 
 #[derive(Accounts)]
@@ -72,5 +73,13 @@ pub fn start_nft_auction_handler(
     auction.complete = false;
     auction.bump = ctx.bumps.auction;
 
+    emit!(NftListedEvent {
+        asset: ctx.accounts.asset.key(),
+        creator: ctx.accounts.creator.key(),
+        start_price,
+        floor_price,
+        duration,
+        timestamp: now,
+    });
     Ok(())
 }
