@@ -14,7 +14,10 @@ export function TradeLog() {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-1">
         <span className="text-2xs text-mid">No activity yet</span>
-        <span className="text-2xs text-low">Orders, fills and cancels appear here</span>
+        <span className="text-2xs text-low">
+          Your orders, fills and cancels. For on-chain activity across every token,
+          see Network.
+        </span>
       </div>
     );
   }

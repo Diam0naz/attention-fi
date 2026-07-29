@@ -18,6 +18,7 @@ import { useProgram, useReadonlyProgram } from "@/lib/solana/use-program";
 import { fetchGlobal } from "@/lib/solana/curve";
 import { explorerTx, PROGRAM_ID } from "@/lib/solana/config";
 import { SkinPicker } from "@/components/nft/skin-picker";
+import { RefreshButton } from "@/components/ui/refresh-button";
 import { useNftPortfolio } from "@/components/nft/use-nft-portfolio";
 import {
   auctionEnded,
@@ -163,6 +164,21 @@ export function NftManage({ section }: { section: Section }) {
       cancelled = true;
     };
   }, [section, address, readProgram]);
+
+  /** Re-read everything the auctions view shows, on demand. */
+  async function refreshAuctions() {
+    const [list, global] = await Promise.all([
+      fetchNftAuctions(readProgram),
+      fetchGlobal(readProgram),
+    ]);
+    setAuctions(list);
+    setTreasury(global?.treasury ?? null);
+    setAuctionsStatus("ready");
+    if (address) {
+      const assets = await fetchListableNfts(readProgram, new PublicKey(address)).catch(() => []);
+      setListable({ owner: address, assets });
+    }
+  }
 
   async function buyNow(a: NftAuctionData) {
     if (!signProgram || !address) return setWalletOpen(true);
@@ -649,7 +665,10 @@ export function NftManage({ section }: { section: Section }) {
         return (
           <div>
             <div className="flex items-center justify-between">
-              <h2 className="text-[13px] font-bold">Your listings</h2>
+              <div className="flex items-center gap-2">
+                <h2 className="text-[13px] font-bold">Your listings</h2>
+                <RefreshButton onRefresh={refreshAuctions} />
+              </div>
               {listableAssets.length > 0 ? (
                 <button
                   onClick={() => setListOpen(true)}
@@ -664,9 +683,7 @@ export function NftManage({ section }: { section: Section }) {
               )}
             </div>
             {auctionsStatus === "loading" ? (
-              <p className="mt-2 rounded-sm border border-dashed border-white/12 p-5 text-center font-mono text-[11px] text-[#6B6B6B]">
-                Loading listings…
-              </p>
+              <AuctionSkeletonGrid count={3} />
             ) : auctionsStatus === "error" ? (
               <p className="mt-2 rounded-sm border border-dashed border-noise/30 p-5 text-center font-mono text-[11px] text-noise">
                 Couldn&apos;t reach the chain to load auctions.
@@ -684,7 +701,13 @@ export function NftManage({ section }: { section: Section }) {
             )}
 
             <h2 className="mt-8 text-[13px] font-bold">Live market</h2>
-            {auctionsStatus === "ready" && market.length === 0 ? (
+            {auctionsStatus === "loading" ? (
+              <AuctionSkeletonGrid count={3} />
+            ) : auctionsStatus === "error" ? (
+              <p className="mt-2 rounded-sm border border-dashed border-noise/30 p-5 text-center font-mono text-[11px] text-noise">
+                Couldn&apos;t reach the chain to load the market.
+              </p>
+            ) : market.length === 0 ? (
               <p className="mt-2 rounded-sm border border-dashed border-white/12 p-5 text-center font-mono text-[11px] text-[#6B6B6B]">
                 {mine.length > 0
                   ? "No listings from other creators yet — your own are above."
@@ -791,6 +814,39 @@ export function NftManage({ section }: { section: Section }) {
       )}
       <WalletConnectModal open={walletOpen} onClose={() => setWalletOpen(false)} />
     </Shell>
+  );
+}
+
+/**
+ * Placeholder while auctions load.
+ *
+ * Mirrors AuctionCard's shape — artwork above, detail block below — so the
+ * grid doesn't reflow when real listings arrive. The market grid previously
+ * rendered empty during the fetch, which read as "no auctions" rather than
+ * "not loaded yet".
+ */
+function AuctionSkeletonGrid({ count }: { count: number }) {
+  return (
+    <div className="mt-3 grid gap-3 sm:grid-cols-3" aria-hidden>
+      {Array.from({ length: count }, (_, i) => (
+        <div key={i} className="flex flex-col">
+          <div className="aspect-3/4 animate-pulse rounded-xl bg-white/[0.05]" />
+          <div className="mt-3 rounded-sm border border-white/[0.08] bg-[#0f1620] p-3.5">
+            <div className="flex items-center justify-between gap-2">
+              <div className="h-3 w-2/5 animate-pulse rounded bg-white/[0.07]" />
+              <div className="h-2.5 w-1/4 animate-pulse rounded bg-white/[0.05]" />
+            </div>
+            <div className="mt-2 h-4 w-1/2 animate-pulse rounded bg-white/[0.07]" />
+            <div className="mt-2 h-1 w-full overflow-hidden rounded-full bg-white/[0.06]" />
+            <div className="mt-2 flex justify-between">
+              <div className="h-2.5 w-1/3 animate-pulse rounded bg-white/[0.05]" />
+              <div className="h-2.5 w-1/4 animate-pulse rounded bg-white/[0.05]" />
+            </div>
+            <div className="mt-3 h-8 w-full animate-pulse rounded-sm bg-white/[0.06]" />
+          </div>
+        </div>
+      ))}
+    </div>
   );
 }
 

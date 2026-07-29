@@ -5,11 +5,13 @@ import { useLayout, type DrawerTab } from "@/lib/terminal-app/stores/layout";
 import { AlertsPanel } from "./AlertsPanel";
 import { Screener } from "./Screener";
 import { TradeLog } from "./TradeLog";
+import { NetworkActivity } from "./NetworkActivity";
 
 const TABS: { id: DrawerTab; label: string }[] = [
   { id: "screener", label: "Screener" },
   { id: "alerts", label: "Alerts" },
   { id: "log", label: "Trade Log" },
+  { id: "network", label: "Network" },
 ];
 
 export function BottomDrawer() {
@@ -49,6 +51,7 @@ export function BottomDrawer() {
         {tab === "screener" && <Screener />}
         {tab === "alerts" && <AlertsPanel />}
         {tab === "log" && <TradeLog />}
+        {tab === "network" && <NetworkActivity />}
       </div>
     </div>
   );

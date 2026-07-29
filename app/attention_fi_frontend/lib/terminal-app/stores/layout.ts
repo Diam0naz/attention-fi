@@ -4,7 +4,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
 export type RightTab = "book" | "tape" | "order" | "positions";
-export type DrawerTab = "screener" | "alerts" | "log";
+export type DrawerTab = "screener" | "alerts" | "log" | "network";
 
 interface LayoutState {
   leftCollapsed: boolean;
