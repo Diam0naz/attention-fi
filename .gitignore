@@ -10,4 +10,9 @@ test-ledger
 # python
 __pycache__/
 *.pyc
+# Solana keypairs. deploy.sh writes deploy-buffer.json to make a failed upload
+# resumable; it is a real keypair holding the buffer's rent, so it must never
+# be committed. The wildcard covers any future *-keypair.json too.
 buffer.json
+deploy-buffer.json
+*-keypair.json

@@ -32,9 +32,9 @@ function sql(strings: TemplateStringsArray, ...values: unknown[]) {
  * Retry a query through a cold start.
  *
  * Neon auto-suspends when idle, and the first request after that can fail
- * outright ("fetch failed") rather than just being slow. Since a skin change
- * is paid for before this runs, a suspended database must not be what makes it
- * fail.
+ * outright ("fetch failed") rather than just being slow. Writes must not lose a
+ * paid-for change to that; reads must not either, since a caller that falls
+ * back to defaults renders a bought skin as unset.
  */
 async function withRetry<T>(run: () => Promise<T>, attempts = 3): Promise<T> {
   let lastError: unknown;
@@ -117,9 +117,9 @@ function ensureSchema(): Promise<void> {
 /** The chosen skin id for a subject, or null when unset / db unavailable. */
 export async function getSkin(subject: string): Promise<string | null> {
   if (!skinDbConfigured()) return null;
-  await ensureSchema();
-  const rows = (await sql`
-    select skin from verification_skin where subject = ${subject}`) as { skin: string }[];
+  await withRetry(() => ensureSchema());
+  const rows = (await withRetry(() => sql`
+    select skin from verification_skin where subject = ${subject}`)) as { skin: string }[];
   return rows[0]?.skin ?? null;
 }
 
@@ -127,21 +127,21 @@ export async function getSkin(subject: string): Promise<string | null> {
 export async function getSkins(subjects: string[]): Promise<Map<string, string>> {
   const out = new Map<string, string>();
   if (subjects.length === 0 || !skinDbConfigured()) return out;
-  await ensureSchema();
-  const rows = (await sql`
+  await withRetry(() => ensureSchema());
+  const rows = (await withRetry(() => sql`
     select subject, skin from verification_skin
-    where subject = any(${subjects})`) as { subject: string; skin: string }[];
+    where subject = any(${subjects})`)) as { subject: string; skin: string }[];
   for (const r of rows) out.set(r.subject, r.skin);
   return out;
 }
 
 /** Set a subject's skin. Callers must have verified wallet ownership first. */
 export async function putSkin(subject: string, skin: string): Promise<void> {
-  await ensureSchema();
-  await sql`
+  await withRetry(() => ensureSchema());
+  await withRetry(() => sql`
     insert into verification_skin (subject, skin, updated_at)
     values (${subject}, ${skin}, now())
-    on conflict (subject) do update set skin = ${skin}, updated_at = now()`;
+    on conflict (subject) do update set skin = ${skin}, updated_at = now()`);
 }
 
 /**
@@ -186,9 +186,9 @@ export async function redeemSkinPayment(
 /** Every skin this wallet has unlocked. */
 export async function getOwnedSkins(subject: string): Promise<string[]> {
   if (!skinDbConfigured()) return [];
-  await ensureSchema();
-  const rows = (await sql`
-    select skin from skin_ownership where subject = ${subject}`) as { skin: string }[];
+  await withRetry(() => ensureSchema());
+  const rows = (await withRetry(() => sql`
+    select skin from skin_ownership where subject = ${subject}`)) as { skin: string }[];
   return rows.map((r) => r.skin);
 }
 
@@ -235,9 +235,9 @@ export type SkinClass = "perk" | "genesis";
 /** The skin worn by one asset, or null when unset / db unavailable. */
 export async function getAssetSkin(cls: SkinClass, asset: string): Promise<string | null> {
   if (!skinDbConfigured()) return null;
-  await ensureSchema();
-  const rows = (await sql`
-    select skin from nft_skin where class = ${cls} and asset = ${asset}`) as { skin: string }[];
+  await withRetry(() => ensureSchema());
+  const rows = (await withRetry(() => sql`
+    select skin from nft_skin where class = ${cls} and asset = ${asset}`)) as { skin: string }[];
   return rows[0]?.skin ?? null;
 }
 
