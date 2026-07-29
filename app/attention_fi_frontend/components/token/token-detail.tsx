@@ -16,6 +16,7 @@ import { useWallet } from "@/components/wallet/wallet-provider";
 import { useLiveTokenDetail } from "@/components/token/use-live-token";
 import { MindshareSourceBadge } from "@/components/feed/mindshare-source";
 import { AuctionPanel } from "@/components/token/auction-panel";
+import { RefreshButton } from "@/components/ui/refresh-button";
 import { ConvictionPanel } from "@/components/token/conviction-panel";
 import { RevenuePanel } from "@/components/token/revenue-panel";
 import { useTokenIndex } from "@/lib/token-index";
@@ -39,7 +40,7 @@ function usd(n: number): string {
 
 export function TokenDetailTerminal({ token: tokenProp }: { token: TokenDetail }) {
   // Mock now, upgraded to live on-chain curve state when the token is deployed.
-  const { token, source } = useLiveTokenDetail(tokenProp);
+  const { token, source, refresh } = useLiveTokenDetail(tokenProp);
   const { connected, address, shortAddress, disconnect } = useWallet();
   const program = useProgram();
   const solBalance = useSolBalance();
@@ -132,6 +133,7 @@ export function TokenDetailTerminal({ token: tokenProp }: { token: TokenDetail }
         <span className="text-[#4b5563]">/</span>
         <span className="font-mono text-[12px]">@{token.handle}</span>
         <div className="ml-auto flex items-center gap-3">
+          <RefreshButton onRefresh={refresh} label="" />
           <span
             className={cn(
               "rounded-sm px-1.5 py-0.5 font-mono text-[9px] font-bold tracking-wide",

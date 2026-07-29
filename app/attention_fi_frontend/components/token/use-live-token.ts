@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { TokenDetail } from "@/lib/mock-data";
 import { useReadonlyProgram } from "@/lib/solana/use-program";
 import { handleToMint, launchedMeta, resolveTokenFromDb, type LaunchedTokenMeta } from "@/lib/solana/registry";
@@ -26,8 +26,13 @@ function withMeta(base: TokenDetail, meta: LaunchedTokenMeta | null): TokenDetai
  * Falls back to the mock+metadata view when the token isn't registered, the
  * program isn't deployed, or the RPC is unreachable.
  */
-export function useLiveTokenDetail(base: TokenDetail): { token: TokenDetail; source: TokenSource } {
+export function useLiveTokenDetail(base: TokenDetail): {
+  token: TokenDetail;
+  source: TokenSource;
+  refresh: () => void;
+} {
   const program = useReadonlyProgram();
+  const [nonce, setNonce] = useState(0);
   const [detail, setDetail] = useState<{ token: TokenDetail; source: TokenSource }>({
     token: withMeta(base, typeof window === "undefined" ? null : launchedMeta(base.handle)),
     source: "mock",
@@ -55,7 +60,10 @@ export function useLiveTokenDetail(base: TokenDetail): { token: TokenDetail; sou
     return () => {
       cancelled = true;
     };
-  }, [base, program]);
+  }, [base, program, nonce]);
 
-  return detail;
+  // Bumping the nonce re-runs the effect, which keeps the last good data on
+  // screen while the re-read is in flight rather than blanking the page.
+  const refresh = useCallback(() => setNonce((n) => n + 1), []);
+  return { ...detail, refresh };
 }

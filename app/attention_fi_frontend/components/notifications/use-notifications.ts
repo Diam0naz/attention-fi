@@ -71,6 +71,8 @@ export interface Notifications {
   items: AppNotification[];
   unread: number;
   markAllRead: () => void;
+  /** Toggle a single item, so "seen" can be corrected as well as set. */
+  toggleRead: (id: string) => void;
   refresh: () => Promise<void>;
   loading: boolean;
 }
@@ -126,10 +128,25 @@ export function useNotifications(): Notifications {
     writeSeen(address, all);
   }, [address, outcomes]);
 
+  const toggleRead = useCallback(
+    (id: string) => {
+      if (!address) return;
+      setSeen((prev) => {
+        const next = new Set(prev);
+        if (next.has(id)) next.delete(id);
+        else next.add(id);
+        writeSeen(address, next);
+        return next;
+      });
+    },
+    [address],
+  );
+
   return {
     items,
     unread: items.filter((i) => !i.read).length,
     markAllRead,
+    toggleRead,
     refresh,
     loading,
   };

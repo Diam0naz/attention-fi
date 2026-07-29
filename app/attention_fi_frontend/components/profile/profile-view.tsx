@@ -17,6 +17,8 @@ import { myCreatedTokens, type CreatedToken } from "@/lib/solana/registry";
 import { useTokenIndex } from "@/lib/token-index";
 import { getPortfolio } from "@/lib/mock-data";
 import { useNftPortfolio } from "@/components/nft/use-nft-portfolio";
+import { RefreshButton } from "@/components/ui/refresh-button";
+import { syncRegistry } from "@/lib/solana/registry";
 
 function usd(n: number): string {
   if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
@@ -46,6 +48,7 @@ export function ProfileView() {
   // truth for "what did I create" — not the mock portfolio.
   const { tokens: indexed } = useTokenIndex();
   const [launched, setLaunched] = useState<CreatedToken[]>([]);
+  const [launchNonce, setLaunchNonce] = useState(0);
   useEffect(() => {
     let cancelled = false;
     void (async () => {
@@ -55,7 +58,14 @@ export function ProfileView() {
     return () => {
       cancelled = true;
     };
-  }, [address]);
+  }, [address, launchNonce]);
+
+  /** Re-read the profile's on-chain halves together. */
+  async function refreshProfile() {
+    nftPortfolio.refresh();
+    setLaunchNonce((n) => n + 1);
+    await syncRegistry(true);
+  }
   const created = useMemo(() => {
     return launched.map((t) => {
       const live = indexed.find((i) => i.handle === t.handle);
@@ -264,7 +274,7 @@ export function ProfileView() {
         </Section>
 
         {/* NFTs — the actual issued assets */}
-        <Section title="Your NFTs">
+        <Section title="Your NFTs" action={<RefreshButton onRefresh={refreshProfile} />}>
           {ownedOnchain.status === "loading" ? (
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
               {Array.from({ length: 4 }, (_, i) => (
@@ -338,12 +348,24 @@ function Stat({ label, value, accent }: { label: string; value: string; accent?:
   );
 }
 
-function Section({ title, count, children }: { title: string; count?: number; children: React.ReactNode }) {
+function Section({
+  title,
+  count,
+  action,
+  children,
+}: {
+  title: string;
+  count?: number;
+  /** Optional control (e.g. refresh) pinned to the right of the heading. */
+  action?: React.ReactNode;
+  children: React.ReactNode;
+}) {
   return (
     <section className="mt-8">
       <div className="mb-3 flex items-baseline gap-2">
         <h2 className="text-[14px] font-bold">{title}</h2>
         {count !== undefined && <span className="font-mono text-[11px] text-[#6B6B6B]">{count}</span>}
+        {action && <span className="ml-auto self-center">{action}</span>}
       </div>
       {children}
     </section>

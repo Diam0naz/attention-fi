@@ -1,49 +1,32 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { Bell } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useWallet } from "@/components/wallet/wallet-provider";
 import { useNotifications } from "@/components/notifications/use-notifications";
-import { NotificationsPanel } from "@/components/notifications/notifications-panel";
+import { NotificationsDrawer } from "@/components/notifications/notifications-drawer";
 
 /**
  * Notification bell.
  *
  * Only rendered for a connected wallet — every notification here is about
- * something that wallet owns, so there's nothing to show otherwise.
+ * something that wallet owns, so there's nothing to show otherwise. Opens a
+ * side panel rather than a dropdown: anchored to the right edge of the nav,
+ * a dropdown had no room to grow and wrapped to a few words per line.
  */
 export function NotificationsBell() {
   const { connected } = useWallet();
-  const { items, unread, markAllRead, loading } = useNotifications();
+  const { items, unread, markAllRead, toggleRead, loading } = useNotifications();
   const [open, setOpen] = useState(false);
-  const wrap = useRef<HTMLDivElement>(null);
-
-  // Close on outside click / Escape, so the panel doesn't strand itself open
-  // over the page.
-  useEffect(() => {
-    if (!open) return;
-    function onDown(e: MouseEvent) {
-      if (wrap.current && !wrap.current.contains(e.target as Node)) setOpen(false);
-    }
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") setOpen(false);
-    }
-    document.addEventListener("mousedown", onDown);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDown);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [open]);
 
   if (!connected) return null;
 
   return (
-    <div className="relative" ref={wrap}>
+    <>
       <button
         type="button"
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => setOpen(true)}
         aria-label={unread > 0 ? `Notifications (${unread} unread)` : "Notifications"}
         className={cn(
           "relative flex h-7 w-7 items-center justify-center rounded-sm border border-white/10 text-[#6B6B6B] transition-colors hover:border-white/25 hover:text-[#F5F4F0]",
@@ -58,26 +41,15 @@ export function NotificationsBell() {
         )}
       </button>
 
-      {open && (
-        <div className="absolute right-0 top-9 z-50">
-          {items.length === 0 ? (
-            <div className="w-[280px] rounded-sm border border-white/10 bg-[#0f1620] p-5 text-center">
-              <div className="font-mono text-[11px] text-[#6B6B6B]">
-                {loading ? "Checking…" : "Nothing yet"}
-              </div>
-              <p className="mt-1 font-mono text-[10px] leading-relaxed text-[#4b5563]">
-                Sales and returns on your 1-of-1 listings show up here.
-              </p>
-            </div>
-          ) : (
-            <NotificationsPanel
-              notifications={items}
-              onMarkAllRead={markAllRead}
-              onViewAll={() => setOpen(false)}
-            />
-          )}
-        </div>
-      )}
-    </div>
+      <NotificationsDrawer
+        open={open}
+        items={items}
+        unread={unread}
+        loading={loading}
+        onClose={() => setOpen(false)}
+        onMarkAllRead={markAllRead}
+        onToggleRead={toggleRead}
+      />
+    </>
   );
 }
