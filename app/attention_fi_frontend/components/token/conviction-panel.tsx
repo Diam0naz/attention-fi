@@ -10,7 +10,10 @@ import { TxStatus, type TxState } from "@/components/wallet/tx-status";
 import { useProgram, useReadonlyProgram } from "@/lib/solana/use-program";
 import { fetchConvictionDetail, fetchGlobal, quoteBuy, type ConvictionDetail } from "@/lib/solana/curve";
 import { buyConviction, quoteConvictionSell, sellConviction } from "@/lib/solana/trade";
+import { useSolBalance } from "@/lib/solana/use-sol-balance";
+import { useTokenBalance } from "@/lib/solana/use-token-balance";
 import { explorerTx } from "@/lib/solana/config";
+import { RefreshButton } from "@/components/ui/refresh-button";
 
 /**
  * Conviction-curve trade panel.
@@ -22,6 +25,11 @@ import { explorerTx } from "@/lib/solana/config";
  */
 
 const POLL_MS = 8_000;
+
+const PERCENTS = [25, 50, 75, 100] as const;
+
+/** Headroom on a MAX buy so the transaction can still pay its own fees. */
+const SOL_BUFFER = 0.01;
 
 function duration(seconds: number): string {
   if (seconds <= 0) return "unlocked";
@@ -48,6 +56,8 @@ export function ConvictionPanel({ mint, symbol }: { mint: string; symbol: string
   const [tx, setTx] = useState<TxState | null>(null);
   const [txSig, setTxSig] = useState<string | null>(null);
   const [txErr, setTxErr] = useState<string | null>(null);
+  const walletSol = useSolBalance();
+  const heldTokens = useTokenBalance(mint);
 
   const mintKey = useMemo(() => (mint ? new PublicKey(mint) : null), [mint]);
 
@@ -122,6 +132,26 @@ export function ConvictionPanel({ mint, symbol }: { mint: string; symbol: string
   const secondsToUnlock = position ? position.unlockTime - now : 0;
   const isLocked = position !== null && secondsToUnlock > 0;
 
+  // Buying spends SOL, selling spends tokens — so "100%" means a different
+  // balance on each side, and MAX on a buy has to leave fee headroom.
+  const sideBalance = side === "buy" ? walletSol : heldTokens;
+  const sideUnit = side === "buy" ? "SOL" : symbol;
+  const sellCeiling = position?.amountTokens ?? 0;
+  const maxForSide =
+    side === "buy"
+      ? Math.max(0, (walletSol ?? 0) - SOL_BUFFER)
+      // Only the locked position is sellable through this curve, which can be
+      // less than the wallet's token balance if some was bought elsewhere.
+      : Math.min(heldTokens ?? 0, sellCeiling);
+
+  function setPercent(pct: number) {
+    const target = (maxForSide * pct) / 100;
+    setAmount(target > 0 ? String(Number(target.toFixed(6))) : "");
+  }
+
+  const overBalance =
+    sideBalance !== null && valid && (side === "buy" ? amt > sideBalance : amt > maxForSide);
+
   const buyPreview = valid ? quoteBuy(detail.curve, amt) / 10 ** decimals : 0;
   const sellQuote = quoteConvictionSell(detail, valid ? amt : 0, decimals, feeBps, now);
   const penaltyPct = detail.earlyExitPenaltyBps / 100;
@@ -129,10 +159,17 @@ export function ConvictionPanel({ mint, symbol }: { mint: string; symbol: string
   const canSubmit =
     valid &&
     !detail.complete &&
+    !overBalance &&
     (side === "buy" || (position !== null && amt <= position.amountTokens));
 
   return (
     <div className="rounded-sm border border-white/[0.08] bg-[#0f1620] p-4">
+      <div className="mb-2 flex items-center justify-between">
+        <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-[#6B6B6B]">
+          Conviction curve
+        </span>
+        <RefreshButton onRefresh={async () => setDetail(await load())} label="" />
+      </div>
       <div className="grid grid-cols-2 gap-1 rounded-sm bg-white/[0.04] p-1">
         {(["buy", "sell"] as const).map((s) => (
           <button
@@ -188,9 +225,19 @@ export function ConvictionPanel({ mint, symbol }: { mint: string; symbol: string
         </div>
       </div>
 
-      <label className="mt-4 block font-mono text-[10px] uppercase tracking-[0.12em] text-[#6B6B6B]">
-        {side === "buy" ? "Amount (SOL)" : `Amount (${symbol})`}
-      </label>
+      <div className="mt-4 flex items-baseline justify-between">
+        <label className="font-mono text-[10px] uppercase tracking-[0.12em] text-[#6B6B6B]">
+          {side === "buy" ? "Amount (SOL)" : `Amount (${symbol})`}
+        </label>
+        <span className="font-mono text-[10px] text-[#6B6B6B]">
+          Balance{" "}
+          <span className="text-[#F5F4F0]">
+            {sideBalance === null
+              ? "—"
+              : `${sideBalance.toLocaleString(undefined, { maximumFractionDigits: 4 })} ${sideUnit}`}
+          </span>
+        </span>
+      </div>
       <input
         inputMode="decimal"
         value={amount}
@@ -198,6 +245,30 @@ export function ConvictionPanel({ mint, symbol }: { mint: string; symbol: string
         placeholder="0"
         className="mt-1 w-full rounded-sm border border-white/[0.08] bg-[#0A0A0A] px-3 py-2 font-mono text-[13px] outline-none focus:border-signal/50"
       />
+      <div className="mt-2 grid grid-cols-4 gap-1.5">
+        {PERCENTS.map((pct) => (
+          <button
+            key={pct}
+            type="button"
+            onClick={() => setPercent(pct)}
+            disabled={maxForSide <= 0}
+            className="rounded-sm border border-white/10 py-1.5 font-mono text-[10px] text-[#6B6B6B] transition-colors hover:border-signal/40 hover:text-signal disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            {pct === 100 ? "MAX" : `${pct}%`}
+          </button>
+        ))}
+      </div>
+      {side === "sell" && sellCeiling > 0 && (heldTokens ?? 0) > sellCeiling && (
+        <p className="mt-1.5 font-mono text-[10px] text-[#4b5563]">
+          Only the {sellCeiling.toLocaleString(undefined, { maximumFractionDigits: 2 })}{" "}
+          {symbol} in your conviction position can be sold here.
+        </p>
+      )}
+      {overBalance && (
+        <p className="mt-1.5 font-mono text-[10px] text-noise">
+          More than your available {sideUnit}.
+        </p>
+      )}
 
       {side === "buy" ? (
         <>

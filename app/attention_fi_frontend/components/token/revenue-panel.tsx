@@ -10,7 +10,9 @@ import { TxStatus, type TxState } from "@/components/wallet/tx-status";
 import { useProgram, useReadonlyProgram } from "@/lib/solana/use-program";
 import { fetchGlobal, fetchRevenueDetail, type RevenueDetail } from "@/lib/solana/curve";
 import { buyRevenue, claimRevenue } from "@/lib/solana/trade";
+import { useSolBalance } from "@/lib/solana/use-sol-balance";
 import { explorerTx } from "@/lib/solana/config";
+import { RefreshButton } from "@/components/ui/refresh-button";
 
 /**
  * Revenue-share trade panel.
@@ -21,6 +23,16 @@ import { explorerTx } from "@/lib/solana/config";
  */
 
 const POLL_MS = 8_000;
+
+/** Quick-size buttons, as a fraction of what the wallet can actually afford. */
+const PERCENTS = [25, 50, 75, 100] as const;
+
+/**
+ * Leave a little SOL behind on MAX so the buy itself can pay fees and rent for
+ * the stake account. Sizing to the exact balance guarantees a failed
+ * transaction.
+ */
+const SOL_BUFFER = 0.01;
 
 export function RevenuePanel({ mint, symbol }: { mint: string; symbol: string }) {
   const { connected, address } = useWallet();
@@ -36,6 +48,7 @@ export function RevenuePanel({ mint, symbol }: { mint: string; symbol: string })
   const [txSig, setTxSig] = useState<string | null>(null);
   const [txErr, setTxErr] = useState<string | null>(null);
   const [action, setAction] = useState<"buy" | "claim">("buy");
+  const walletSol = useSolBalance();
 
   const mintKey = useMemo(() => (mint ? new PublicKey(mint) : null), [mint]);
 
@@ -100,8 +113,26 @@ export function RevenuePanel({ mint, symbol }: { mint: string; symbol: string })
   const validShares = Number.isFinite(n) && n > 0 && n <= detail.remainingShares;
   const cost = validShares ? n * detail.sharePriceSol : 0;
   const fee = cost * (feeBps / 10_000);
+  const total = cost + fee;
   const soldOut = detail.remainingBaseUnits === 0n;
   const claimable = detail.stake?.claimableSol ?? 0;
+
+  // Price + fee, so a percentage of the balance buys shares the wallet can
+  // actually pay for rather than tipping into "insufficient funds" at signing.
+  const costPerShare = detail.sharePriceSol * (1 + feeBps / 10_000);
+  const spendable = Math.max(0, (walletSol ?? 0) - SOL_BUFFER);
+  const affordable = costPerShare > 0 ? spendable / costPerShare : 0;
+  // Never suggest more than is left in the allocation.
+  const maxShares = Math.min(affordable, detail.remainingShares);
+  const overBalance = walletSol !== null && total > walletSol;
+
+  function setPercent(pct: number) {
+    const target = (maxShares * pct) / 100;
+    if (target <= 0) return setShares("");
+    // Shares are divisible, but whole ones read better; keep decimals only
+    // when the affordable size is genuinely below one.
+    setShares(target >= 1 ? String(Math.floor(target)) : target.toFixed(4));
+  }
 
   return (
     <div className="rounded-sm border border-white/[0.08] bg-[#0f1620] p-4">
@@ -109,9 +140,12 @@ export function RevenuePanel({ mint, symbol }: { mint: string; symbol: string })
         <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-[#6B6B6B]">
           Revenue share
         </span>
-        <span className="font-mono text-[10px] text-signal">
-          {detail.revenueReservesSol.toFixed(4)} SOL distributed
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="font-mono text-[10px] text-signal">
+            {detail.revenueReservesSol.toFixed(4)} SOL distributed
+          </span>
+          <RefreshButton onRefresh={async () => setDetail(await load())} label="" />
+        </div>
       </div>
 
       <div className="mt-3">
@@ -121,6 +155,15 @@ export function RevenuePanel({ mint, symbol }: { mint: string; symbol: string })
         <div className="mt-0.5 font-mono text-[10px] text-[#6B6B6B]">
           PER SHARE · fixed price
         </div>
+        {/* Stated plainly because this mechanism behaves unlike the others on
+            the site: no curve, no sell side, and the return arrives as
+            deposits rather than as price movement. */}
+        <p className="mt-2 rounded-sm border border-white/[0.06] bg-[#0A0A0A] px-3 py-2 font-mono text-[10px] leading-relaxed text-[#6B6B6B]">
+          <span className="text-[#F5F4F0]">How this works.</span> You buy a fixed slice of{" "}
+          {symbol}&apos;s revenue. The creator deposits earnings over time and each share
+          accrues a pro-rata cut, which you claim below. The price never moves and there is
+          no sell side — shares are held for the stream, not resold for a gain.
+        </p>
       </div>
 
       <div className="mt-3">
@@ -166,9 +209,17 @@ export function RevenuePanel({ mint, symbol }: { mint: string; symbol: string })
 
       {!soldOut && (
         <>
-          <label className="mt-4 block font-mono text-[10px] uppercase tracking-[0.12em] text-[#6B6B6B]">
-            Shares
-          </label>
+          <div className="mt-4 flex items-baseline justify-between">
+            <label className="font-mono text-[10px] uppercase tracking-[0.12em] text-[#6B6B6B]">
+              Shares
+            </label>
+            <span className="font-mono text-[10px] text-[#6B6B6B]">
+              Balance{" "}
+              <span className="text-[#F5F4F0]">
+                {walletSol === null ? "—" : `${walletSol.toFixed(4)} SOL`}
+              </span>
+            </span>
+          </div>
           <input
             inputMode="decimal"
             value={shares}
@@ -176,6 +227,29 @@ export function RevenuePanel({ mint, symbol }: { mint: string; symbol: string })
             placeholder="0"
             className="mt-1 w-full rounded-sm border border-white/[0.08] bg-[#0A0A0A] px-3 py-2 font-mono text-[13px] outline-none focus:border-signal/50"
           />
+          {/* Sized off the balance, not off the remaining allocation alone —
+              a percentage that can't be paid for is worse than no shortcut. */}
+          <div className="mt-2 grid grid-cols-4 gap-1.5">
+            {PERCENTS.map((pct) => (
+              <button
+                key={pct}
+                type="button"
+                onClick={() => setPercent(pct)}
+                disabled={maxShares <= 0}
+                className="rounded-sm border border-white/10 py-1.5 font-mono text-[10px] text-[#6B6B6B] transition-colors hover:border-signal/40 hover:text-signal disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {pct === 100 ? "MAX" : `${pct}%`}
+              </button>
+            ))}
+          </div>
+          <div className="mt-1.5 font-mono text-[10px] text-[#4b5563]">
+            {walletSol === null
+              ? "Connect a wallet to size a position."
+              : maxShares <= 0
+                ? "Not enough SOL to buy a share at this price."
+                : `You can afford about ${Math.floor(maxShares).toLocaleString()} shares.`}
+          </div>
+
           <div className="mt-2.5 flex justify-between font-mono text-[10px] text-[#6B6B6B]">
             <span>Cost</span>
             <span className="text-[#F5F4F0]">{cost > 0 ? `${cost.toFixed(6)} SOL` : "—"}</span>
@@ -186,10 +260,15 @@ export function RevenuePanel({ mint, symbol }: { mint: string; symbol: string })
           </div>
           <div className="mt-1.5 flex justify-between border-t border-white/[0.06] pt-1.5 font-mono text-[11px]">
             <span className="text-[#6B6B6B]">Total</span>
-            <span className="font-bold text-[#F5F4F0]">
-              {cost > 0 ? `${(cost + fee).toFixed(6)} SOL` : "—"}
+            <span className={cn("font-bold", overBalance ? "text-noise" : "text-[#F5F4F0]")}>
+              {cost > 0 ? `${total.toFixed(6)} SOL` : "—"}
             </span>
           </div>
+          {overBalance && (
+            <p className="mt-2 font-mono text-[10px] text-noise">
+              That&apos;s more than your {walletSol?.toFixed(4)} SOL balance.
+            </p>
+          )}
           {n > detail.remainingShares && (
             <p className="mt-2 font-mono text-[10px] text-noise">
               Only {detail.remainingShares.toLocaleString(undefined, { maximumFractionDigits: 0 })}{" "}
@@ -201,11 +280,11 @@ export function RevenuePanel({ mint, symbol }: { mint: string; symbol: string })
 
       <button
         onClick={() => submit("buy")}
-        disabled={soldOut || !validShares}
+        disabled={soldOut || !validShares || overBalance}
         className={cn(
           "mt-4 w-full rounded-sm py-3 font-mono text-[13px] font-bold tracking-wide text-[#0A0A0A]",
           soldOut ? "bg-[#6B6B6B]" : "bg-signal",
-          !soldOut && !validShares && "cursor-not-allowed opacity-40",
+          !soldOut && (!validShares || overBalance) && "cursor-not-allowed opacity-40",
         )}
       >
         {soldOut ? "FULLY ALLOCATED" : connected ? `BUY $${symbol} SHARES` : "CONNECT TO BUY"}
