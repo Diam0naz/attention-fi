@@ -8,6 +8,10 @@ export interface AppNotification {
   text: string;
   time: string;
   read: boolean;
+  /** Where to go to act on it. Set only when there's something to do. */
+  href?: string;
+  /** Label for that link, e.g. "Claim your perk". */
+  action?: string;
 }
 
 const DOT: Record<AppNotification["type"], string> = {

@@ -4,7 +4,12 @@ import { useCallback, useEffect, useState } from "react";
 import { PublicKey } from "@solana/web3.js";
 import { useWallet } from "@/components/wallet/wallet-provider";
 import { useReadonlyProgram } from "@/lib/solana/use-program";
-import { fetchNftOutcomes, type NftOutcome } from "@/lib/solana/nft-data";
+import {
+  fetchNftOutcomes,
+  fetchPerkGrant,
+  type NftOutcome,
+  type PerkGrantData,
+} from "@/lib/solana/nft-data";
 import type { AppNotification } from "@/components/notifications/notifications-panel";
 
 /**
@@ -20,6 +25,38 @@ import type { AppNotification } from "@/components/notifications/notifications-p
 
 const READ_KEY = (owner: string) => `af.notifications.read.${owner}`;
 const POLL_MS = 60_000;
+
+/**
+ * What a listing actually fetched, from the indexed `NftAuctionEvent`.
+ *
+ * The auction PDA records the schedule, not the outcome — `buy_nft` clears the
+ * account's usefulness for this — so the price paid and the moment of sale only
+ * exist in the event. Sales from before that event shipped have no row here,
+ * which is why the fallback below has to stay.
+ */
+interface SaleFact {
+  priceSol: number;
+  blockTime: number | null;
+}
+
+async function fetchSaleFacts(): Promise<Map<string, SaleFact>> {
+  const out = new Map<string, SaleFact>();
+  try {
+    const res = await fetch("/api/activity?kinds=nft_sale&limit=200");
+    if (!res.ok) return out;
+    const body = (await res.json()) as {
+      events?: { mint: string | null; sol: number | null; blockTime: number | null }[];
+    };
+    for (const e of body.events ?? []) {
+      // The indexer stores a 1-of-1's asset in the mint column.
+      if (!e.mint || out.has(e.mint)) continue;
+      out.set(e.mint, { priceSol: e.sol ?? 0, blockTime: e.blockTime });
+    }
+  } catch {
+    // No indexer configured / offline — fall back to the PDA-derived text.
+  }
+  return out;
+}
 
 function readSeen(owner: string): Set<string> {
   try {
@@ -38,7 +75,6 @@ function writeSeen(owner: string, ids: Set<string>) {
   }
 }
 
-const sol = (lamports: bigint) => (Number(lamports) / 1_000_000_000).toFixed(3);
 const short = (a: string) => `${a.slice(0, 4)}…${a.slice(-4)}`;
 
 function ago(unixSeconds: number): string {
@@ -51,18 +87,36 @@ function ago(unixSeconds: number): string {
   return `${Math.floor(h / 24)}d ago`;
 }
 
-function toNotification(o: NftOutcome, seen: Set<string>): AppNotification {
+function toNotification(
+  o: NftOutcome,
+  seen: Set<string>,
+  fact: SaleFact | undefined,
+): AppNotification {
   const id = `${o.outcome}:${o.asset}`;
+  const to = o.buyer ? ` to ${short(o.buyer)}` : "";
+
+  let text: string;
+  if (o.outcome !== "sold") {
+    text = `${o.name} ended unsold and is back in your wallet`;
+  } else if (fact) {
+    text = `${o.name} sold${to} for ${fact.priceSol.toFixed(3)} SOL`;
+  } else {
+    // No event for this sale, so the price genuinely isn't recorded anywhere.
+    // Quoting the floor as though it were the sale price reads as a real
+    // number and is usually far too low — a descending auction almost always
+    // clears above it.
+    text = `${o.name} sold${to} — price not recorded`;
+  }
+
   return {
     id,
     // Reuses the panel's existing visual vocabulary: a sale is the good
     // outcome, a reclaim is informational.
     type: o.outcome === "sold" ? "graduation" : "mention",
-    text:
-      o.outcome === "sold"
-        ? `${o.name} sold${o.buyer ? ` to ${short(o.buyer)}` : ""} — at least ${sol(o.floorPrice)} SOL`
-        : `${o.name} ended unsold and is back in your wallet`,
-    time: ago(o.endedAt),
+    text,
+    // The event carries when it actually sold; the PDA only knows when the
+    // window would have closed.
+    time: ago(fact?.blockTime ?? o.endedAt),
     read: seen.has(id),
   };
 }
@@ -81,6 +135,11 @@ export function useNotifications(): Notifications {
   const { address } = useWallet();
   const program = useReadonlyProgram();
   const [outcomes, setOutcomes] = useState<NftOutcome[]>([]);
+  const [saleFacts, setSaleFacts] = useState<Map<string, SaleFact>>(new Map());
+  // An unclaimed grant is the one notification that's actionable: the perk
+  // doesn't exist until the recipient mints it, so silence here means a
+  // granted discount is simply never collected.
+  const [grant, setGrant] = useState<PerkGrantData | null>(null);
   const [seen, setSeen] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
   const [nonce, setNonce] = useState(0);
@@ -100,9 +159,17 @@ export function useNotifications(): Notifications {
       }
       setLoading(true);
       try {
-        const list = await fetchNftOutcomes(program, new PublicKey(address));
+        // Independent sources: the PDAs say what happened, the events say for
+        // how much. Losing the second must not cost the first.
+        const [list, facts, pending] = await Promise.all([
+          fetchNftOutcomes(program, new PublicKey(address)),
+          fetchSaleFacts(),
+          fetchPerkGrant(program, new PublicKey(address)),
+        ]);
         if (!cancelled) {
           setOutcomes(list);
+          setSaleFacts(facts);
+          setGrant(pending);
           setSeen(readSeen(address));
         }
       } catch {
@@ -119,14 +186,29 @@ export function useNotifications(): Notifications {
     };
   }, [address, program, nonce]);
 
-  const items = outcomes.map((o) => toNotification(o, seen));
+  const items = outcomes.map((o) => toNotification(o, seen, saleFacts.get(o.asset)));
+
+  // Pinned first: it's the only item that needs the reader to do something,
+  // and it disappears by itself once claimed (the grant account closes).
+  if (grant) {
+    const id = `grant:${grant.recipient}:${grant.level}`;
+    items.unshift({
+      id,
+      type: "referral",
+      text: `You've been granted a Level ${grant.level} perk — claim it to mint your NFT and start paying ${grant.level}% less on every trade.`,
+      time: "pending",
+      read: seen.has(id),
+      href: "/nft/perk",
+      action: "Claim your perk",
+    });
+  }
 
   const markAllRead = useCallback(() => {
     if (!address) return;
-    const all = new Set(outcomes.map((o) => `${o.outcome}:${o.asset}`));
+    const all = new Set(items.map((i) => i.id));
     setSeen(all);
     writeSeen(address, all);
-  }, [address, outcomes]);
+  }, [address, items]);
 
   const toggleRead = useCallback(
     (id: string) => {

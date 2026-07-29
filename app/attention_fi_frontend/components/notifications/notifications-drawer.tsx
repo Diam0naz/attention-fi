@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+
 import { useEffect } from "react";
 import { createPortal } from "react-dom";
 import { Check, CheckCheck, Gavel, Undo2, X } from "lucide-react";
@@ -107,6 +109,15 @@ export function NotificationsDrawer({
                       {n.text}
                     </div>
                     <div className="mt-1 font-mono text-[10px] text-[#6B6B6B]">{n.time}</div>
+                    {n.href && (
+                      <Link
+                        href={n.href}
+                        onClick={onClose}
+                        className="mt-1.5 inline-block font-mono text-[10px] font-bold text-signal hover:underline"
+                      >
+                        {n.action ?? "Open"} →
+                      </Link>
+                    )}
                   </div>
 
                   {/* A tick that toggles rather than only sets: marking one read
