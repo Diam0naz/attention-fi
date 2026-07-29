@@ -4,6 +4,7 @@ import { useState } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { WALLETS, useWallet } from "@/components/wallet/wallet-provider";
+import { WalletMark, hasMark } from "@/components/wallet/wallet-icons";
 import { useScrollLock } from "@/lib/use-scroll-lock";
 
 export function WalletConnectModal({
@@ -13,7 +14,7 @@ export function WalletConnectModal({
   open: boolean;
   onClose: () => void;
 }) {
-  const { detected, connect } = useWallet();
+  const { detected, icons, connect } = useWallet();
   const [busy, setBusy] = useState<string | null>(null);
   useScrollLock(open);
 
@@ -59,13 +60,26 @@ export function WalletConnectModal({
                 disabled={busy !== null}
                 className="group flex items-center gap-3 rounded-md border border-white/[0.08] bg-[#12181f] px-3.5 py-3 text-left text-[13px] font-semibold text-[#F5F4F0] transition-all hover:border-signal/40 hover:bg-[#151d26] active:scale-[0.99] disabled:opacity-50"
               >
-                <span
-                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md font-mono text-[13px] font-bold shadow-inner"
-                  style={{ background: w.brand, color: w.fg }}
-                  aria-hidden
-                >
-                  {w.name.charAt(0)}
-                </span>
+                {/* Prefer the logo the installed wallet publishes about
+                    itself; fall back to our own mark, then to an initial. */}
+                {icons[w.id] ? (
+                  <span className="h-8 w-8 shrink-0 overflow-hidden rounded-md">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={icons[w.id]} alt="" className="h-full w-full object-cover" />
+                  </span>
+                ) : hasMark(w.id) ? (
+                  <span className="h-8 w-8 shrink-0 overflow-hidden rounded-md">
+                    <WalletMark id={w.id} />
+                  </span>
+                ) : (
+                  <span
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md font-mono text-[13px] font-bold shadow-inner"
+                    style={{ background: w.brand, color: w.fg }}
+                    aria-hidden
+                  >
+                    {w.name.charAt(0)}
+                  </span>
+                )}
                 {w.name}
                 <span className="ml-auto">
                   {busy === w.id ? (

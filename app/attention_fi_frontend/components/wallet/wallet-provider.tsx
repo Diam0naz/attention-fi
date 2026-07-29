@@ -4,6 +4,8 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 
 /** Minimal shape of an injected Solana wallet provider (Phantom/Solflare/etc). */
 interface Injected {
+  /** Data-URI logo the wallet advertises about itself (Wallet Standard). */
+  icon?: string;
   isPhantom?: boolean;
   isSolflare?: boolean;
   isBackpack?: boolean;
@@ -26,7 +28,7 @@ export interface WalletMeta {
 
 export const WALLETS: WalletMeta[] = [
   { id: "phantom", name: "Phantom", brand: "linear-gradient(135deg,#ab9ff2,#4fd1c5)", fg: "#2a2250", url: "https://phantom.app/" },
-  { id: "solflare", name: "Solflare", brand: "linear-gradient(135deg,#3b82f6,#1652f0)", fg: "#ffffff", url: "https://solflare.com/" },
+  { id: "solflare", name: "Solflare", brand: "linear-gradient(135deg,#ffc10b,#fc7227)", fg: "#2b1400", url: "https://solflare.com/" },
   { id: "backpack", name: "Backpack", brand: "#0b0b0e", fg: "#e33e5c", url: "https://backpack.app/" },
   { id: "coinbase", name: "Coinbase Wallet", brand: "linear-gradient(135deg,#f5b300,#e08a00)", fg: "#1a1200", url: "https://www.coinbase.com/wallet" },
 ];
@@ -62,6 +64,8 @@ interface WalletContextValue {
   shortAddress: string | null;
   walletId: string | null;
   detected: Set<string>;
+  /** Wallet id -> the logo that wallet advertises, for wallets present now. */
+  icons: Record<string, string>;
   connect: (id: string) => Promise<boolean>;
   disconnect: () => void;
   /** The live injected provider — used to sign real transactions. */
@@ -76,9 +80,22 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const [address, setAddress] = useState<string | null>(null);
   const [walletId, setWalletId] = useState<string | null>(null);
   const [detected, setDetected] = useState<Set<string>>(new Set());
+  // Injected wallets publish their own logo, so a detected wallet is drawn with
+  // its real mark rather than an approximation that drifts when they rebrand.
+  const [icons, setIcons] = useState<Record<string, string>>({});
 
   const refreshDetected = useCallback(() => {
-    setDetected(new Set(WALLETS.filter((w) => getProvider(w.id)).map((w) => w.id)));
+    const present = WALLETS.map((w) => [w, getProvider(w.id)] as const).filter(([, p]) => p);
+    setDetected(new Set(present.map(([w]) => w.id)));
+    setIcons((prev) => {
+      const next = { ...prev };
+      for (const [w, provider] of present) {
+        // Only data URIs: a remote src here would let an injected script
+        // beacon every wallet-modal open to a third party.
+        if (provider?.icon?.startsWith("data:image/")) next[w.id] = provider.icon;
+      }
+      return next;
+    });
   }, []);
 
   // Detect installed wallets on mount and when the tab regains focus (wallets
@@ -149,11 +166,12 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       shortAddress: address ? short(address) : null,
       walletId,
       detected,
+      icons,
       connect,
       disconnect,
       getSigner,
     }),
-    [address, walletId, detected, connect, disconnect, getSigner],
+    [address, walletId, detected, icons, connect, disconnect, getSigner],
   );
 
   return <WalletContext.Provider value={value}>{children}</WalletContext.Provider>;
