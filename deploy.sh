@@ -50,6 +50,11 @@ MAX_SIGN_ATTEMPTS="${MAX_SIGN_ATTEMPTS:-200}"
 # Where to persist the buffer keypair between runs so we can resume.
 BUFFER_KEYPAIR="deploy-buffer.json"
 
+# Spare bytes to request when growing the program account, so the next couple
+# of builds don't each need their own extend (which is a separate txn and a
+# separate rent top-up). Programs only grow in practice.
+EXTEND_HEADROOM="${EXTEND_HEADROOM:-65536}"
+
 # ─────────────────────────────────────────────────────────────────────────
 # helpers
 # ─────────────────────────────────────────────────────────────────────────
@@ -73,6 +78,51 @@ program_id() {
   else
     die "program keypair not found: $PROGRAM_KEYPAIR"
   fi
+}
+
+# ─────────────────────────────────────────────────────────────────────────
+# ensure_capacity: grow the program account if the new binary won't fit.
+#
+# A deploy into an undersized ProgramData account fails *after* the whole
+# buffer has been uploaded — minutes of work and a funded buffer left behind.
+# Checking first turns that into one cheap txn up front.
+# ─────────────────────────────────────────────────────────────────────────
+program_capacity() {
+  # "Data Length: 1251776 (0x131ac0) bytes" -> 1251776. Take the third
+  # whitespace field rather than stripping non-digits from the rest of the
+  # line: that also swallows the digits inside the hex form, yielding a
+  # capacity far larger than reality, so an undersized account would look
+  # like it fit. Empty when the program is not deployed yet, which is not
+  # an error: the first deploy sizes it.
+  solana program show "$1" --url "$RPC_URL" 2>/dev/null |
+    awk '/Data Length/ { print $3; exit }'
+}
+
+ensure_capacity() {
+  local pid="$1" need have deficit grow
+  need="$(stat -c%s "$PROGRAM_SO")"
+  have="$(program_capacity "$pid")"
+
+  if [[ -z "$have" ]]; then
+    log "Program not deployed yet — the first deploy sizes the account. Skipping extend."
+    return 0
+  fi
+
+  log "Binary is ${need} bytes; program account holds ${have}."
+  if ((need <= have)); then
+    log "Fits — no extend needed."
+    return 0
+  fi
+
+  deficit=$((need - have))
+  grow=$((deficit + EXTEND_HEADROOM))
+  warn "Too small by ${deficit} bytes. Extending by ${grow} (deficit + ${EXTEND_HEADROOM} headroom)."
+  solana program extend "$pid" "$grow" --url "$RPC_URL" ||
+    die "extend failed — the authority must hold enough SOL for the extra rent."
+
+  have="$(program_capacity "$pid")"
+  ((need <= have)) || die "still too small after extend (have ${have}, need ${need})"
+  log "Extended. Program account now holds ${have} bytes."
 }
 
 # ─────────────────────────────────────────────────────────────────────────
@@ -114,6 +164,9 @@ deploy_from_buffer() {
 
   local pid
   pid="$(program_id)"
+  # Before finalising, not before uploading: an extend is cheap and the buffer
+  # is already paid for by this point either way.
+  ensure_capacity "$pid"
   log "Deploying program-id $pid from buffer ..."
 
   # If the program account doesn't exist yet this creates it; if it exists and
@@ -155,6 +208,11 @@ then re-run: $0 resume"
   fi
 }
 
+cmd_extend() {
+  require
+  ensure_capacity "$(program_id)"
+}
+
 cmd_show() {
   require
   local pid; pid="$(program_id)"
@@ -180,6 +238,7 @@ main() {
     resume) cmd_resume ;;
     show)   cmd_show ;;
     clean)  cmd_clean ;;
+    extend) cmd_extend ;;
     *)
       cat <<EOF
 Usage: $0 <command>
@@ -188,18 +247,22 @@ Usage: $0 <command>
   resume   Resume a deploy from the saved buffer keypair (deploy-buffer.json).
   show     Show the program account and any open buffers.
   clean    Close all open buffers and reclaim their rent.
+  extend   Grow the program account if the built binary no longer fits.
+           Runs automatically as part of deploy/resume.
 
 Config via env vars:
   HELIUS_API_KEY        your Helius key (keeps it out of the script/history)
   RPC_URL_OVERRIDE      use any RPC URL directly
   COMPUTE_UNIT_PRICE    priority fee, micro-lamports/CU (default 50000)
   MAX_SIGN_ATTEMPTS     retry ceiling for dropped writes (default 200)
+  EXTEND_HEADROOM       spare bytes when growing the account (default 65536)
 
 Examples:
   export HELIUS_API_KEY=xxxxxxxx
   ./deploy.sh deploy
   ./deploy.sh resume            # after a failure
   ./deploy.sh clean             # reclaim stranded rent
+  ./deploy.sh extend            # grow the account without deploying
   RPC_URL_OVERRIDE=https://api.devnet.solana.com ./deploy.sh deploy
 EOF
       exit 1 ;;
