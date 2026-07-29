@@ -112,3 +112,15 @@ pub struct NftListedEvent {
     pub duration: i64,
     pub timestamp: i64,
 }
+
+/// Emitted when protocol authority moves to a different wallet.
+///
+/// Authority gates every privileged instruction, so a handover is the single
+/// most consequential administrative act — worth an indexable record rather
+/// than only a silent field change.
+#[event]
+pub struct AuthorityChangedEvent {
+    pub previous: Pubkey,
+    pub current: Pubkey,
+    pub timestamp: i64,
+}

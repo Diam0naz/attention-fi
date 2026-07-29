@@ -14,6 +14,59 @@ export type AttentionFi = {
   },
   "instructions": [
     {
+      "name": "setAuthority",
+      "docs": [
+        "Hand protocol authority to a different wallet. Both the current and the",
+        "incoming authority must sign, so authority can't be sent to a mistyped",
+        "address that nobody controls."
+      ],
+      "discriminator": [
+        133,
+        250,
+        37,
+        21,
+        110,
+        163,
+        26,
+        121
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "global",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  108,
+                  111,
+                  98,
+                  97,
+                  108
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "newAuthority",
+          "docs": [
+            "sign \u2014 which is what proves the key exists and is controlled, rather",
+            "than being a typo that would lock the protocol out permanently."
+          ],
+          "signer": true
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "addToCollection",
       "docs": [
         "Move a Core asset the payer controls into one of their collections."
@@ -5271,6 +5324,19 @@ export type AttentionFi = {
   ],
   "events": [
     {
+      "name": "AuthorityChangedEvent",
+      "discriminator": [
+        85,
+        105,
+        159,
+        188,
+        6,
+        44,
+        52,
+        28
+      ]
+    },
+    {
       "name": "NftAuctionEvent",
       "discriminator": [
         123,
@@ -5503,6 +5569,33 @@ export type AttentionFi = {
     }
   ],
   "types": [
+    {
+      "name": "AuthorityChangedEvent",
+      "docs": [
+        "Emitted when protocol authority moves to a different wallet.",
+        "",
+        "Authority gates every privileged instruction, so a handover is the single",
+        "most consequential administrative act \u2014 worth an indexable record rather",
+        "than only a silent field change."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "previous",
+            "type": "pubkey"
+          },
+          {
+            "name": "current",
+            "type": "pubkey"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
     {
       "name": "NftAuctionEvent",
       "docs": [

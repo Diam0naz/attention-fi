@@ -165,6 +165,13 @@ pub mod attention_fi {
         set_issuer::set_issuer_handler(ctx, issuer)
     }
 
+    /// Hand protocol authority to a different wallet. Both the current and the
+    /// incoming authority must sign, so authority can't be sent to a mistyped
+    /// address that nobody controls.
+    pub fn set_authority(ctx: Context<SetAuthority>) -> Result<()> {
+        set_authority::set_authority_handler(ctx)
+    }
+
     /// Mint an upgradeable perk NFT (Metaplex Core) granting platform fee
     /// discounts; starts at level 1.
     pub fn mint_perk(ctx: Context<MintPerk>, uri: String) -> Result<()> {
