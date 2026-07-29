@@ -12,7 +12,7 @@ import { PageBackground } from "@/components/reactbits/page-background";
 import { Keypair, PublicKey } from "@solana/web3.js";
 import { BN } from "@anchor-lang/core";
 import { useProgram } from "@/lib/solana/use-program";
-import { registerToken } from "@/lib/solana/registry";
+import { registerToken, syncRegistry } from "@/lib/solana/registry";
 import { explorerTx, verificationMetadataUri } from "@/lib/solana/config";
 import { verificationPda } from "@/lib/solana/program";
 import { mindshareFeedEnabled, launchFromFeed } from "@/lib/solana/mindshare-feed";
@@ -239,6 +239,10 @@ export function LaunchFlow() {
         { name, symbol: ticker, image: image || undefined },
         { creator: address, mechanism: mech },
       );
+      // registerToken writes through to the server registry; re-pull it so the
+      // new token is searchable from this session without waiting for the
+      // periodic refresh.
+      void syncRegistry(true);
       setTxSig(sig);
       setTx("confirmed");
     } catch (e) {

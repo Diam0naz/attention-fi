@@ -1,7 +1,7 @@
 import type { PublicKey } from "@solana/web3.js";
 import { fetchAllCurves, fetchGlobal, spotPriceSol, LAMPORTS_PER_SOL, type CurveState } from "@/lib/solana/curve";
 import { getReadonlyProgram } from "@/lib/solana/program";
-import { allTokenHandles, handleToMint } from "@/lib/solana/registry";
+import { allTokenHandles, handleToMint, syncRegistry } from "@/lib/solana/registry";
 import {
   TIMEFRAME_SECONDS,
   type Candle,
@@ -525,6 +525,8 @@ export class AttentionFiProvider implements MarketDataProvider {
   }
 
   async searchSymbols(query: string): Promise<SymbolMeta[]> {
+    // Without this, search only ever saw this browser's own launches.
+    await syncRegistry();
     const q = query.trim().replace(/^@/, "").toLowerCase();
     return allTokenHandles()
       .filter((h) => !q || h.includes(q))
@@ -539,6 +541,7 @@ export class AttentionFiProvider implements MarketDataProvider {
   }
 
   async getTickerStats(symbols?: string[]): Promise<TickerStats[]> {
+    await syncRegistry();
     await this.ensureDecimals();
     await this.refreshSnapshot();
     const targets = (symbols ?? allTokenHandles()).map((s) => s.toLowerCase());

@@ -34,6 +34,53 @@ function staticRegistry(): Record<string, string> {
   }
 }
 
+/**
+ * Tokens the server knows about, from /api/tokens.
+ *
+ * localStorage only ever holds launches made from *this* browser, so without
+ * this a token launched on another device — or by anyone else — was invisible
+ * to search, the watchlist and handleToMint, and so untradeable here. Held in
+ * a module-level cache because the sync readers below can't await.
+ */
+let remote: Record<string, RegistryEntry> = {};
+let remoteLoaded: Promise<void> | null = null;
+
+function remoteRegistry(): Record<string, RegistryEntry> {
+  return remote;
+}
+
+/**
+ * Pull the server registry into the cache. Safe to call repeatedly; the fetch
+ * happens once unless `force` is set (e.g. right after launching a token).
+ */
+export function syncRegistry(force = false): Promise<void> {
+  if (force) remoteLoaded = null;
+  remoteLoaded ??= (async () => {
+    try {
+      const res = await fetch("/api/tokens");
+      if (!res.ok) return;
+      const body = (await res.json()) as {
+        tokens?: { handle: string; mint: string; name?: string; symbol?: string; image?: string }[];
+      };
+      const next: Record<string, RegistryEntry> = {};
+      for (const t of body.tokens ?? []) {
+        if (!t?.handle || !t?.mint) continue;
+        next[norm(t.handle)] = {
+          mint: t.mint,
+          ...(t.name ? { name: t.name } : {}),
+          ...(t.symbol ? { symbol: t.symbol } : {}),
+          ...(t.image ? { image: t.image } : {}),
+        };
+      }
+      remote = next;
+    } catch {
+      // Offline or no registry configured — the local view still works.
+      remoteLoaded = null;
+    }
+  })();
+  return remoteLoaded;
+}
+
 function launchedRegistry(): Record<string, RegistryEntry> {
   if (typeof window === "undefined") return {};
   try {
@@ -51,7 +98,8 @@ function mintOf(entry: RegistryEntry): string {
 
 export function handleToMint(handle: string): PublicKey | null {
   const key = norm(handle);
-  const entry = launchedRegistry()[key];
+  // This browser's own launches win, then the server registry, then statics.
+  const entry = launchedRegistry()[key] ?? remoteRegistry()[key];
   const mint = (entry && mintOf(entry)) ?? staticRegistry()[key];
   if (!mint) return null;
   try {
@@ -63,15 +111,23 @@ export function handleToMint(handle: string): PublicKey | null {
 
 /** Name/symbol/image a launcher attached at launch time, if any (this browser only). */
 export function launchedMeta(handle: string): LaunchedTokenMeta | null {
-  const entry = launchedRegistry()[norm(handle)];
+  const key = norm(handle);
+  const entry = launchedRegistry()[key] ?? remoteRegistry()[key];
   if (!entry || typeof entry === "string") return null;
   const { name, symbol, image } = entry;
   return { name, symbol, image };
 }
 
-/** Every known handle (static + env + runtime-launched), for symbol listings. */
+/**
+ * Every known handle — statics + env + the server registry + this browser's
+ * own launches — for symbol listings, search and the watchlist.
+ *
+ * Synchronous by necessity (its callers are), so it reflects whatever
+ * `syncRegistry()` has cached. Callers that care about freshness should await
+ * that first.
+ */
 export function allTokenHandles(): string[] {
-  return Object.keys({ ...staticRegistry(), ...launchedRegistry() });
+  return Object.keys({ ...staticRegistry(), ...remoteRegistry(), ...launchedRegistry() });
 }
 
 /** Handles launched from this browser (i.e. tokens the user created). */
