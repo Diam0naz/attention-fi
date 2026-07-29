@@ -7,7 +7,9 @@ import { Logo } from "@/components/brand/logo";
 import { TickerTape } from "@/components/feed/ticker-tape";
 import { WaitlistButton } from "@/components/waitlist/waitlist-button";
 import { WalletButton } from "@/components/wallet/wallet-button";
+import { NotificationsBell } from "@/components/notifications/notifications-bell";
 import { refreshSolUsd } from "@/lib/solana/sol-usd";
+import { syncRegistry } from "@/lib/solana/registry";
 import { cn } from "@/lib/utils";
 
 const LINKS = [
@@ -53,7 +55,13 @@ export function AppNav() {
   // NFT pricing). Refreshes on load and every 5 min; the rate is display-only.
   useEffect(() => {
     void refreshSolUsd();
-    const id = setInterval(() => void refreshSolUsd(), 5 * 60_000);
+    // Tokens launched on another device or by another user live only in the
+    // server registry; without this they can't be found or traded here.
+    void syncRegistry();
+    const id = setInterval(() => {
+      void refreshSolUsd();
+      void syncRegistry(true);
+    }, 5 * 60_000);
     return () => clearInterval(id);
   }, []);
 
@@ -76,6 +84,7 @@ export function AppNav() {
           </ul>
           <div className="ml-auto flex shrink-0 items-center gap-2.5 sm:ml-0">
             {pathname === "/" && <WaitlistButton />}
+            <NotificationsBell />
             <WalletButton />
           </div>
         </div>
