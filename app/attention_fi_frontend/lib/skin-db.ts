@@ -94,6 +94,11 @@ function ensureSchema(): Promise<void> {
       select subject, skin, updated_at from verification_skin
       on conflict (subject, skin) do nothing`;
 
+    // The Signature skin carries artwork instead of a palette, so the choice
+    // alone isn't enough to render it — the URL lives beside it. Null for every
+    // other skin.
+    await sql`alter table verification_skin add column if not exists custom_uri text`;
+
     // Skins for perk and genesis NFTs. Keyed by (class, asset) rather than by
     // wallet: those PDAs are keyed by asset and a wallet can hold several, so
     // one row per wallet — the shape verification_skin uses — can't address
@@ -107,6 +112,7 @@ function ensureSchema(): Promise<void> {
         updated_at timestamptz not null default now(),
         primary key (class, asset)
       )`;
+    await sql`alter table nft_skin add column if not exists custom_uri text`;
   })().catch((e) => {
     schemaReady = null; // allow retry on transient failure
     throw e;
@@ -116,11 +122,25 @@ function ensureSchema(): Promise<void> {
 
 /** The chosen skin id for a subject, or null when unset / db unavailable. */
 export async function getSkin(subject: string): Promise<string | null> {
-  if (!skinDbConfigured()) return null;
+  return (await getSkinWithUri(subject)).skin;
+}
+
+/** A skin selection together with its artwork, when the skin is Signature. */
+export interface SkinSelection {
+  skin: string | null;
+  customUri: string | null;
+}
+
+export async function getSkinWithUri(subject: string): Promise<SkinSelection> {
+  if (!skinDbConfigured()) return { skin: null, customUri: null };
   await withRetry(() => ensureSchema());
   const rows = (await withRetry(() => sql`
-    select skin from verification_skin where subject = ${subject}`)) as { skin: string }[];
-  return rows[0]?.skin ?? null;
+    select skin, custom_uri from verification_skin where subject = ${subject}`)) as {
+    skin: string;
+    custom_uri: string | null;
+  }[];
+  const row = rows[0];
+  return { skin: row?.skin ?? null, customUri: row?.custom_uri ?? null };
 }
 
 /** Skins for many subjects at once — one round trip for a grid of badges. */
@@ -199,15 +219,53 @@ export async function getOwnedSkins(subject: string): Promise<string[]> {
  * than in a prior query, so a skin can't be applied on the strength of a
  * check that was true a moment earlier. Returns false when unowned.
  */
-export async function applyOwnedSkin(subject: string, skin: string): Promise<boolean> {
+export async function applyOwnedSkin(
+  subject: string,
+  skin: string,
+  customUri: string | null = null,
+): Promise<boolean> {
   await withRetry(() => ensureSchema());
+  // custom_uri is written on every switch, not just Signature ones: leaving a
+  // stale URL behind would resurrect old artwork the next time Signature is
+  // selected, without the holder choosing it.
   const rows = (await withRetry(() => sql`
-    insert into verification_skin (subject, skin, updated_at)
-    select ${subject}, ${skin}, now()
+    insert into verification_skin (subject, skin, custom_uri, updated_at)
+    select ${subject}, ${skin}, ${customUri}, now()
     where exists (
       select 1 from skin_ownership where subject = ${subject} and skin = ${skin}
     )
-    on conflict (subject) do update set skin = excluded.skin, updated_at = now()
+    on conflict (subject) do update
+      set skin = excluded.skin, custom_uri = excluded.custom_uri, updated_at = now()
+    returning subject`)) as { subject: string }[];
+  return rows.length > 0;
+}
+
+/**
+ * Consume a payment signature and unlock a skin, without wearing it anywhere.
+ *
+ * Unlocking is wallet-level: it is not tied to a verification badge, and the
+ * holder chooses afterwards which NFT wears it. Same atomicity argument as
+ * redeemSkinPayment — claiming the signature and granting the skin must land
+ * together, or a paid-for unlock could be lost.
+ *
+ * Returns false when the signature was already spent.
+ */
+export async function redeemSkinUnlock(
+  subject: string,
+  skin: string,
+  signature: string,
+): Promise<boolean> {
+  await withRetry(() => ensureSchema());
+  const rows = (await withRetry(() => sql`
+    with claim as (
+      insert into skin_payment (signature, subject, skin, paid_at)
+      values (${signature}, ${subject}, ${skin}, now())
+      on conflict (signature) do nothing
+      returning signature
+    )
+    insert into skin_ownership (subject, skin, acquired_at)
+    select ${subject}, ${skin}, now() from claim
+    on conflict (subject, skin) do nothing
     returning subject`)) as { subject: string }[];
   return rows.length > 0;
 }
@@ -234,11 +292,23 @@ export type SkinClass = "perk" | "genesis";
 
 /** The skin worn by one asset, or null when unset / db unavailable. */
 export async function getAssetSkin(cls: SkinClass, asset: string): Promise<string | null> {
-  if (!skinDbConfigured()) return null;
+  return (await getAssetSkinWithUri(cls, asset)).skin;
+}
+
+export async function getAssetSkinWithUri(
+  cls: SkinClass,
+  asset: string,
+): Promise<SkinSelection> {
+  if (!skinDbConfigured()) return { skin: null, customUri: null };
   await withRetry(() => ensureSchema());
   const rows = (await withRetry(() => sql`
-    select skin from nft_skin where class = ${cls} and asset = ${asset}`)) as { skin: string }[];
-  return rows[0]?.skin ?? null;
+    select skin, custom_uri from nft_skin
+    where class = ${cls} and asset = ${asset}`)) as {
+    skin: string;
+    custom_uri: string | null;
+  }[];
+  const row = rows[0];
+  return { skin: row?.skin ?? null, customUri: row?.custom_uri ?? null };
 }
 
 /**
@@ -254,15 +324,19 @@ export async function applyAssetSkin(
   asset: string,
   skin: string,
   owner: string,
+  customUri: string | null = null,
 ): Promise<boolean> {
   await withRetry(() => ensureSchema());
+  // Written unconditionally so switching away from Signature clears the
+  // artwork rather than leaving it to reappear on the next selection.
   const rows = (await withRetry(() => sql`
-    insert into nft_skin (class, asset, skin, updated_at)
-    select ${cls}, ${asset}, ${skin}, now()
+    insert into nft_skin (class, asset, skin, custom_uri, updated_at)
+    select ${cls}, ${asset}, ${skin}, ${customUri}, now()
     where exists (
       select 1 from skin_ownership where subject = ${owner} and skin = ${skin}
     )
-    on conflict (class, asset) do update set skin = excluded.skin, updated_at = now()
+    on conflict (class, asset) do update
+      set skin = excluded.skin, custom_uri = excluded.custom_uri, updated_at = now()
     returning asset`)) as { asset: string }[];
   return rows.length > 0;
 }

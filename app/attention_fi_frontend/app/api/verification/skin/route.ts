@@ -20,14 +20,17 @@ import { PROGRAM_ID, RPC_ENDPOINT } from "@/lib/solana/config";
 import {
   applyOwnedSkin,
   getOwnedSkins,
-  getSkin,
+  getSkinWithUri,
   grantSkin,
   redeemSkinPayment,
   skinDbConfigured,
 } from "@/lib/skin-db";
 import {
+  CUSTOM_SKIN_ID,
+  customSkinUnlocked,
   DEFAULT_SKIN_ID,
   isValidSkinId,
+  normalizeCustomUri,
   SKIN_FEE_LAMPORTS,
   SKIN_MESSAGE_TTL_MS,
   skinMessage,
@@ -43,15 +46,29 @@ export async function GET(request: Request) {
   const subject = new URL(request.url).searchParams.get("subject");
   if (!subject) return NextResponse.json({ error: "missing subject" }, { status: 400 });
   try {
-    const [skin, owned] = await Promise.all([getSkin(subject), getOwnedSkins(subject)]);
+    const [sel, owned] = await Promise.all([getSkinWithUri(subject), getOwnedSkins(subject)]);
     // The default is always owned — it's what a badge wears before anything is
     // bought, so charging to go back to it would be charging twice for nothing.
     if (!owned.includes(DEFAULT_SKIN_ID)) owned.push(DEFAULT_SKIN_ID);
-    return NextResponse.json({ skin, owned });
+    // Signature is earned by collecting the rest, so it's derived here rather
+    // than trusted from a row.
+    const unlocked = customSkinUnlocked(owned);
+    if (unlocked && !owned.includes(CUSTOM_SKIN_ID)) owned.push(CUSTOM_SKIN_ID);
+    return NextResponse.json({
+      skin: sel.skin,
+      customUri: sel.customUri,
+      owned,
+      customUnlocked: unlocked,
+    });
   } catch {
     // A skin lookup failing is not worth failing the page over — the badge
     // renders with the default.
-    return NextResponse.json({ skin: null, owned: [DEFAULT_SKIN_ID] });
+    return NextResponse.json({
+      skin: null,
+      customUri: null,
+      owned: [DEFAULT_SKIN_ID],
+      customUnlocked: false,
+    });
   }
 }
 
@@ -70,19 +87,27 @@ export async function POST(request: Request) {
       signature?: unknown;
       messageSignature?: unknown;
       issuedAt?: unknown;
+      customUri?: unknown;
     };
     try {
       body = await request.json();
     } catch {
       return NextResponse.json({ error: "invalid json" }, { status: 400 });
     }
-    const { subject, skin, signature, messageSignature, issuedAt } = body;
+    const { subject, skin, signature, messageSignature, issuedAt, customUri } = body;
 
     if (typeof subject !== "string" || typeof skin !== "string") {
       return NextResponse.json({ error: "missing subject or skin" }, { status: 400 });
     }
     if (!isValidSkinId(skin)) {
       return NextResponse.json({ error: "unknown skin" }, { status: 400 });
+    }
+    // Signature has no price — buying it would defeat the point of earning it.
+    if (skin === CUSTOM_SKIN_ID && typeof signature === "string") {
+      return NextResponse.json(
+        { error: "Signature can't be bought — it unlocks by owning every other skin." },
+        { status: 400 },
+      );
     }
 
     let subjectKey: PublicKey;
@@ -129,7 +154,28 @@ export async function POST(request: Request) {
       // than rejecting a wallet that never explicitly bought it.
       if (skin === DEFAULT_SKIN_ID) await grantSkin(subject, skin);
 
-      if (!(await applyOwnedSkin(subject, skin))) {
+      // Signature isn't sold; it's earned by owning everything else. Check that
+      // here and record the entitlement, so the ownership test below — which is
+      // a plain row lookup — stays one code path for every skin.
+      let uri: string | null = null;
+      if (skin === CUSTOM_SKIN_ID) {
+        const owned = await getOwnedSkins(subject);
+        if (!customSkinUnlocked(owned)) {
+          return NextResponse.json(
+            { error: "Signature unlocks once you own every other skin." },
+            { status: 402 },
+          );
+        }
+        if (typeof customUri !== "string" || !(uri = normalizeCustomUri(customUri) ?? "")) {
+          return NextResponse.json(
+            { error: "Signature needs an https image URL (200 characters or fewer)." },
+            { status: 400 },
+          );
+        }
+        await grantSkin(subject, CUSTOM_SKIN_ID);
+      }
+
+      if (!(await applyOwnedSkin(subject, skin, uri))) {
         return NextResponse.json(
           { error: "You don't own that skin yet." },
           { status: 402 },

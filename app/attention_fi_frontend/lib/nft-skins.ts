@@ -87,9 +87,14 @@ export function skinById(id: string | null | undefined): Skin {
   return SKINS.find((s) => s.id === id) ?? DEFAULT_SKIN;
 }
 
-/** True when `id` names a skin in the current catalog. */
+/**
+ * True when `id` names a skin we recognise.
+ *
+ * Includes the custom skin, which is a valid selection but carries no palette
+ * and so deliberately isn't in `SKINS`.
+ */
 export function isValidSkinId(id: string): boolean {
-  return SKINS.some((s) => s.id === id);
+  return id === CUSTOM_SKIN_ID || SKINS.some((s) => s.id === id);
 }
 
 /**
@@ -116,4 +121,59 @@ export function skinMessage(subject: string, skin: string, issuedAt: number): st
     `Issued at: ${new Date(issuedAt).toISOString()}`,
     "This is free and does not authorise a payment.",
   ].join("\n");
+}
+
+/* ── the custom-artwork skin ─────────────────────────────────────────────── */
+
+/**
+ * A skin that replaces the generated gradient with artwork of your choosing.
+ *
+ * Deliberately not in `SKINS`: it has no palette, so every loop that renders
+ * swatches or resolves a gradient would have to special-case it. Kept separate,
+ * the existing code paths stay honest and this is handled where it differs.
+ *
+ * It isn't for sale. It unlocks once a wallet owns every other skin — the point
+ * is that it can't be bought outright, only collected into.
+ */
+export const CUSTOM_SKIN_ID = "custom";
+
+export const CUSTOM_SKIN = {
+  id: CUSTOM_SKIN_ID,
+  name: "Signature",
+  blurb: "Your own artwork. Unlocks once you own every other skin.",
+} as const;
+
+/** True once `owned` covers the whole catalogue, which is what unlocks it. */
+export function customSkinUnlocked(owned: readonly string[]): boolean {
+  const set = new Set(owned);
+  return SKINS.every((s) => set.has(s.id));
+}
+
+/** How many more skins a wallet needs before Signature unlocks. */
+export function customSkinRemaining(owned: readonly string[]): number {
+  const set = new Set(owned);
+  return SKINS.filter((s) => !set.has(s.id)).length;
+}
+
+/**
+ * Validate artwork supplied by a holder, returning a safe URL or null.
+ *
+ * https only. `http:` would break in wallets that refuse mixed content, and
+ * `data:`/`javascript:` are rejected outright — this string is handed to
+ * wallets and explorers to render, so it must be a plain remote image and
+ * nothing that can carry a payload. Nothing fetches it server-side, so this is
+ * about what we're willing to publish, not about SSRF.
+ */
+export function normalizeCustomUri(raw: string): string | null {
+  const trimmed = raw.trim();
+  // Core stores the uri in a bounded field, and this also rides in metadata.
+  if (trimmed.length === 0 || trimmed.length > 200) return null;
+  let url: URL;
+  try {
+    url = new URL(trimmed);
+  } catch {
+    return null;
+  }
+  if (url.protocol !== "https:") return null;
+  return url.toString();
 }

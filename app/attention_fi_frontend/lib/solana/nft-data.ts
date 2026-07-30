@@ -288,6 +288,10 @@ async function fetchProgramNfts(
  */
 export async function fetchOwnedNfts(program: Program<AttentionFi>, owner: PublicKey): Promise<NftCardData[]> {
   const { cards, tracked } = await fetchProgramNfts(program, owner.toBase58());
+  // Skins live off-chain, so the grid rendered every card in its default
+  // palette no matter what the holder was wearing. Applied here rather than in
+  // each caller, so every surface showing a collection agrees.
+  await applySkins(cards, owner.toBase58());
   const standalone = await fetchStandaloneAssets(program, owner, tracked).catch(() => []);
   return [
     ...cards,
@@ -403,6 +407,46 @@ export async function fetchNftPortfolio(
         ),
       })),
   };
+}
+
+/**
+ * Paint the holder's chosen skins onto their cards.
+ *
+ * One request for the whole grid rather than one per card. A failure leaves the
+ * default palettes, which is the correct degraded state — the cards are still
+ * accurate about what the wallet holds, just not about how it dressed them.
+ */
+async function applySkins(cards: NftCardData[], owner: string): Promise<void> {
+  const perk = cards.find((c) => c.kind === "perk");
+  const genesis = cards.filter((c) => c.kind === "genesis");
+  const verification = cards.find((c) => c.kind === "verification");
+  if (!perk && !verification && genesis.length === 0) return;
+
+  try {
+    const res = await fetch(`/api/skins/worn?owner=${owner}`);
+    if (!res.ok) return;
+    const body = (await res.json()) as {
+      verification?: string | null;
+      perkAsset?: string | null;
+      assets?: Record<string, { skin: string | null; customUri: string | null }>;
+    };
+    const assets = body.assets ?? {};
+
+    if (verification?.kind === "verification") {
+      verification.skinId = body.verification ?? null;
+    }
+    if (perk?.kind === "perk" && body.perkAsset) {
+      perk.skinId = assets[body.perkAsset]?.skin ?? null;
+    }
+    // Genesis cards carry a shortened asset id, so match on the same shortening
+    // rather than duplicating the format in the API contract.
+    for (const [address, sel] of Object.entries(assets)) {
+      const card = genesis.find((c) => c.kind === "genesis" && c.id === short(address));
+      if (card?.kind === "genesis") card.skinId = sel.skin ?? null;
+    }
+  } catch {
+    // Offline / not configured — keep the designed defaults.
+  }
 }
 
 /**
