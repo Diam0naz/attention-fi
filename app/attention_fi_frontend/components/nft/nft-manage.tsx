@@ -21,6 +21,8 @@ import { SkinPicker } from "@/components/nft/skin-picker";
 import { AssetSkinPicker } from "@/components/nft/asset-skin-picker";
 import { RefreshButton } from "@/components/ui/refresh-button";
 import { useNftPortfolio } from "@/components/nft/use-nft-portfolio";
+import { useQueryClient } from "@tanstack/react-query";
+import { notificationsKey } from "@/components/notifications/use-notifications";
 import {
   auctionEnded,
   currentAuctionPrice,
@@ -84,6 +86,7 @@ export function NftManage({ section }: { section: Section }) {
   const portfolioStatus = portfolioState.status;
 
   const readProgram = useReadonlyProgram();
+  const queryClient = useQueryClient();
   const signProgram = useProgram();
   const [auctions, setAuctions] = useState<NftAuctionData[]>([]);
   const [auctionsStatus, setAuctionsStatus] = useState<"loading" | "ready" | "error">("loading");
@@ -216,6 +219,9 @@ export function NftManage({ section }: { section: Section }) {
       });
       setPerkGrant(null);
       refreshPortfolio();
+      // The grant account closes on claim, so its pinned notification is now
+      // stale — drop it rather than leaving it until the next poll.
+      void queryClient.invalidateQueries({ queryKey: notificationsKey(address) });
     } catch (e) {
       setTx({
         state: "failed",

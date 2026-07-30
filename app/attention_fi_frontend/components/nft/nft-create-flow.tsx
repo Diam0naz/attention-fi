@@ -12,6 +12,8 @@ import { NftCardFace, type NftCardData } from "@/components/nft/nft-card";
 import { Keypair, PublicKey } from "@solana/web3.js";
 import { BN } from "@anchor-lang/core";
 import { useProgram, useReadonlyProgram } from "@/lib/solana/use-program";
+import { useQueryClient } from "@tanstack/react-query";
+import { nftPortfolioKey } from "@/components/nft/use-nft-portfolio";
 import { fetchCollections, fetchListableNfts, type CollectionData, type OwnedAsset } from "@/lib/solana/nft-data";
 import { handleToMint, myCreatedTokens } from "@/lib/solana/registry";
 import { solUsd } from "@/lib/solana/sol-usd";
@@ -101,6 +103,7 @@ export function NftCreateFlow() {
   const [creatingCollection, setCreatingCollection] = useState(false);
 
   const readProgram = useReadonlyProgram();
+  const queryClient = useQueryClient();
   // Bumped after a successful create so the list re-reads without a callback
   // indirection the effect lint can't see through.
   const [collectionsNonce, setCollectionsNonce] = useState(0);
@@ -262,6 +265,9 @@ export function NftCreateFlow() {
       }
       setTxSig(sig);
       setTx("confirmed");
+      // The credential now exists on-chain; every surface reading the wallet's
+      // portfolio should say so without waiting for its own poll.
+      void queryClient.invalidateQueries({ queryKey: nftPortfolioKey(address) });
     } catch (e) {
       setTxErr(e instanceof Error ? e.message : "Transaction failed");
       setTx("failed");

@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { PublicKey } from "@solana/web3.js";
 import { useWallet } from "@/components/wallet/wallet-provider";
 import { useReadonlyProgram } from "@/lib/solana/use-program";
@@ -149,65 +150,54 @@ export interface Notifications {
   loading: boolean;
 }
 
+/** Cache key for the bell's contents. Exported so writers can invalidate it. */
+export const notificationsKey = (address: string | null | undefined) =>
+  ["notifications", address ?? null] as const;
+
 export function useNotifications(): Notifications {
   const { address } = useWallet();
   const program = useReadonlyProgram();
-  const [outcomes, setOutcomes] = useState<NftOutcome[]>([]);
-  const [saleFacts, setSaleFacts] = useState<Map<string, SaleFact>>(new Map());
-  // An unclaimed grant is the one notification that's actionable: the perk
-  // doesn't exist until the recipient mints it, so silence here means a
-  // granted discount is simply never collected.
-  const [grant, setGrant] = useState<PerkGrantData | null>(null);
-  const [signatureUnlocked, setSignatureUnlocked] = useState(false);
-  const [seen, setSeen] = useState<Set<string>>(new Set());
-  const [loading, setLoading] = useState(false);
-  const [nonce, setNonce] = useState(0);
+  const queryClient = useQueryClient();
+  const [seen, setSeen] = useState<Set<string>>(() => new Set());
+
+  const query = useQuery({
+    queryKey: notificationsKey(address),
+    queryFn: async () => {
+      const owner = new PublicKey(address!);
+      // Independent sources: the PDAs say what happened, the events say for how
+      // much, and the grant is a separate entitlement. Losing one must not cost
+      // the others, so each settles on its own.
+      const [outcomes, facts, grant, signatureUnlocked] = await Promise.all([
+        fetchNftOutcomes(program, owner).catch(() => [] as NftOutcome[]),
+        fetchSaleFacts(),
+        fetchPerkGrant(program, owner).catch(() => null),
+        fetchSignatureUnlocked(address!),
+      ]);
+      return { outcomes, facts, grant, signatureUnlocked };
+    },
+    enabled: Boolean(address),
+    // A failed poll keeps the bell as it was rather than emptying it, which
+    // would read as "those things never happened".
+    placeholderData: (prev) => prev,
+    refetchInterval: POLL_MS,
+  });
+
+  // Read state is per-wallet and lives in the browser, so it's loaded lazily
+  // rather than as part of the query.
+  const storedSeen = address ? readSeen(address) : new Set<string>();
+  const effectiveSeen = seen.size > 0 ? seen : storedSeen;
+
+  const outcomes = query.data?.outcomes ?? [];
+  const saleFacts = query.data?.facts ?? new Map<string, SaleFact>();
+  const grant = query.data?.grant ?? null;
+  const signatureUnlocked = query.data?.signatureUnlocked ?? false;
+  const loading = query.isPending;
 
   const refresh = useCallback(async () => {
-    setNonce((n) => n + 1);
-  }, []);
+    await queryClient.invalidateQueries({ queryKey: notificationsKey(address) });
+  }, [queryClient, address]);
 
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      // Clearing happens inside the async body, not in the effect body: a
-      // synchronous setState here is what the cascading-render lint catches.
-      if (!address) {
-        if (!cancelled) setOutcomes([]);
-        return;
-      }
-      setLoading(true);
-      try {
-        // Independent sources: the PDAs say what happened, the events say for
-        // how much. Losing the second must not cost the first.
-        const [list, facts, pending, unlocked] = await Promise.all([
-          fetchNftOutcomes(program, new PublicKey(address)),
-          fetchSaleFacts(),
-          fetchPerkGrant(program, new PublicKey(address)),
-          fetchSignatureUnlocked(address),
-        ]);
-        if (!cancelled) {
-          setOutcomes(list);
-          setSaleFacts(facts);
-          setGrant(pending);
-          setSignatureUnlocked(unlocked);
-          setSeen(readSeen(address));
-        }
-      } catch {
-        // A failed read leaves the last known set rather than clearing the
-        // bell, which would look like the events never happened.
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    const id = setInterval(() => setNonce((n) => n + 1), POLL_MS);
-    return () => {
-      cancelled = true;
-      clearInterval(id);
-    };
-  }, [address, program, nonce]);
-
-  const items = outcomes.map((o) => toNotification(o, seen, saleFacts.get(o.asset)));
+  const items = outcomes.map((o) => toNotification(o, effectiveSeen, saleFacts.get(o.asset)));
 
   if (signatureUnlocked) {
     // Stable id, so dismissing it keeps it dismissed rather than resurfacing
@@ -218,7 +208,7 @@ export function useNotifications(): Notifications {
       type: "graduation",
       text: "You own every skin — Signature is unlocked. Put your own artwork on any NFT you hold.",
       time: "unlocked",
-      read: seen.has(id),
+      read: effectiveSeen.has(id),
       href: "/nft/verification",
       action: "Set your artwork",
     });
@@ -233,7 +223,7 @@ export function useNotifications(): Notifications {
       type: "referral",
       text: `You've been granted a Level ${grant.level} perk — claim it to mint your NFT and start paying ${grant.level}% less on every trade.`,
       time: "pending",
-      read: seen.has(id),
+      read: effectiveSeen.has(id),
       href: "/nft/perk",
       action: "Claim your perk",
     });
@@ -250,7 +240,7 @@ export function useNotifications(): Notifications {
     (id: string) => {
       if (!address) return;
       setSeen((prev) => {
-        const next = new Set(prev);
+        const next = new Set(prev.size > 0 ? prev : readSeen(address));
         if (next.has(id)) next.delete(id);
         else next.add(id);
         writeSeen(address, next);

@@ -3,6 +3,7 @@ import "./globals.css";
 import { cn } from "@/lib/utils";
 import { AppNav } from "@/components/nav/app-nav";
 import { WalletProvider } from "@/components/wallet/wallet-provider";
+import { QueryProvider } from "@/components/providers/query-provider";
 
 // Fonts are declared as a zero-network CSS stack in globals.css (`--font-sans` /
 // `--font-geist-mono`) — no build-time fetch, so dev never hangs offline. Uses
@@ -31,10 +32,12 @@ export default function RootLayout({
       className={cn("dark h-full antialiased font-sans")}
       suppressHydrationWarning>
       <body className="min-h-full flex flex-col bg-[#0A0A0A] text-[#F5F4F0]">
-        <WalletProvider>
-          <AppNav />
-          {children}
-        </WalletProvider>
+        <QueryProvider>
+          <WalletProvider>
+            <AppNav />
+            {children}
+          </WalletProvider>
+        </QueryProvider>
       </body>
     </html>
   );

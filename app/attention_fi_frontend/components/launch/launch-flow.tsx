@@ -12,6 +12,8 @@ import { PageBackground } from "@/components/reactbits/page-background";
 import { Keypair, PublicKey } from "@solana/web3.js";
 import { BN } from "@anchor-lang/core";
 import { useProgram } from "@/lib/solana/use-program";
+import { useQueryClient } from "@tanstack/react-query";
+import { nftPortfolioKey } from "@/components/nft/use-nft-portfolio";
 import { registerToken, syncRegistry } from "@/lib/solana/registry";
 import { explorerTx, verificationMetadataUri } from "@/lib/solana/config";
 import { verificationPda } from "@/lib/solana/program";
@@ -96,6 +98,7 @@ const STEPS = ["Mechanism", "Verify", "Seed & review", "Confirm"];
 export function LaunchFlow() {
   const { connected, shortAddress, address, getSigner } = useWallet();
   const program = useProgram();
+  const queryClient = useQueryClient();
   const [step, setStep] = useState(0); // 0..3
   const [mech, setMech] = useState<MechId>("bonding");
   const [handle, setHandle] = useState("");
@@ -312,6 +315,9 @@ export function LaunchFlow() {
         .signers([asset])
         .rpc();
       setVerifiedHandle(handle);
+      // The badge exists now — the NFT screens and the bell shouldn't wait for
+      // their own polls to notice.
+      void queryClient.invalidateQueries({ queryKey: nftPortfolioKey(address) });
       setVerifyStep(3);
     } catch (e) {
       setVerifyErr(e instanceof Error ? e.message : "Verification failed");
