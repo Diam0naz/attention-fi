@@ -16,7 +16,9 @@ import { NextResponse } from "next/server";
 import { Connection, PublicKey } from "@solana/web3.js";
 import { getReadonlyProgram } from "@/lib/solana/program";
 import { PROGRAM_ID, RPC_ENDPOINT } from "@/lib/solana/config";
-import { redeemSkinUnlock, skinDbConfigured } from "@/lib/skin-db";
+import { redeemSkinUnlock, skinDbConfigured,
+  isConnectionError,
+} from "@/lib/skin-db";
 import { CUSTOM_SKIN_ID, isValidSkinId, SKIN_FEE_LAMPORTS } from "@/lib/nft-skins";
 
 const GLOBAL_SEED = Buffer.from("global");
@@ -107,6 +109,14 @@ export async function POST(request: Request) {
     }
     return NextResponse.json({ ok: true, skin });
   } catch (e) {
+    // A sleeping database is a wait, not a failed request — say which, rather
+    // than surfacing a raw "fetch failed" to whoever clicked.
+    if (isConnectionError(e)) {
+      return NextResponse.json(
+        { error: "The skins database is waking up — try again in a few seconds." },
+        { status: 503 },
+      );
+    }
     return NextResponse.json(
       { error: e instanceof Error ? e.message : "Could not unlock skin" },
       { status: 500 },

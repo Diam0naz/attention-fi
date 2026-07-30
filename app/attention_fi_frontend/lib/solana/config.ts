@@ -10,9 +10,16 @@ export const RPC_ENDPOINT =
 /** Program ID — defaults to the address baked into the IDL. */
 export const PROGRAM_ID = new PublicKey(process.env.NEXT_PUBLIC_PROGRAM_ID ?? idl.address);
 
-/** USDC mint. Defaults to Circle's devnet USDC; override per-cluster. */
+/**
+ * USDC mint. Defaults to Circle's devnet USDC; override per-cluster.
+ *
+ * The previous default (4zMMC9sr…) is not a live account on devnet, so the
+ * balance hook looked up an associated account of a mint that doesn't exist,
+ * found nothing, and left the profile showing "…" indefinitely. Verified
+ * on-chain: this address is a Token-program mint with 6 decimals.
+ */
 export const USDC_MINT =
-  process.env.NEXT_PUBLIC_USDC_MINT ?? "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDaSh";
+  process.env.NEXT_PUBLIC_USDC_MINT ?? "Gh9ZwEmdLJ8DscKNTkTqPbNwLNNBjuSzaG9Vp2KGtKJr";
 
 /**
  * Canonical public origin, used to build NFT metadata URIs.

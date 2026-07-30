@@ -22,6 +22,7 @@ import {
   getOwnedSkins,
   getSkinWithUri,
   grantSkin,
+  isConnectionError,
   redeemSkinPayment,
   skinDbConfigured,
 } from "@/lib/skin-db";
@@ -248,8 +249,16 @@ export async function POST(request: Request) {
     }
     return NextResponse.json({ ok: true, skin, charged: true });
   } catch (e) {
-    // Anything unhandled here previously escaped as an empty 500 body, which
-    // the client then failed to parse as JSON.
+    // A sleeping database is a wait, not a failed request — say which, rather
+    // than surfacing a raw "fetch failed" to whoever clicked.
+    if (isConnectionError(e)) {
+      return NextResponse.json(
+        { error: "The skins database is waking up — try again in a few seconds." },
+        { status: 503 },
+      );
+    }
+    // Anything else unhandled here previously escaped as an empty 500 body,
+    // which the client then failed to parse as JSON.
     return NextResponse.json(
       { error: e instanceof Error ? e.message : "Could not save skin" },
       { status: 500 },

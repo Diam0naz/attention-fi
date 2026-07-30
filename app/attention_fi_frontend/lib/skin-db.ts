@@ -31,22 +31,36 @@ function sql(strings: TemplateStringsArray, ...values: unknown[]) {
 /**
  * Retry a query through a cold start.
  *
- * Neon auto-suspends when idle, and the first request after that can fail
- * outright ("fetch failed") rather than just being slow. Writes must not lose a
+ * Neon auto-suspends when idle, and the first request after that fails
+ * outright ("fetch failed") rather than being slow. Writes must not lose a
  * paid-for change to that; reads must not either, since a caller that falls
  * back to defaults renders a bought skin as unset.
+ *
+ * Five attempts spanning ~7.5s, because a resume routinely takes longer than
+ * the 1.2s the previous budget allowed — which is why applying a skin still
+ * surfaced a raw "fetch failed" to holders.
  */
-async function withRetry<T>(run: () => Promise<T>, attempts = 3): Promise<T> {
+async function withRetry<T>(run: () => Promise<T>, attempts = 5): Promise<T> {
   let lastError: unknown;
   for (let i = 0; i < attempts; i++) {
     try {
       return await run();
     } catch (e) {
       lastError = e;
-      if (i < attempts - 1) await new Promise((r) => setTimeout(r, 400 * 2 ** i));
+      if (i < attempts - 1) await new Promise((r) => setTimeout(r, 500 * 2 ** i));
     }
   }
   throw lastError;
+}
+
+/**
+ * True when an error is the database being unreachable rather than a genuine
+ * rejection. Worth distinguishing: one is "try again in a moment", the other
+ * means the request was wrong.
+ */
+export function isConnectionError(e: unknown): boolean {
+  const msg = e instanceof Error ? e.message : String(e);
+  return /fetch failed|ECONNRESET|ETIMEDOUT|connect|Connection terminated/i.test(msg);
 }
 
 let schemaReady: Promise<void> | null = null;

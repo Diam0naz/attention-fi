@@ -21,6 +21,7 @@ import {
   getOwnedSkins,
   grantSkin,
   skinDbConfigured,
+  isConnectionError,
 } from "@/lib/skin-db";
 import { isSkinClass, readNftFacts } from "@/lib/nft-metadata";
 import {
@@ -163,6 +164,14 @@ export async function POST(request: Request) {
     }
     return NextResponse.json({ ok: true, skin });
   } catch (e) {
+    // A sleeping database is a wait, not a failed request — say which, rather
+    // than surfacing a raw "fetch failed" to whoever clicked.
+    if (isConnectionError(e)) {
+      return NextResponse.json(
+        { error: "The skins database is waking up — try again in a few seconds." },
+        { status: 503 },
+      );
+    }
     return NextResponse.json(
       { error: e instanceof Error ? e.message : "Could not save skin" },
       { status: 500 },
