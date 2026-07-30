@@ -36,6 +36,13 @@ esac
 # skipped, so a partial config is fine — features degrade rather than break.
 KEYS=(
   DATABASE_URL
+  # Builds the metadata URI written into an NFT on-chain at mint time. Without
+  # it the app falls back to window.location.origin, baking whatever host the
+  # minter happened to use — a preview deployment, or localhost — into the
+  # asset permanently.
+  NEXT_PUBLIC_APP_URL
+  NEXT_PUBLIC_SKIN_FEE_SOL
+  NEXT_PUBLIC_X_HANDLE
   NEYNAR_API_KEY
   MINDSHARE_SOURCE
   FARCASTER_MINDSHARE_TTL_S
@@ -77,6 +84,16 @@ present=()
 for key in "${KEYS[@]}"; do
   [[ -n "$(read_value "$key")" ]] && present+=("$key")
 done
+
+# Minting with the wrong origin can't be undone: the uri is on-chain. Warn
+# before sending rather than after someone mints.
+if [[ "$TARGET" == "production" && -z "$(read_value NEXT_PUBLIC_APP_URL)" ]]; then
+  echo "WARNING: NEXT_PUBLIC_APP_URL is not set in $ENV_FILE."
+  echo "  Anything minted from production will bake the browser's origin into the"
+  echo "  asset's on-chain uri, permanently. Set it to the canonical https origin"
+  echo "  (e.g. https://v1testenv.vercel.app) before minting anything real."
+  echo
+fi
 
 if [[ ${#present[@]} -eq 0 ]]; then
   echo "Nothing to send — no matching non-empty keys in $ENV_FILE."
