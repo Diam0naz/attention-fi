@@ -8,8 +8,8 @@
 import { PublicKey } from "@solana/web3.js";
 import { getReadonlyProgram } from "@/lib/solana/program";
 import { PROGRAM_ID } from "@/lib/solana/config";
-import { getSkin } from "@/lib/skin-db";
-import { skinById } from "@/lib/nft-skins";
+import { getSkinWithUri } from "@/lib/skin-db";
+import { CUSTOM_SKIN_ID, skinById } from "@/lib/nft-skins";
 
 const VERIFY_SEED = Buffer.from("verify");
 
@@ -50,7 +50,14 @@ export async function GET(
     return new Response("not verified", { status: 404 });
   }
 
-  const skin = skinById(await getSkin(subject).catch(() => null));
+  const sel = await getSkinWithUri(subject).catch(() => ({ skin: null, customUri: null }));
+  // Signature is the holder's own artwork, so there's nothing to draw. Redirect
+  // rather than proxy: we never fetch a holder-supplied URL server-side, and a
+  // redirect keeps that true for anything hitting this route directly.
+  if (sel.skin === CUSTOM_SKIN_ID && sel.customUri) {
+    return Response.redirect(sel.customUri, 302);
+  }
+  const skin = skinById(sel.skin);
   // Long handles would overflow the card; scale the type down instead of
   // clipping, so the badge stays legible rather than truncated.
   const label = `@${handle}`;

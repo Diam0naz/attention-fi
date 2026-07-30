@@ -15,9 +15,23 @@ import { NextResponse } from "next/server";
 import { PublicKey } from "@solana/web3.js";
 import bs58 from "bs58";
 import nacl from "tweetnacl";
-import { applyAssetSkin, getAssetSkin, getOwnedSkins, skinDbConfigured } from "@/lib/skin-db";
+import {
+  applyAssetSkin,
+  getAssetSkinWithUri,
+  getOwnedSkins,
+  grantSkin,
+  skinDbConfigured,
+} from "@/lib/skin-db";
 import { isSkinClass, readNftFacts } from "@/lib/nft-metadata";
-import { DEFAULT_SKIN_ID, isValidSkinId, SKIN_MESSAGE_TTL_MS, skinMessage } from "@/lib/nft-skins";
+import {
+  CUSTOM_SKIN_ID,
+  customSkinUnlocked,
+  DEFAULT_SKIN_ID,
+  isValidSkinId,
+  normalizeCustomUri,
+  SKIN_MESSAGE_TTL_MS,
+  skinMessage,
+} from "@/lib/nft-skins";
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
@@ -28,14 +42,27 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "missing class or asset" }, { status: 400 });
   }
   try {
-    const [skin, owned] = await Promise.all([
-      getAssetSkin(cls, asset),
+    const [sel, owned] = await Promise.all([
+      getAssetSkinWithUri(cls, asset),
       owner ? getOwnedSkins(owner) : Promise.resolve<string[]>([]),
     ]);
     if (!owned.includes(DEFAULT_SKIN_ID)) owned.push(DEFAULT_SKIN_ID);
-    return NextResponse.json({ skin, owned });
+    // Derived from the catalogue, never trusted from a row.
+    const unlocked = customSkinUnlocked(owned);
+    if (unlocked && !owned.includes(CUSTOM_SKIN_ID)) owned.push(CUSTOM_SKIN_ID);
+    return NextResponse.json({
+      skin: sel.skin,
+      customUri: sel.customUri,
+      owned,
+      customUnlocked: unlocked,
+    });
   } catch {
-    return NextResponse.json({ skin: null, owned: [DEFAULT_SKIN_ID] });
+    return NextResponse.json({
+      skin: null,
+      customUri: null,
+      owned: [DEFAULT_SKIN_ID],
+      customUnlocked: false,
+    });
   }
 }
 
@@ -55,13 +82,14 @@ export async function POST(request: Request) {
       owner?: unknown;
       messageSignature?: unknown;
       issuedAt?: unknown;
+      customUri?: unknown;
     };
     try {
       body = await request.json();
     } catch {
       return NextResponse.json({ error: "invalid json" }, { status: 400 });
     }
-    const { class: cls, asset, skin, owner, messageSignature, issuedAt } = body;
+    const { class: cls, asset, skin, owner, messageSignature, issuedAt, customUri } = body;
 
     if (
       typeof cls !== "string" ||
@@ -109,7 +137,28 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "You don't hold that NFT." }, { status: 403 });
     }
 
-    if (!(await applyAssetSkin(cls, asset, skin, owner))) {
+    // Signature is earned, not sold: verify the gate and record the
+    // entitlement, so the ownership test inside applyAssetSkin stays a single
+    // row lookup for every skin.
+    let uri: string | null = null;
+    if (skin === CUSTOM_SKIN_ID) {
+      const owned = await getOwnedSkins(owner);
+      if (!customSkinUnlocked(owned)) {
+        return NextResponse.json(
+          { error: "Signature unlocks once you own every other skin." },
+          { status: 402 },
+        );
+      }
+      if (typeof customUri !== "string" || !(uri = normalizeCustomUri(customUri) ?? "")) {
+        return NextResponse.json(
+          { error: "Signature needs an https image URL (200 characters or fewer)." },
+          { status: 400 },
+        );
+      }
+      await grantSkin(owner, CUSTOM_SKIN_ID);
+    }
+
+    if (!(await applyAssetSkin(cls, asset, skin, owner, uri))) {
       return NextResponse.json({ error: "You don't own that skin yet." }, { status: 402 });
     }
     return NextResponse.json({ ok: true, skin });

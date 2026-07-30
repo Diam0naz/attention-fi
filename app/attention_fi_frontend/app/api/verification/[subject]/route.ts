@@ -15,8 +15,8 @@ import { NextResponse } from "next/server";
 import { PublicKey } from "@solana/web3.js";
 import { getReadonlyProgram } from "@/lib/solana/program";
 import { PROGRAM_ID } from "@/lib/solana/config";
-import { getSkin } from "@/lib/skin-db";
-import { skinById } from "@/lib/nft-skins";
+import { getSkinWithUri } from "@/lib/skin-db";
+import { CUSTOM_SKIN, CUSTOM_SKIN_ID, skinById } from "@/lib/nft-skins";
 
 const VERIFY_SEED = Buffer.from("verify");
 
@@ -53,8 +53,16 @@ export async function GET(
     return NextResponse.json({ error: "not verified" }, { status: 404 });
   }
 
-  const skin = skinById(await getSkin(subject).catch(() => null));
+  const sel = await getSkinWithUri(subject).catch(() => ({ skin: null, customUri: null }));
   const origin = new URL(request.url).origin;
+
+  // Signature replaces the generated badge with the holder's own artwork, so
+  // metadata points straight at it. Everything else renders through the SVG
+  // route. The URL was validated as https on the way in; nothing is fetched
+  // server-side, here or anywhere.
+  const isCustom = sel.skin === CUSTOM_SKIN_ID && Boolean(sel.customUri);
+  const image = isCustom ? sel.customUri! : `${origin}/api/verification/${subject}/image`;
+  const skinName = isCustom ? CUSTOM_SKIN.name : skinById(sel.skin).name;
 
   return NextResponse.json(
     {
@@ -62,20 +70,17 @@ export async function GET(
       description:
         `On-chain proof that @${handle} is controlled by ${subject}. ` +
         `Issued by AttentionFi against a Solana Attestation Service attestation.`,
-      image: `${origin}/api/verification/${subject}/image`,
+      image,
       external_url: `${origin}/token/${handle}`,
       attributes: [
         { trait_type: "Handle", value: `@${handle}` },
-        { trait_type: "Skin", value: skin.name },
+        { trait_type: "Skin", value: skinName },
       ],
       properties: {
         category: "image",
-        files: [
-          {
-            uri: `${origin}/api/verification/${subject}/image`,
-            type: "image/svg+xml",
-          },
-        ],
+        // A custom image is whatever the holder linked; only our own render is
+        // known to be SVG.
+        files: [{ uri: image, ...(isCustom ? {} : { type: "image/svg+xml" }) }],
       },
     },
     { headers: { "cache-control": "public, max-age=60, stale-while-revalidate=300" } },

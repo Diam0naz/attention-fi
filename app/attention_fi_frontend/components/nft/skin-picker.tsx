@@ -10,11 +10,14 @@ import { useProgram } from "@/lib/solana/use-program";
 import { fetchGlobal } from "@/lib/solana/curve";
 import {
   SKINS,
+  CUSTOM_SKIN,
+  CUSTOM_SKIN_ID,
   DEFAULT_SKIN_ID,
   SKIN_FEE_LAMPORTS,
   skinById,
   skinMessage,
 } from "@/lib/nft-skins";
+import { SignatureField } from "@/components/nft/signature-field";
 
 /**
  * Restyle the caller's verification badge.
@@ -55,7 +58,13 @@ function buildSkinMessage(subject: string, skin: string): { bytes: Uint8Array; i
 /** Parse a response that may not be JSON (a proxy error page, an empty 500). */
 async function readJson(
   res: Response,
-): Promise<{ ok?: boolean; error?: string; skin?: string | null; owned?: string[] }> {
+): Promise<{
+  ok?: boolean;
+  error?: string;
+  skin?: string | null;
+  customUri?: string | null;
+  owned?: string[];
+}> {
   const text = await res.text();
   if (!text) return { error: `Request failed (${res.status})` };
   try {
@@ -103,6 +112,7 @@ export function SkinPicker({
   const program = useProgram();
   const [skin, setSkin] = useState<string>(DEFAULT_SKIN_ID);
   const [owned, setOwned] = useState<string[]>([DEFAULT_SKIN_ID]);
+  const [customUri, setCustomUri] = useState<string | null>(null);
   const [busy, setBusy] = useState<{ id: string; phase: Phase } | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -118,6 +128,7 @@ export function SkinPicker({
           const current = json.skin ?? DEFAULT_SKIN_ID;
           setSkin(current);
           setOwned(json.owned ?? [DEFAULT_SKIN_ID]);
+          setCustomUri(json.customUri ?? null);
           // Report on load too, not just on change: a wallet already wearing a
           // skin would otherwise see its card rendered in the default palette.
           onSkinChange?.(current);
@@ -179,7 +190,7 @@ export function SkinPicker({
   }
 
   /** Wear a skin this wallet already owns — no charge, signature as proof. */
-  async function wearOwned(id: string): Promise<void> {
+  async function wearOwned(id: string, uri?: string): Promise<void> {
     const provider = getSigner();
     if (!provider?.signMessage) {
       throw new Error("This wallet can't sign messages, so a free switch isn't possible.");
@@ -199,10 +210,12 @@ export function SkinPicker({
         skin: id,
         messageSignature: bs58.encode(bytes),
         issuedAt,
+        ...(uri ? { customUri: uri } : {}),
       }),
     });
     const json = await readJson(res);
     if (!res.ok || !json.ok) throw new Error(json.error ?? "Could not apply skin");
+    if (uri) setCustomUri(uri);
     land(id);
   }
 
@@ -238,15 +251,18 @@ export function SkinPicker({
     await redeem(id, signature);
   }
 
-  async function choose(id: string) {
-    if (id === skin || busy) return;
+  async function choose(id: string, uri?: string) {
+    if (busy) return;
+    // Signature can be re-applied with new artwork while already worn.
+    if (id === skin && id !== CUSTOM_SKIN_ID) return;
     if (!program) {
       setErr("Connect a wallet to change your skin.");
       return;
     }
     setErr(null);
     try {
-      if (owned.includes(id)) await wearOwned(id);
+      // Signature is earned, never sold — it must not reach the purchase path.
+      if (owned.includes(id) || id === CUSTOM_SKIN_ID) await wearOwned(id, uri);
       else await buy(id);
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Could not save skin");
@@ -345,6 +361,14 @@ export function SkinPicker({
         })}
       </div>
 
+      <SignatureField
+        owned={owned}
+        active={skin === CUSTOM_SKIN_ID}
+        currentUri={customUri}
+        busy={busy?.id === CUSTOM_SKIN_ID}
+        onApply={(uri) => void choose(CUSTOM_SKIN_ID, uri)}
+      />
+
       {pending && pending.skin !== skin && (
         <div className="mt-3 rounded-sm border border-signal/30 bg-signal/[0.06] p-3">
           <div className="font-mono text-[10px] leading-relaxed text-[#F5F4F0]">
@@ -365,8 +389,9 @@ export function SkinPicker({
       {err && <p className="mt-2 font-mono text-[10px] leading-relaxed text-noise">{err}</p>}
 
       <p className="mt-2 font-mono text-[10px] text-[#4b5563]">
-        Wearing {active.name} · {owned.length} of {SKINS.length} unlocked · wallets and explorers
-        refresh within a minute.
+        Wearing {skin === CUSTOM_SKIN_ID ? CUSTOM_SKIN.name : active.name} ·{" "}
+        {owned.filter((o) => o !== CUSTOM_SKIN_ID).length} of {SKINS.length} unlocked · wallets
+        and explorers refresh within a minute.
       </p>
     </div>
   );

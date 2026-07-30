@@ -5,7 +5,8 @@
  * font loading — these cards are type and geometry. Wallets and explorers
  * accept image/svg+xml for NFT artwork.
  */
-import { getAssetSkin } from "@/lib/skin-db";
+import { getAssetSkinWithUri } from "@/lib/skin-db";
+import { CUSTOM_SKIN_ID } from "@/lib/nft-skins";
 import { esc, isSkinClass, paletteFor, readNftFacts } from "@/lib/nft-metadata";
 
 export const revalidate = 60;
@@ -20,7 +21,16 @@ export async function GET(
   const facts = await readNftFacts(cls, asset);
   if (!facts) return new Response("not found", { status: 404 });
 
-  const skin = paletteFor(facts, await getAssetSkin(cls, asset).catch(() => null));
+  const sel = await getAssetSkinWithUri(cls, asset).catch(() => ({
+    skin: null,
+    customUri: null,
+  }));
+  // Same as the badge: Signature has no palette to render, so hand the caller
+  // straight to the artwork instead of fetching it here.
+  if (sel.skin === CUSTOM_SKIN_ID && sel.customUri) {
+    return Response.redirect(sel.customUri, 302);
+  }
+  const skin = paletteFor(facts, sel.skin);
   const isPerk = cls === "perk";
 
   const headline = isPerk

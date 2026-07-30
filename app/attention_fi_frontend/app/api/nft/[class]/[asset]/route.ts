@@ -10,8 +10,12 @@
  * metadata can't be spoofed by requesting an asset with chosen attributes.
  */
 import { NextResponse } from "next/server";
-import { getAssetSkin } from "@/lib/skin-db";
+import { getAssetSkinWithUri } from "@/lib/skin-db";
 import { isSkinClass, paletteFor, readNftFacts } from "@/lib/nft-metadata";
+import { CUSTOM_SKIN, CUSTOM_SKIN_ID } from "@/lib/nft-skins";
+
+/** Signature carries artwork rather than a palette, so paletteFor can't name it. */
+const isCustomName = (id: string | null) => id === CUSTOM_SKIN_ID;
 
 export const revalidate = 60;
 
@@ -31,9 +35,19 @@ export async function GET(
     return NextResponse.json({ error: "not found" }, { status: 404 });
   }
 
-  const skin = paletteFor(facts, await getAssetSkin(cls, asset).catch(() => null));
+  const sel = await getAssetSkinWithUri(cls, asset).catch(() => ({
+    skin: null,
+    customUri: null,
+  }));
+  const skin = paletteFor(facts, sel.skin);
+  const skinName = isCustomName(sel.skin) ? CUSTOM_SKIN.name : skin.name;
   const origin = new URL(request.url).origin;
-  const image = `${origin}/api/nft/${cls}/${asset}/image`;
+
+  // Signature swaps the generated card for the holder's artwork; every other
+  // skin renders through the SVG route. Validated https on the way in, and
+  // never fetched server-side.
+  const isCustom = sel.skin === CUSTOM_SKIN_ID && Boolean(sel.customUri);
+  const image = isCustom ? sel.customUri! : `${origin}/api/nft/${cls}/${asset}/image`;
 
   const isPerk = cls === "perk";
   const name = isPerk
@@ -53,16 +67,17 @@ export async function GET(
             { trait_type: "Level", value: facts.level },
             { trait_type: "Fee discount", value: `${((facts.discountBps ?? 0) / 100).toFixed(0)}%` },
             { trait_type: "Transferable", value: "No" },
-            { trait_type: "Skin", value: skin.name },
+            { trait_type: "Skin", value: skinName },
           ]
         : [
             { trait_type: "Fee share", value: `${((facts.shareBps ?? 0) / 100).toFixed(2)}%` },
             { trait_type: "Transferable", value: "Yes" },
-            { trait_type: "Skin", value: skin.name },
+            { trait_type: "Skin", value: skinName },
           ],
       properties: {
         category: "image",
-        files: [{ uri: image, type: "image/svg+xml" }],
+        // Only our own render is known to be SVG.
+        files: [{ uri: image, ...(isCustom ? {} : { type: "image/svg+xml" }) }],
       },
     },
     { headers: { "cache-control": "public, max-age=60, stale-while-revalidate=300" } },

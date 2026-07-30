@@ -5,24 +5,42 @@ import bs58 from "bs58";
 import { Check, Loader2, Lock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useWallet } from "@/components/wallet/wallet-provider";
-import { SKINS, DEFAULT_SKIN_ID, skinById, skinMessage } from "@/lib/nft-skins";
+import {
+  SKINS,
+  CUSTOM_SKIN,
+  CUSTOM_SKIN_ID,
+  DEFAULT_SKIN_ID,
+  SKIN_FEE_LAMPORTS,
+  skinById,
+  skinMessage,
+} from "@/lib/nft-skins";
+import { SignatureField } from "@/components/nft/signature-field";
+import { useProgram } from "@/lib/solana/use-program";
+import { fetchGlobal } from "@/lib/solana/curve";
+import { PublicKey, SystemProgram, Transaction } from "@solana/web3.js";
 
 /**
  * Restyle one perk or genesis NFT.
  *
  * Unlike the verification badge, these classes are keyed by asset — a wallet
- * can hold several — so the skin is chosen per NFT. Unlocking is still
- * wallet-wide: buy a skin once on your badge and wear it on anything you hold.
- * That means there's no payment here, and a signed message stands in as proof
- * of wallet control.
+ * can hold several — so the skin is chosen per NFT. Unlocking stays
+ * wallet-wide: buy a skin once and wear it on anything you hold, here or on
+ * the badge.
+ *
+ * Two authorisations, because the two actions differ. Buying is authorised by
+ * the payment itself; wearing something already unlocked has no payment to
+ * lean on, so the wallet signs a message that names the asset.
  */
 
-type Phase = "signing" | "applying";
+type Phase = "paying" | "signing" | "applying";
 
 const PHASE_COPY: Record<Phase, string> = {
+  paying: "Confirming payment on-chain…",
   signing: "Waiting for your signature…",
   applying: "Applying the new look…",
 };
+
+const FEE_SOL = SKIN_FEE_LAMPORTS / 1_000_000_000;
 
 /**
  * Message bytes plus the timestamp sent alongside them. Module scope because
@@ -36,7 +54,13 @@ function buildMessage(asset: string, skin: string): { bytes: Uint8Array; issuedA
 
 async function readJson(
   res: Response,
-): Promise<{ ok?: boolean; error?: string; skin?: string | null; owned?: string[] }> {
+): Promise<{
+  ok?: boolean;
+  error?: string;
+  skin?: string | null;
+  customUri?: string | null;
+  owned?: string[];
+}> {
   const text = await res.text();
   if (!text) return { error: `Request failed (${res.status})` };
   try {
@@ -58,7 +82,9 @@ export function AssetSkinPicker({
   onSkinChange?: (skin: string) => void;
 }) {
   const { getSigner } = useWallet();
+  const program = useProgram();
   const [skin, setSkin] = useState<string>(DEFAULT_SKIN_ID);
+  const [customUri, setCustomUri] = useState<string | null>(null);
   const [owned, setOwned] = useState<string[]>([DEFAULT_SKIN_ID]);
   const [busy, setBusy] = useState<{ id: string; phase: Phase } | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -75,6 +101,7 @@ export function AssetSkinPicker({
         if (!cancelled) {
           const current = json.skin ?? DEFAULT_SKIN_ID;
           setSkin(current);
+          setCustomUri(json.customUri ?? null);
           setOwned(json.owned ?? [DEFAULT_SKIN_ID]);
           onSkinChange?.(current);
         }
@@ -89,12 +116,42 @@ export function AssetSkinPicker({
     };
   }, [cls, asset, owner, onSkinChange]);
 
-  async function choose(id: string) {
-    if (id === skin || busy) return;
-    if (!owned.includes(id)) {
-      setErr("Unlock this skin on your verification badge first — then it's yours to wear here.");
-      return;
-    }
+  /**
+   * Unlock a skin by paying the treasury.
+   *
+   * Buying used to live only on the verification badge, which left this picker
+   * a dead end for any wallet without one: every tile locked, and clicking did
+   * nothing. Unlocking is wallet-level, so it belongs here too.
+   */
+  async function unlock(id: string): Promise<void> {
+    if (!program) throw new Error("Connect a wallet to unlock skins.");
+    const global = await fetchGlobal(program);
+    if (!global?.treasury) throw new Error("Couldn't read the protocol treasury.");
+
+    setBusy({ id, phase: "paying" });
+    const tx = new Transaction().add(
+      SystemProgram.transfer({
+        fromPubkey: new PublicKey(owner),
+        toPubkey: new PublicKey(global.treasury),
+        lamports: SKIN_FEE_LAMPORTS,
+      }),
+    );
+    const signature = await program.provider.sendAndConfirm!(tx, [], { commitment: "confirmed" });
+
+    const res = await fetch("/api/skins/buy", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ owner, skin: id, signature }),
+    });
+    const json = await readJson(res);
+    // 409 means the signature was already redeemed — the unlock landed.
+    if (!res.ok && res.status !== 409) throw new Error(json.error ?? "Could not unlock skin");
+    setOwned((prev) => (prev.includes(id) ? prev : [...prev, id]));
+  }
+
+  async function choose(id: string, uri?: string) {
+    if (busy) return;
+    if (id === skin && id !== CUSTOM_SKIN_ID) return;
     const provider = getSigner();
     if (!provider?.signMessage) {
       setErr("This wallet can't sign messages, so skins can't be changed here.");
@@ -102,8 +159,12 @@ export function AssetSkinPicker({
     }
 
     setErr(null);
-    setBusy({ id, phase: "signing" });
     try {
+      // Signature is earned, never sold, so it's the one id that must not be
+      // routed through a purchase.
+      if (!owned.includes(id) && id !== CUSTOM_SKIN_ID) await unlock(id);
+
+      setBusy({ id, phase: "signing" });
       const { bytes, issuedAt } = buildMessage(asset, id);
       const raw = await provider.signMessage(bytes);
       // Wallets disagree on the shape: some return bytes, some wrap them.
@@ -120,11 +181,13 @@ export function AssetSkinPicker({
           owner,
           messageSignature: bs58.encode(sig),
           issuedAt,
+          ...(uri ? { customUri: uri } : {}),
         }),
       });
       const json = await readJson(res);
       if (!res.ok || !json.ok) throw new Error(json.error ?? "Could not apply skin");
       setSkin(id);
+      if (uri) setCustomUri(uri);
       onSkinChange?.(id);
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Could not apply skin");
@@ -162,7 +225,7 @@ export function AssetSkinPicker({
               key={s.id}
               onClick={() => void choose(s.id)}
               disabled={busy !== null}
-              title={isOwned ? s.blurb : `${s.name} — unlock on your verification badge`}
+              title={isOwned ? s.blurb : `${s.name} — ${FEE_SOL} SOL to unlock, yours forever`}
               className={cn(
                 "flex items-center gap-1.5 rounded-sm border px-2 py-1.5 transition-colors disabled:opacity-50",
                 isActive ? "border-signal bg-signal/10" : "border-white/10 hover:border-white/25",
@@ -187,17 +250,29 @@ export function AssetSkinPicker({
               ) : isActive ? (
                 <Check className="h-2.5 w-2.5 shrink-0 text-signal" />
               ) : !isOwned ? (
-                <Lock className="h-2.5 w-2.5 shrink-0 text-[#4b5563]" />
+                <span className="inline-flex shrink-0 items-center gap-0.5 font-mono text-[9px] text-[#4b5563]">
+                  <Lock className="h-2.5 w-2.5" />
+                  {FEE_SOL}
+                </span>
               ) : null}
             </button>
           );
         })}
       </div>
 
+      <SignatureField
+        owned={owned}
+        active={skin === CUSTOM_SKIN_ID}
+        currentUri={customUri}
+        busy={busy?.id === CUSTOM_SKIN_ID}
+        onApply={(uri) => void choose(CUSTOM_SKIN_ID, uri)}
+      />
+
       {err && <p className="mt-2 font-mono text-[10px] leading-relaxed text-noise">{err}</p>}
 
       <p className="mt-2 font-mono text-[10px] text-[#4b5563]">
-        Wearing {active.name} · free to switch between skins you&apos;ve unlocked.
+        Wearing {skin === CUSTOM_SKIN_ID ? CUSTOM_SKIN.name : active.name} · free to switch
+        between skins you&apos;ve unlocked.
       </p>
     </div>
   );

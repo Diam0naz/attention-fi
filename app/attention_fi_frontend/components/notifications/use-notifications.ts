@@ -39,6 +39,24 @@ interface SaleFact {
   blockTime: number | null;
 }
 
+/**
+ * Whether Signature has unlocked for this wallet.
+ *
+ * Worth a notification where a purchase isn't: buying a skin is something you
+ * just did and watched happen, but crossing the last one into Signature is a
+ * threshold you'd otherwise have to notice yourself.
+ */
+async function fetchSignatureUnlocked(subject: string): Promise<boolean> {
+  try {
+    const res = await fetch(`/api/verification/skin?subject=${subject}`);
+    if (!res.ok) return false;
+    const body = (await res.json()) as { customUnlocked?: boolean };
+    return body.customUnlocked === true;
+  } catch {
+    return false;
+  }
+}
+
 async function fetchSaleFacts(): Promise<Map<string, SaleFact>> {
   const out = new Map<string, SaleFact>();
   try {
@@ -140,6 +158,7 @@ export function useNotifications(): Notifications {
   // doesn't exist until the recipient mints it, so silence here means a
   // granted discount is simply never collected.
   const [grant, setGrant] = useState<PerkGrantData | null>(null);
+  const [signatureUnlocked, setSignatureUnlocked] = useState(false);
   const [seen, setSeen] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
   const [nonce, setNonce] = useState(0);
@@ -161,15 +180,17 @@ export function useNotifications(): Notifications {
       try {
         // Independent sources: the PDAs say what happened, the events say for
         // how much. Losing the second must not cost the first.
-        const [list, facts, pending] = await Promise.all([
+        const [list, facts, pending, unlocked] = await Promise.all([
           fetchNftOutcomes(program, new PublicKey(address)),
           fetchSaleFacts(),
           fetchPerkGrant(program, new PublicKey(address)),
+          fetchSignatureUnlocked(address),
         ]);
         if (!cancelled) {
           setOutcomes(list);
           setSaleFacts(facts);
           setGrant(pending);
+          setSignatureUnlocked(unlocked);
           setSeen(readSeen(address));
         }
       } catch {
@@ -187,6 +208,21 @@ export function useNotifications(): Notifications {
   }, [address, program, nonce]);
 
   const items = outcomes.map((o) => toNotification(o, seen, saleFacts.get(o.asset)));
+
+  if (signatureUnlocked) {
+    // Stable id, so dismissing it keeps it dismissed rather than resurfacing
+    // on every poll.
+    const id = `signature-unlocked:${address ?? ""}`;
+    items.unshift({
+      id,
+      type: "graduation",
+      text: "You own every skin — Signature is unlocked. Put your own artwork on any NFT you hold.",
+      time: "unlocked",
+      read: seen.has(id),
+      href: "/nft/verification",
+      action: "Set your artwork",
+    });
+  }
 
   // Pinned first: it's the only item that needs the reader to do something,
   // and it disappears by itself once claimed (the grant account closes).
