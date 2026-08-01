@@ -24,6 +24,7 @@ import {
   isConnectionError,
 } from "@/lib/skin-db";
 import { isSkinClass, readNftFacts } from "@/lib/nft-metadata";
+import { clientKey, rateLimit, tooManyRequests } from "@/lib/rate-limit";
 import {
   CUSTOM_SKIN_ID,
   customSkinUnlocked,
@@ -69,6 +70,11 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
+    // Before the signature check: verifying ed25519 and reading the asset from
+    // chain both cost more than turning the request away does.
+    const limited = await rateLimit("skins:wear", clientKey(request));
+    if (!limited.ok) return tooManyRequests(limited);
+
     if (!skinDbConfigured()) {
       return NextResponse.json(
         { error: "Skins aren't configured on this deployment." },

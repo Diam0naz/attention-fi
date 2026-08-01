@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { addSignup, getLeaderboard, getStatus } from "@/lib/waitlist-store";
+import { clientKey, rateLimit, tooManyRequests } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -20,6 +21,11 @@ export async function GET(req: NextRequest) {
 
 /** POST /api/waitlist { email?, wallet?, ref? } -> status (+ duplicate flag) */
 export async function POST(req: NextRequest) {
+  // The only unauthenticated write in the app, so the only one where a single
+  // client can create unbounded rows without spending anything.
+  const limited = await rateLimit("waitlist", clientKey(req));
+  if (!limited.ok) return tooManyRequests(limited);
+
   let body: unknown;
   try {
     body = await req.json();

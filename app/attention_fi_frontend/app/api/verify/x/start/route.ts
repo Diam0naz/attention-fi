@@ -8,11 +8,17 @@ import {
   signOAuthState,
   xConfig,
 } from "@/lib/x-oauth";
+import { clientKey, rateLimit, tooManyRequests } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
 /** Begin the X OAuth flow: stash PKCE + wallet in a signed cookie, redirect to X. */
-export function GET(req: NextRequest) {
+export async function GET(req: NextRequest) {
+  // Each start burns an X API handshake against a quota that is not ours to
+  // refill, so a loop here degrades verification for everyone.
+  const limited = await rateLimit("verify:start", clientKey(req));
+  if (!limited.ok) return tooManyRequests(limited);
+
   const cfg = xConfig();
   if (!cfg) {
     return NextResponse.json({ error: "X OAuth is not configured on this server." }, { status: 503 });

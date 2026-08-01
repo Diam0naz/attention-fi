@@ -20,6 +20,7 @@ import { redeemSkinUnlock, skinDbConfigured,
   isConnectionError,
 } from "@/lib/skin-db";
 import { CUSTOM_SKIN_ID, isValidSkinId, SKIN_FEE_LAMPORTS } from "@/lib/nft-skins";
+import { clientKey, rateLimit, tooManyRequests } from "@/lib/rate-limit";
 
 const GLOBAL_SEED = Buffer.from("global");
 
@@ -28,6 +29,12 @@ const FEE_TOLERANCE_LAMPORTS = 1_000;
 
 export async function POST(request: Request) {
   try {
+    // Ahead of the body parse, because everything below is expensive: two RPC
+    // round trips to fetch the treasury and the payment transaction, before
+    // any of it can be rejected.
+    const limited = await rateLimit("skins:buy", clientKey(request));
+    if (!limited.ok) return tooManyRequests(limited);
+
     if (!skinDbConfigured()) {
       return NextResponse.json(
         { error: "Skins aren't configured on this deployment." },
