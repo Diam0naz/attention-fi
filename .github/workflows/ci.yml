@@ -1,0 +1,163 @@
+# Continuous integration.
+#
+# Two toolchains live in this repo and they fail in different ways, so they get
+# separate jobs rather than one script: a Rust job that can reject a program
+# before it is ever built for deploy, and a Next.js job for the app. The Anchor
+# test job is split out again because it is the slow one — it installs a Solana
+# toolchain and runs a validator — and there is no reason for a typo in a React
+# component to wait on that.
+#
+# Actions are pinned to commit SHAs, not tags: a tag can be moved to point at
+# new code, so `@v4` is a promise the author can break after the fact.
+
+name: CI
+
+on:
+  push:
+    branches: [main, v1]
+  pull_request:
+
+# Least privilege by default; no job here writes anything back to the repo.
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  SOLANA_VERSION: v3.1.12
+  ANCHOR_VERSION: 0.32.1
+
+jobs:
+  program-lint:
+    name: program — fmt & clippy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # No toolchain version here: rust-toolchain.toml pins it, and naming a
+      # second version in CI is how the two drift apart.
+      - uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
+        with:
+          toolchain: stable
+          components: rustfmt, clippy
+
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: cargo-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: cargo-${{ runner.os }}-
+
+      - name: cargo fmt
+        run: cargo fmt --all -- --check
+
+      # Deliberately not `--all-features`. switchboard-on-demand is pulled in
+      # with default-features off, and turning everything on drags in a second
+      # solana-program that collides with anchor-lang's — 42 resolution errors
+      # before a single lint is reported. The features this program actually
+      # compiles with are the ones worth linting.
+      - name: cargo clippy
+        run: cargo clippy --all-targets -- -D warnings
+
+  frontend:
+    name: frontend — types, lint, build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app/attention_fi_frontend
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/attention_fi_frontend/package-lock.json
+
+      - name: install
+        run: npm ci
+
+      - name: typecheck
+        run: npx tsc --noEmit
+
+      - name: lint
+        run: npm run lint
+
+      # Catches what tsc alone cannot: server/client boundary violations, bad
+      # route exports, and anything that only fails once Next compiles it.
+      - name: build
+        run: npm run build
+        env:
+          # The build reads these; supplying inert values keeps it honest about
+          # missing-variable handling without putting real secrets in CI.
+          NEXT_PUBLIC_SOLANA_CLUSTER: devnet
+          NEXT_PUBLIC_RPC_ENDPOINT: https://api.devnet.solana.com
+          NEXT_PUBLIC_PROGRAM_ID: 8fQW2JbfNytdjJ7LR8dvKWMUtpeQPRqxAa3JZvBLsVVc
+
+  anchor-test:
+    name: program — anchor test
+    runs-on: ubuntu-latest
+    # Installing the Solana and Anchor toolchains dominates this job; the tests
+    # themselves are quick once a validator is up.
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
+        with:
+          toolchain: stable
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            ~/.cargo/bin
+            ~/.local/share/solana
+            target
+          key: anchor-${{ runner.os }}-${{ env.SOLANA_VERSION }}-${{ env.ANCHOR_VERSION }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: anchor-${{ runner.os }}-${{ env.SOLANA_VERSION }}-${{ env.ANCHOR_VERSION }}-
+
+      - name: install solana
+        run: |
+          set -euo pipefail
+          if [ ! -x "$HOME/.local/share/solana/install/active_release/bin/solana" ]; then
+            sh -c "$(curl -sSfL https://release.anza.xyz/${SOLANA_VERSION}/install)"
+          fi
+          echo "$HOME/.local/share/solana/install/active_release/bin" >> "$GITHUB_PATH"
+
+      - name: install anchor
+        run: |
+          set -euo pipefail
+          if [ ! -x "$HOME/.cargo/bin/anchor" ]; then
+            cargo install --git https://github.com/coral-xyz/anchor \
+              --tag "v${ANCHOR_VERSION}" anchor-cli --locked
+          fi
+
+      - name: keypair
+        run: |
+          set -euo pipefail
+          solana-keygen new --no-bip39-passphrase --silent --force \
+            -o "$HOME/.config/solana/id.json"
+
+      - name: install js deps
+        run: yarn install --frozen-lockfile
+
+      # `anchor test` builds, starts a local validator, deploys, and runs the
+      # ts-mocha suite against it.
+      - name: anchor test
+        run: anchor test

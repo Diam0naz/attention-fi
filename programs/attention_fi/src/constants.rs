@@ -20,6 +20,10 @@ pub const GENESIS_SEED: &[u8] = b"genesis";
 pub const GENPOOL_SEED: &[u8] = b"genpool";
 pub const NFTAUCTION_SEED: &[u8] = b"nftauction";
 
+/// One SOL in lamports, so tiers below can be written in the unit their doc
+/// comments describe them in.
+pub const LAMPORTS_PER_SOL: u64 = 1_000_000_000;
+
 // ---- Perk NFTs ----
 /// Highest perk level reachable.
 pub const MAX_PERK_LEVEL: u8 = 5;
@@ -28,11 +32,11 @@ pub const DISCOUNT_PER_LEVEL_BPS: u16 = 100;
 /// Cumulative activity score (TraderStats::activity_score, lamports) required
 /// to reach each level. Index 0 = level 1's requirement, etc.
 pub const PERK_LEVEL_ACTIVITY_LAMPORTS: [u64; MAX_PERK_LEVEL as usize] = [
-    1 * 1_000_000_000,   // level 1: 1 SOL
-    5 * 1_000_000_000,   // level 2: 5 SOL
-    20 * 1_000_000_000,  // level 3: 20 SOL
-    75 * 1_000_000_000,  // level 4: 75 SOL
-    250 * 1_000_000_000, // level 5: 250 SOL
+    LAMPORTS_PER_SOL,       // level 1: 1 SOL
+    5 * LAMPORTS_PER_SOL,   // level 2: 5 SOL
+    20 * LAMPORTS_PER_SOL,  // level 3: 20 SOL
+    75 * LAMPORTS_PER_SOL,  // level 4: 75 SOL
+    250 * LAMPORTS_PER_SOL, // level 5: 250 SOL
 ];
 
 // Exposed in the IDL for clients that derive PDAs from the seed string.
@@ -56,7 +60,7 @@ pub const DEFAULT_FEE_BPS: u16 = 100;
 /// 5000 = 50% of a 1% fee => 0.5% to creator, 0.5% to protocol (per the brief).
 pub const DEFAULT_CREATOR_FEE_SHARE_BPS: u16 = 5000;
 /// Graduation trigger: real SOL raised into the curve (85 SOL).
-pub const DEFAULT_GRADUATION_SOL: u64 = 85 * 1_000_000_000;
+pub const DEFAULT_GRADUATION_SOL: u64 = 85 * LAMPORTS_PER_SOL;
 
 // ---- Conviction curve ----
 /// Default loyalty lock: 7 days in seconds.
