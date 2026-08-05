@@ -1,13 +1,23 @@
 import { X_HANDLE, X_URL } from "@/lib/config";
 import { Logo } from "@/components/brand/logo";
+import { V0_GATE } from "@/lib/v0-gate";
 
-const PRODUCT = [
+const APP_PRODUCT = [
   { label: "Discover", href: "/discover" },
   { label: "Terminal", href: "/terminal" },
   { label: "Launch", href: "/launch" },
   { label: "NFT", href: "/nft" },
   { label: "Profile", href: "/profile" },
 ];
+
+/** Gated deployments link to the landing-page sections instead. */
+const V0_PRODUCT = [
+  { label: "Thesis", href: "/#thesis" },
+  { label: "Mechanism Design", href: "/#mechanism" },
+  { label: "Verticals", href: "/#verticals" },
+];
+
+const PRODUCT = V0_GATE ? V0_PRODUCT : APP_PRODUCT;
 
 export function Footer() {
   return (

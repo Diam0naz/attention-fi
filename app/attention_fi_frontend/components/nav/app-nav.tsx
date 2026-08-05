@@ -11,13 +11,24 @@ import { NotificationsBell } from "@/components/notifications/notifications-bell
 import { refreshSolUsd } from "@/lib/solana/sol-usd";
 import { syncRegistry } from "@/lib/solana/registry";
 import { cn } from "@/lib/utils";
+import { V0_GATE } from "@/lib/v0-gate";
 
-const LINKS = [
+const APP_LINKS = [
   { label: "Discover", href: "/discover" },
   { label: "Terminal", href: "/terminal" },
   { label: "Launch", href: "/launch" },
   { label: "NFT", href: "/nft" },
 ] as const;
+
+/** On the gated deployment the app surfaces redirect, so point at the story
+ *  instead — offering a link the proxy will bounce is worse than no link. */
+const V0_LINKS = [
+  { label: "Thesis", href: "/#thesis" },
+  { label: "Mechanism Design", href: "/#mechanism" },
+  { label: "Verticals", href: "/#verticals" },
+] as const;
+
+const LINKS: readonly { label: string; href: string }[] = V0_GATE ? V0_LINKS : APP_LINKS;
 
 /** The link set, shared by the desktop centre row and the mobile scroll row. */
 function NavLinks({ pathname }: { pathname: string }) {
