@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { PublicKey, Transaction } from "@solana/web3.js";
 import { ChevronDown, Loader2, PackageOpen, Plus, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -348,6 +349,28 @@ export function CollectionShelf({
             and Core refuses to move them.
           </Notice>
 
+          {/* An empty picker is a dead end unless it says why. The wallet
+              either holds nothing standalone, or everything it holds is
+              already here — different situations, and only one of them is
+              solved by minting. */}
+          {movable.length === 0 && (
+            <div className="mt-3 rounded-sm border border-dashed border-white/12 p-6 text-center">
+              <p className="font-mono text-[11px] text-[#6B6B6B]">
+                {candidates.length === 0
+                  ? "No NFTs in this wallet to add yet."
+                  : "Everything you hold is already in this collection."}
+              </p>
+              {candidates.length === 0 && (
+                <Link
+                  href="/nft/create"
+                  className="mt-2 inline-block font-mono text-[11px] font-bold text-signal"
+                >
+                  Mint one →
+                </Link>
+              )}
+            </div>
+          )}
+
           <div className="mt-3 grid grid-cols-3 gap-2.5 sm:grid-cols-5">
             {movable.map((m) => {
               const isChosen = chosen.has(m.asset);
@@ -383,6 +406,7 @@ export function CollectionShelf({
 
           {err && <p className="mt-2 font-mono text-[10px] text-noise">{err}</p>}
 
+          {movable.length > 0 && (
           <button
             onClick={() => void addChosen()}
             disabled={busy || chosen.size === 0}
@@ -394,6 +418,7 @@ export function CollectionShelf({
               : `ADD ${chosen.size || ""}`.trim() +
                 (chosen.size > BATCH ? ` · ${Math.ceil(chosen.size / BATCH)} txs` : "")}
           </button>
+          )}
         </div>
       )}
     </div>
