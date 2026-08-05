@@ -13,6 +13,7 @@ import { useProgram, useReadonlyProgram } from "@/lib/solana/use-program";
 import { useIsAdmin } from "@/lib/solana/use-admin";
 import { fetchGlobal } from "@/lib/solana/curve";
 import { explorerAddress, explorerTx } from "@/lib/solana/config";
+import { Notice } from "@/components/ui/notice";
 import {
   fetchClaimedPerks,
   fetchPerkGrants,
@@ -278,6 +279,25 @@ export function AdminView() {
         <p className="mt-2 font-mono text-[11px] text-noise">Couldn&apos;t read Global.</p>
       )}
 
+      {/* Two facts the console can't act on but shouldn't hide: which of these
+          values are frozen, and that the most consequential action of all
+          deliberately isn't a button here. */}
+      <Notice tone="info" title="WHAT THIS PAGE CAN AND CAN'T CHANGE" className="mt-3 max-w-2xl">
+        Fees and the graduation threshold are written at <code>initialize</code> and have no
+        setter — changing them needs a program upgrade. Authority transfer is deliberately not a
+        button: the program requires the incoming wallet to sign too, so it runs from{" "}
+        <code>scripts/set-authority.ts</code> where both signatures can be collected. That
+        requirement is what stops authority being sent to a mistyped address nobody controls.
+      </Notice>
+
+      {config && config.authority === config.treasury && (
+        <Notice tone="caution" title="AUTHORITY AND TREASURY ARE THE SAME WALLET" className="mt-2 max-w-2xl">
+          Protocol fees accrue to the key that can also change protocol settings. Workable for
+          testing; worth separating before real money moves, so a compromised operator key
+          doesn&apos;t also drain the treasury.
+        </Notice>
+      )}
+
       {/* ── perk grants ────────────────────────────────────────── */}
       <h2 className="mt-8 text-[13px] font-bold">Grant perks</h2>
       <p className="mt-1 max-w-2xl text-[11px] leading-relaxed text-[#6B6B6B]">
@@ -432,10 +452,13 @@ export function AdminView() {
       {/* ── issuer ─────────────────────────────────────────────── */}
       <h2 className="mt-8 text-[13px] font-bold">Attestation issuer</h2>
       <p className="mt-1 max-w-2xl text-[11px] leading-relaxed text-[#6B6B6B]">
-        The key whose SAS attestations <code>verify_handle</code> will accept. Changing it
-        invalidates verification requests signed by the previous issuer, so rotate it only
-        alongside the backend that holds it.
+        The key whose SAS attestations <code>verify_handle</code> will accept.
       </p>
+      <Notice tone="danger" title="ROTATING THIS BREAKS VERIFICATION IN FLIGHT" className="mt-2 max-w-2xl">
+        Attestations signed by the previous issuer stop being accepted the moment this lands.
+        Anyone mid-verification has to start over, and the backend holding the old key can no
+        longer issue badges until it is updated to match. Rotate the key and the backend together.
+      </Notice>
       <div className="mt-2 flex max-w-xl gap-1.5">
         <input
           value={issuer}

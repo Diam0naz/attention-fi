@@ -15,6 +15,7 @@ import {
   skinMessage,
 } from "@/lib/nft-skins";
 import { SignatureField } from "@/components/nft/signature-field";
+import { Notice } from "@/components/ui/notice";
 import { useProgram } from "@/lib/solana/use-program";
 import { fetchGlobal } from "@/lib/solana/curve";
 import { PublicKey, SystemProgram, Transaction } from "@solana/web3.js";
@@ -269,6 +270,17 @@ export function AssetSkinPicker({
       />
 
       {err && <p className="mt-2 font-mono text-[10px] leading-relaxed text-noise">{err}</p>}
+
+      {/* Said before the wallet prompt, not after: the thing worth knowing is
+          that the fee buys the skin outright rather than renting it, and that
+          it unlocks for the wallet rather than for this one NFT. */}
+      {lockedCount > 0 && (
+        <Notice tone="caution" title={`${FEE_SOL} SOL — ONE PAYMENT, YOURS FOREVER`} className="mt-3">
+          Unlocking charges the treasury fee once. The skin then belongs to your wallet, not to
+          this NFT — wear it on anything you hold, switch back and forth free, and keep it if you
+          sell this one.
+        </Notice>
+      )}
 
       <p className="mt-2 font-mono text-[10px] text-[#4b5563]">
         Wearing {skin === CUSTOM_SKIN_ID ? CUSTOM_SKIN.name : active.name} · free to switch
