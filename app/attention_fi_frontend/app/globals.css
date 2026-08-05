@@ -252,6 +252,30 @@
 .af-orbit-rev { animation: af-spin-rev 64s linear infinite; transform-box: fill-box; transform-origin: center; }
 .af-orbit-fast { animation: af-spin 26s linear infinite; transform-box: fill-box; transform-origin: center; }
 
+/* Page scrollbar.
+   The horizontal shelves and the terminal were themed; the window itself
+   wasn't, so every page carried a light OS bar down the right edge of a near
+   black canvas — the brightest thing on screen, and never the point.
+   Applied at the root so nested scrollers inherit it, with the two named
+   classes below still free to override. */
+html {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.14) transparent;
+}
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background-color: rgba(255, 255, 255, 0.14);
+  border-radius: 9999px;
+  /* Inset via a transparent border so the thumb reads as a slim pill rather
+     than filling the gutter edge to edge. */
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover { background-color: rgba(0, 255, 133, 0.35); }
+/* Where both axes scroll, the default corner is an opaque light square. */
+::-webkit-scrollbar-corner { background: transparent; }
+
 /* Themed scrollbar for horizontal shelves (curated feed rows, etc.) —
    replaces the default OS scrollbar that clashes with the dark canvas. */
 .af-scrollbar-x {

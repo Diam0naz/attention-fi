@@ -732,11 +732,15 @@ export function NftManage({ section }: { section: Section }) {
               return (
               <div key={g.asset} className="rounded-sm border border-white/[0.08] bg-[#0f1620] p-4">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-                <button onClick={() => setSelected(card)} className="w-28 shrink-0 self-center sm:self-auto">
+                {/* w-44, matching the verification badge and the create-flow
+                    preview. At the w-28 this used to be, NftCardFace's p-4 left
+                    only 80px of content and the share figure printed over the
+                    id and the wordmark. */}
+                <button onClick={() => setSelected(card)} className="w-44 max-w-full shrink-0 self-center sm:self-auto">
                   <NftCardFace data={card} />
                 </button>
-                <div className="flex-1">
-                  <div className="font-mono text-[13px] font-bold">{g.id}</div>
+                <div className="min-w-0 flex-1">
+                  <div className="truncate font-mono text-[13px] font-bold">{g.id}</div>
                   <div className="mt-0.5 font-mono text-[11px] text-[#6B6B6B]">{(g.shareBps / 100).toFixed(1)}% revenue share</div>
                   <div className="mt-2 font-mono text-[10px] text-[#6B6B6B]">CLAIMABLE</div>
                   <div className="font-mono text-[18px] font-bold text-signal">{sol(g.claimableLamports)} SOL</div>
