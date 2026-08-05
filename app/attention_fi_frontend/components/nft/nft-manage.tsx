@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Keypair, PublicKey, Transaction } from "@solana/web3.js";
 import { BN } from "@anchor-lang/core";
@@ -124,6 +124,7 @@ export function NftManage({ section }: { section: Section }) {
   const [collections, setCollections] = useState<CollectionData[]>([]);
   const [collectionsNonce, setCollectionsNonce] = useState(0);
   const [newCollectionName, setNewCollectionName] = useState("");
+  const newCollectionRef = useRef<HTMLInputElement | null>(null);
   const [creatingCollection, setCreatingCollection] = useState(false);
 
   // Re-entering the auctions tab shows a spinner rather than the previous
@@ -878,12 +879,34 @@ export function NftManage({ section }: { section: Section }) {
                   onChanged={() => setCollectionsNonce((n) => n + 1)}
                 />
               ))}
+              {/* A new-collection pack in the same row as the real ones, so
+                  creating is a peer action rather than a form further down. */}
+              <button
+                onClick={() => {
+                  newCollectionRef.current?.focus();
+                  newCollectionRef.current?.scrollIntoView({ block: "center" });
+                }}
+                className="group flex items-center gap-4 rounded-sm border border-dashed border-white/[0.08] p-4 text-left transition-colors hover:border-signal/40"
+              >
+                <span className="af-pack-empty flex h-24 w-[72px] shrink-0 flex-col items-center justify-center gap-1 rounded-md border border-dashed border-white/12 group-hover:border-signal/40">
+                  <Plus className="h-4 w-4 text-[#4b5563] transition-colors group-hover:text-signal" />
+                </span>
+                <span>
+                  <span className="block text-[13px] font-bold text-[#6B6B6B] transition-colors group-hover:text-[#F5F4F0]">
+                    New collection
+                  </span>
+                  <span className="mt-0.5 block font-mono text-[10px] text-[#4b5563]">
+                    Group NFTs you already hold
+                  </span>
+                </span>
+              </button>
             </div>
           ) : null}
 
           <h2 className="mt-8 text-[13px] font-bold">New collection</h2>
           <div className="mt-2 flex max-w-md gap-1.5">
             <input
+              ref={newCollectionRef}
               value={newCollectionName}
               onChange={(e) => setNewCollectionName(e.target.value.slice(0, 64))}
               placeholder="New collection name"

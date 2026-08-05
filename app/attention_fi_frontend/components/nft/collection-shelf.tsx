@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { PublicKey, Transaction } from "@solana/web3.js";
-import { ChevronDown, Layers, Loader2, PackageOpen, Plus, Trash2 } from "lucide-react";
+import { ChevronDown, Loader2, PackageOpen, Plus, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { NftCardFace, type NftCardData } from "@/components/nft/nft-card";
 import { Notice } from "@/components/ui/notice";
@@ -191,15 +191,24 @@ export function CollectionShelf({
             Both states are pure transforms so the animation stays on the
             compositor — see .af-pack-card in globals.css. */}
         <button
-          onClick={() => setOpen((o) => !o)}
-          aria-expanded={open}
-          aria-label={`${open ? "Hide" : "Show"} ${collection.name} contents`}
+          // An empty pack has no contents to reveal, so tapping it does the
+          // only useful thing instead: opens the picker. The sleeve doubles as
+          // the affordance rather than sitting there as decoration.
+          onClick={() => (isEmpty ? setPicking(true) : setOpen((o) => !o))}
+          aria-expanded={isEmpty ? undefined : open}
+          aria-label={
+            isEmpty
+              ? `Add NFTs to ${collection.name}`
+              : `${open ? "Hide" : "Show"} ${collection.name} contents`
+          }
           className="group relative h-24 w-[72px] shrink-0"
         >
           {cover.length === 0 ? (
-            <div className="af-pack-empty flex h-full w-full flex-col items-center justify-center gap-1 rounded-md border border-dashed border-white/12 group-hover:border-white/25">
-              <Layers className="h-4 w-4 text-[#4b5563]" />
-              <span className="font-mono text-[8px] tracking-[0.12em] text-[#4b5563]">EMPTY</span>
+            <div className="af-pack-empty flex h-full w-full flex-col items-center justify-center gap-1 rounded-md border border-dashed border-white/12 group-hover:border-signal/40">
+              <Plus className="h-4 w-4 text-[#4b5563] transition-colors group-hover:text-signal" />
+              <span className="font-mono text-[8px] tracking-[0.12em] text-[#4b5563] transition-colors group-hover:text-signal">
+                ADD
+              </span>
             </div>
           ) : (
             cover.map((m, i) => {
