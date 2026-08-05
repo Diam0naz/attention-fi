@@ -122,6 +122,9 @@ export function NftManage({ section }: { section: Section }) {
   const listableAssets = address && listable.owner === address ? listable.assets : [];
   // Collections this wallet is the update authority for.
   const [collections, setCollections] = useState<CollectionData[]>([]);
+  // null until the first read lands: an empty array and "not read yet"
+  // are different claims, and only one of them should say "none".
+  const [collectionsLoaded, setCollectionsLoaded] = useState(false);
   const [collectionsNonce, setCollectionsNonce] = useState(0);
   const [newCollectionName, setNewCollectionName] = useState("");
   const newCollectionRef = useRef<HTMLInputElement | null>(null);
@@ -303,7 +306,10 @@ export function NftManage({ section }: { section: Section }) {
     let cancelled = false;
     void (async () => {
       const list = await fetchCollections(readProgram, new PublicKey(address)).catch(() => []);
-      if (!cancelled) setCollections(list);
+      if (!cancelled) {
+        setCollections(list);
+        setCollectionsLoaded(true);
+      }
     })();
     return () => {
       cancelled = true;
@@ -862,7 +868,23 @@ export function NftManage({ section }: { section: Section }) {
             time, or move assets in and out here afterwards.
           </p>
 
-          {collections.length === 0 ? (
+          {!collectionsLoaded ? (
+            <div className="mt-4 flex flex-col gap-2.5">
+              {[0, 1].map((i) => (
+                <div
+                  key={i}
+                  className="flex items-start gap-4 rounded-sm border border-white/[0.08] bg-[#0f1620] p-4"
+                >
+                  <div className="af-skeleton h-24 w-[72px] shrink-0 rounded-md" />
+                  <div className="flex-1 space-y-2 pt-1">
+                    <div className="af-skeleton h-3 w-32 rounded-sm" />
+                    <div className="af-skeleton h-2.5 w-44 rounded-sm" />
+                    <div className="af-skeleton h-6 w-24 rounded-sm" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : collections.length === 0 ? (
             <div className="mt-4 rounded-sm border border-dashed border-white/12 p-8 text-center font-mono text-[11px] text-[#6B6B6B]">
               No collections yet. Create one below, then add NFTs you already hold.
             </div>
@@ -874,6 +896,7 @@ export function NftManage({ section }: { section: Section }) {
                   collection={c}
                   owner={address}
                   candidates={listableAssets}
+                  ownedCollections={collections.map((x) => x.address)}
                   // Sizes come from the collection account, so a move has to
                   // re-read them or the counts stay one action behind.
                   onChanged={() => setCollectionsNonce((n) => n + 1)}

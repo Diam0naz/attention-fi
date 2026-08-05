@@ -43,11 +43,15 @@ export function CollectionShelf({
   owner,
   /** Assets the wallet holds that could be moved in. */
   candidates,
+  /** Every collection this wallet controls — an asset sitting in one of these
+   *  can be moved out, because the wallet can authorise on its behalf. */
+  ownedCollections,
   onChanged,
 }: {
   collection: CollectionData;
   owner: string;
   candidates: OwnedAsset[];
+  ownedCollections: string[];
   onChanged: () => void;
 }) {
   const readProgram = useReadonlyProgram();
@@ -75,9 +79,26 @@ export function CollectionShelf({
     };
   }, [readProgram, collection.address, nonce]);
 
-  // Anything already here can't be added again; everything else the wallet
-  // holds is fair game, including assets sitting in another of its collections.
-  const movable = candidates.filter((c) => c.collection !== collection.address);
+  /**
+   * Assets this wallet can actually move into the collection.
+   *
+   * Owning an asset is not enough. Core authorises UpdateV2 against the
+   * asset's update authority, so an NFT you bought stays transferable but not
+   * re-collectable — its authority is still whoever minted it. Offering those
+   * looked fine until submit, then failed the whole batch with NoApprovals
+   * (0x1a), taking the assets that would have worked down with it.
+   *
+   * Two cases pass: the wallet is the asset's own authority, or the asset sits
+   * in a collection the wallet controls (so it can authorise the move out).
+   */
+  const controlled = candidates.filter(
+    (c) =>
+      c.updateAuthority === owner ||
+      (c.collection !== null && ownedCollections.includes(c.collection)),
+  );
+  const movable = controlled.filter((c) => c.collection !== collection.address);
+  /** Held but not movable — worth counting so the gap is explained, not hidden. */
+  const notMovable = candidates.length - controlled.length;
 
   async function addChosen() {
     if (!program || chosen.size === 0) return;
@@ -180,6 +201,7 @@ export function CollectionShelf({
     }
   }
 
+  const loading = members === null;
   const cover = (members ?? []).slice(0, 3);
   // Core refuses to burn a collection that still holds assets, so the button
   // waits for the count rather than offering an action that would revert.
@@ -196,15 +218,37 @@ export function CollectionShelf({
           // only useful thing instead: opens the picker. The sleeve doubles as
           // the affordance rather than sitting there as decoration.
           onClick={() => (isEmpty ? setPicking(true) : setOpen((o) => !o))}
+          disabled={loading}
+          aria-busy={loading}
           aria-expanded={isEmpty ? undefined : open}
           aria-label={
-            isEmpty
-              ? `Add NFTs to ${collection.name}`
-              : `${open ? "Hide" : "Show"} ${collection.name} contents`
+            loading
+              ? `Reading ${collection.name}`
+              : isEmpty
+                ? `Add NFTs to ${collection.name}`
+                : `${open ? "Hide" : "Show"} ${collection.name} contents`
           }
           className="group relative h-24 w-[72px] shrink-0"
         >
-          {cover.length === 0 ? (
+          {loading ? (
+            // A loading pack must not look like an empty one — otherwise it
+            // offers "+ ADD" for a collection that may be full, and the label
+            // changes under the cursor when the read lands. Same deck shape,
+            // no contents claimed.
+            <>
+              {[0, 1, 2].map((i) => (
+                <div
+                  key={i}
+                  className="af-skeleton absolute inset-0 rounded-xl border border-white/[0.06]"
+                  style={{
+                    transform: `translate3d(${i * 3}px, ${i * -2}px, 0) rotate(${(i - 1) * 2.5}deg)`,
+                    zIndex: 3 - i,
+                    animationDelay: `${i * 140}ms`,
+                  }}
+                />
+              ))}
+            </>
+          ) : cover.length === 0 ? (
             <div className="af-pack-empty flex h-full w-full flex-col items-center justify-center gap-1 rounded-md border border-dashed border-white/12 group-hover:border-signal/40">
               <Plus className="h-4 w-4 text-[#4b5563] transition-colors group-hover:text-signal" />
               <span className="font-mono text-[8px] tracking-[0.12em] text-[#4b5563] transition-colors group-hover:text-signal">
@@ -258,7 +302,7 @@ export function CollectionShelf({
           <div className="mt-2.5 flex flex-wrap gap-1.5">
             <button
               onClick={() => setPicking((p) => !p)}
-              disabled={movable.length === 0 || busy}
+              disabled={movable.length === 0 || busy || loading}
               className="inline-flex items-center gap-1 rounded-sm border border-signal/40 bg-signal/10 px-2.5 py-1.5 font-mono text-[10px] font-bold text-signal disabled:cursor-not-allowed disabled:opacity-40"
             >
               <Plus className="h-3 w-3" />
@@ -358,7 +402,9 @@ export function CollectionShelf({
               <p className="font-mono text-[11px] text-[#6B6B6B]">
                 {candidates.length === 0
                   ? "No NFTs in this wallet to add yet."
-                  : "Everything you hold is already in this collection."}
+                  : notMovable === candidates.length
+                    ? "None of your NFTs can be moved — a collection can only take assets you're the update authority for, and these were minted by someone else."
+                    : "Everything you can move is already in this collection."}
               </p>
               {candidates.length === 0 && (
                 <Link

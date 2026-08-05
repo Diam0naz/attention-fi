@@ -19,17 +19,33 @@ const KEY_COLLECTION_V1 = 5;
  * this narrow. `collection` is set only when UpdateAuthority::Collection(_) —
  * i.e. the asset genuinely belongs to an mpl-core collection, tag byte 2.
  */
-export function decodeAsset(
-  data: Buffer,
-): { owner: string; name: string; uri: string; collection: string | null } | null {
+export function decodeAsset(data: Buffer): {
+  owner: string;
+  name: string;
+  uri: string;
+  collection: string | null;
+  /**
+   * Whoever may change this asset — Address(pubkey) for a standalone asset, or
+   * the collection when it belongs to one.
+   *
+   * Distinct from `owner`, and the distinction is load-bearing: Core authorises
+   * UpdateV2 against the update authority, so an asset you bought is yours to
+   * transfer but not yours to move between collections. Offering those in a
+   * collection picker produced NoApprovals (0x1a) at simulation.
+   */
+  updateAuthority: string | null;
+} | null {
   try {
     const owner = new PublicKey(data.subarray(1, 33)).toBase58();
     let offset = 1 + 32; // key + owner
     const authorityTag = data.readUInt8(offset);
     offset += 1;
     let collection: string | null = null;
+    let updateAuthority: string | null = null;
     if (authorityTag !== 0) {
-      if (authorityTag === 2) collection = new PublicKey(data.subarray(offset, offset + 32)).toBase58();
+      const key = new PublicKey(data.subarray(offset, offset + 32)).toBase58();
+      updateAuthority = key;
+      if (authorityTag === 2) collection = key;
       offset += 32; // Address(Pubkey) or Collection(Pubkey)
     }
 
@@ -42,7 +58,7 @@ export function decodeAsset(
     offset += 4;
     const uri = data.subarray(offset, offset + uriLen).toString("utf8");
 
-    return { owner, name, uri, collection };
+    return { owner, name, uri, collection, updateAuthority };
   } catch {
     return null;
   }
@@ -118,6 +134,7 @@ export async function fetchCollectionAssets(
       name: decoded.name || short(pubkey.toBase58()),
       uri: decoded.uri || undefined,
       collection: decoded.collection,
+      updateAuthority: decoded.updateAuthority,
     });
   }
   return out;
@@ -240,6 +257,8 @@ export interface OwnedAsset {
   name: string;
   uri?: string;
   collection: string | null;
+  /** Who may change it — see decodeAsset. Null only for renounced authority. */
+  updateAuthority: string | null;
 }
 
 /**
@@ -276,6 +295,7 @@ async function fetchStandaloneAssets(
       name: decoded.name || short(key),
       uri: decoded.uri || undefined,
       collection: decoded.collection,
+      updateAuthority: decoded.updateAuthority,
     });
   }
   return out;

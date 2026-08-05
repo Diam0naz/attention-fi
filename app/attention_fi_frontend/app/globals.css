@@ -252,6 +252,22 @@
 .af-orbit-rev { animation: af-spin-rev 64s linear infinite; transform-box: fill-box; transform-origin: center; }
 .af-orbit-fast { animation: af-spin 26s linear infinite; transform-box: fill-box; transform-origin: center; }
 
+/* Skeleton for content still being read from chain. A slow, low-contrast
+   pulse — opacity only, so it composites without repainting and stays cheap
+   on Android. Held still entirely under reduced motion, where the shape alone
+   is enough to say "not yet". */
+.af-skeleton {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02));
+  animation: af-skeleton-pulse 1.8s ease-in-out infinite;
+}
+@keyframes af-skeleton-pulse {
+  0%, 100% { opacity: 0.45; }
+  50%      { opacity: 0.85; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .af-skeleton { animation: none; opacity: 0.6; }
+}
+
 /* Card pack — the cover of a collection.
    Closed it reads as a sealed deck; opening fans it. Only transform and
    opacity are animated, both compositor-only, because the alternative
