@@ -29,6 +29,7 @@ import {
 import {
   CUSTOM_SKIN_ID,
   customSkinUnlocked,
+  ownedWithDefault,
   DEFAULT_SKIN_ID,
   isValidSkinId,
   normalizeCustomUri,
@@ -50,15 +51,15 @@ export async function GET(request: Request) {
     const [sel, owned] = await Promise.all([getSkinWithUri(subject), getOwnedSkins(subject)]);
     // The default is always owned — it's what a badge wears before anything is
     // bought, so charging to go back to it would be charging twice for nothing.
-    if (!owned.includes(DEFAULT_SKIN_ID)) owned.push(DEFAULT_SKIN_ID);
+    const held = ownedWithDefault(owned);
     // Signature is earned by collecting the rest, so it's derived here rather
     // than trusted from a row.
-    const unlocked = customSkinUnlocked(owned);
-    if (unlocked && !owned.includes(CUSTOM_SKIN_ID)) owned.push(CUSTOM_SKIN_ID);
+    const unlocked = customSkinUnlocked(held);
+    if (unlocked && !held.includes(CUSTOM_SKIN_ID)) held.push(CUSTOM_SKIN_ID);
     return NextResponse.json({
       skin: sel.skin,
       customUri: sel.customUri,
-      owned,
+      owned: held,
       customUnlocked: unlocked,
     });
   } catch {

@@ -143,15 +143,39 @@ export const CUSTOM_SKIN = {
   blurb: "Your own artwork. Unlocks once you own every other skin.",
 } as const;
 
-/** True once `owned` covers the whole catalogue, which is what unlocks it. */
+/**
+ * Ownership as it actually stands, given the default is free.
+ *
+ * The database only records skins someone paid for, so a wallet that bought
+ * the other four has no row for the default — it never needed one. Any check
+ * that reads rows directly therefore has to add it back, and both the read and
+ * the write path must do so identically.
+ *
+ * They didn't: the GET routes pushed the default in before testing, the POST
+ * routes tested the raw rows. A wallet owning everything was shown Signature
+ * unlocked and then refused with 402 when it applied — the UI and the server
+ * disagreeing about the same wallet.
+ */
+export function ownedWithDefault(owned: readonly string[]): string[] {
+  return owned.includes(DEFAULT_SKIN_ID) ? [...owned] : [...owned, DEFAULT_SKIN_ID];
+}
+
+/**
+ * True once `owned` covers the whole catalogue, which is what unlocks it.
+ *
+ * Normalises through {@link ownedWithDefault} so callers can't get this wrong
+ * by passing raw rows — the free default counts whether or not it was bought.
+ */
 export function customSkinUnlocked(owned: readonly string[]): boolean {
-  const set = new Set(owned);
+  const set = new Set(ownedWithDefault(owned));
   return SKINS.every((s) => set.has(s.id));
 }
 
-/** How many more skins a wallet needs before Signature unlocks. */
+/** How many more skins a wallet needs before Signature unlocks. Same
+ *  normalisation as {@link customSkinUnlocked}, so the count can't disagree
+ *  with the lock it describes. */
 export function customSkinRemaining(owned: readonly string[]): number {
-  const set = new Set(owned);
+  const set = new Set(ownedWithDefault(owned));
   return SKINS.filter((s) => !set.has(s.id)).length;
 }
 

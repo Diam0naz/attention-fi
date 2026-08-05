@@ -28,6 +28,7 @@ import { clientKey, rateLimit, tooManyRequests } from "@/lib/rate-limit";
 import {
   CUSTOM_SKIN_ID,
   customSkinUnlocked,
+  ownedWithDefault,
   DEFAULT_SKIN_ID,
   isValidSkinId,
   normalizeCustomUri,
@@ -48,14 +49,14 @@ export async function GET(request: Request) {
       getAssetSkinWithUri(cls, asset),
       owner ? getOwnedSkins(owner) : Promise.resolve<string[]>([]),
     ]);
-    if (!owned.includes(DEFAULT_SKIN_ID)) owned.push(DEFAULT_SKIN_ID);
+    const held = ownedWithDefault(owned);
     // Derived from the catalogue, never trusted from a row.
-    const unlocked = customSkinUnlocked(owned);
-    if (unlocked && !owned.includes(CUSTOM_SKIN_ID)) owned.push(CUSTOM_SKIN_ID);
+    const unlocked = customSkinUnlocked(held);
+    if (unlocked && !held.includes(CUSTOM_SKIN_ID)) held.push(CUSTOM_SKIN_ID);
     return NextResponse.json({
       skin: sel.skin,
       customUri: sel.customUri,
-      owned,
+      owned: held,
       customUnlocked: unlocked,
     });
   } catch {
