@@ -252,6 +252,38 @@
 .af-orbit-rev { animation: af-spin-rev 64s linear infinite; transform-box: fill-box; transform-origin: center; }
 .af-orbit-fast { animation: af-spin 26s linear infinite; transform-box: fill-box; transform-origin: center; }
 
+/* Card pack — the cover of a collection.
+   Closed it reads as a sealed deck; opening fans it. Only transform and
+   opacity are animated, both compositor-only, because the alternative
+   (animating box-shadow or filter) repaints every frame and is what makes
+   this kind of thing stutter on mid-range Android.
+   translateZ(0) puts each card on its own layer up front rather than letting
+   the browser promote them mid-animation, which is the other common hitch. */
+.af-pack-card {
+  transition: transform 380ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  transform: translateZ(0);
+  backface-visibility: hidden;
+}
+/* Only the top card carries a shadow — a stack of them is both wrong-looking
+   and the most expensive part of the frame. */
+.af-pack-card:first-child {
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+}
+
+/* An empty collection still deserves a shape, so it gets the sleeve the cards
+   would sit in rather than a folder glyph. */
+.af-pack-empty {
+  transition: border-color 220ms ease, transform 380ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  transform: translateZ(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .af-pack-card,
+  .af-pack-empty {
+    transition: none;
+  }
+}
+
 /* Page scrollbar.
    The horizontal shelves and the terminal were themed; the window itself
    wasn't, so every page carried a light OS bar down the right edge of a near

@@ -187,29 +187,44 @@ export function CollectionShelf({
   return (
     <div className="rounded-sm border border-white/[0.08] bg-[#0f1620] p-4">
       <div className="flex items-start gap-4">
-        {/* Fanned cover — the stack IS the collection's likeness. */}
+        {/* The pack. Closed it sits as a squared-up deck; opening fans it.
+            Both states are pure transforms so the animation stays on the
+            compositor — see .af-pack-card in globals.css. */}
         <button
           onClick={() => setOpen((o) => !o)}
-          className="relative h-24 w-[72px] shrink-0"
+          aria-expanded={open}
           aria-label={`${open ? "Hide" : "Show"} ${collection.name} contents`}
+          className="group relative h-24 w-[72px] shrink-0"
         >
           {cover.length === 0 ? (
-            <div className="flex h-full w-full items-center justify-center rounded-md border border-dashed border-white/12">
-              <Layers className="h-5 w-5 text-[#4b5563]" />
+            <div className="af-pack-empty flex h-full w-full flex-col items-center justify-center gap-1 rounded-md border border-dashed border-white/12 group-hover:border-white/25">
+              <Layers className="h-4 w-4 text-[#4b5563]" />
+              <span className="font-mono text-[8px] tracking-[0.12em] text-[#4b5563]">EMPTY</span>
             </div>
           ) : (
-            cover.map((m, i) => (
-              <div
-                key={m.asset}
-                className="absolute inset-0 origin-bottom transition-transform duration-300"
-                style={{
-                  transform: `translateX(${i * 6}px) rotate(${(i - 1) * 4}deg)`,
-                  zIndex: cover.length - i,
-                }}
-              >
-                <NftCardFace data={toCard(m)} />
-              </div>
-            ))
+            cover.map((m, i) => {
+              // Closed: a tight deck, each card peeking a couple of pixels.
+              // Open: fanned from a shared bottom origin, like a hand.
+              const t = open
+                ? `translate3d(${(i - 1) * 13}px, ${i === 1 ? -4 : 0}px, 0) rotate(${(i - 1) * 11}deg)`
+                : `translate3d(${i * 3}px, ${i * -2}px, 0) rotate(${(i - 1) * 2.5}deg)`;
+              return (
+                <div
+                  key={m.asset}
+                  className="af-pack-card absolute inset-0 origin-bottom rounded-xl"
+                  style={{ transform: t, zIndex: cover.length - i }}
+                >
+                  <NftCardFace data={toCard(m)} />
+                </div>
+              );
+            })
+          )}
+          {/* Count sits on the pack rather than only in the text column, so the
+              artwork carries its own label at a glance. */}
+          {collection.size > 0 && (
+            <span className="pointer-events-none absolute -bottom-1 -right-1 z-10 rounded-full border border-white/15 bg-[#0A0A0A] px-1.5 py-0.5 font-mono text-[9px] font-bold text-[#F5F4F0]">
+              {collection.size}
+            </span>
           )}
         </button>
 

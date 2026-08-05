@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, ChevronRight, Gavel, Gift, Lock, TrendingUp } from "lucide-react";
+import { ArrowLeft, ChevronRight, Gavel, Gift, Lock, TrendingUp, Layers } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useWallet } from "@/components/wallet/wallet-provider";
 import { WalletConnectModal } from "@/components/wallet/wallet-connect-modal";
@@ -97,6 +97,14 @@ export function NftView() {
       title: "1-of-1 auctions",
       tag: "DUTCH",
       status: "Browse & list",
+      ok: false,
+    },
+    {
+      href: "/nft/collections",
+      icon: <Layers className="h-4 w-4" />,
+      title: "Collections",
+      tag: "GROUPED",
+      status: "Create & organise",
       ok: false,
     },
   ];

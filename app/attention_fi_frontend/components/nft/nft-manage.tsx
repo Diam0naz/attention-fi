@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Keypair, PublicKey, Transaction } from "@solana/web3.js";
 import { BN } from "@anchor-lang/core";
-import { ArrowLeft, BadgeCheck, Gavel, Gift, Loader2, Lock, Plus, TrendingUp, X } from "lucide-react";
+import { ArrowLeft, BadgeCheck, Gavel, Gift, Layers, Loader2, Lock, Plus, TrendingUp, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useWallet } from "@/components/wallet/wallet-provider";
 import { WalletConnectModal } from "@/components/wallet/wallet-connect-modal";
@@ -54,7 +54,7 @@ function countdown(secondsLeft: number): string {
   return m > 0 ? `${m}m ${sec}s` : `${sec}s`;
 }
 
-export type Section = "verification" | "perk" | "genesis" | "auctions";
+export type Section = "verification" | "perk" | "genesis" | "auctions" | "collections";
 
 const MAX_LEVEL = 5;
 
@@ -66,6 +66,7 @@ const META: Record<Section, { title: string; icon: React.ReactNode }> = {
   perk: { title: "Perk NFTs", icon: <TrendingUp className="h-4 w-4" /> },
   genesis: { title: "Genesis NFTs", icon: <Gift className="h-4 w-4" /> },
   auctions: { title: "1-of-1 Auctions", icon: <Gavel className="h-4 w-4" /> },
+  collections: { title: "Collections", icon: <Layers className="h-4 w-4" /> },
 };
 
 export function NftManage({ section }: { section: Section }) {
@@ -176,8 +177,10 @@ export function NftManage({ section }: { section: Section }) {
 
   // Listable collectibles are a separate, wallet-scoped read: it scans every
   // Core asset the wallet owns, so it stays out of the 10s auction poll.
+  // Needed by both tabs — the auction lister picks from it, and it's the pool
+  // a collection draws candidates from.
   useEffect(() => {
-    if (section !== "auctions" || !address) return;
+    if ((section !== "auctions" && section !== "collections") || !address) return;
     let cancelled = false;
     fetchListableNfts(readProgram, new PublicKey(address))
       .then((assets) => {
@@ -295,7 +298,7 @@ export function NftManage({ section }: { section: Section }) {
   }
 
   useEffect(() => {
-    if (section !== "auctions" || !address) return;
+    if ((section !== "auctions" && section !== "collections") || !address) return;
     let cancelled = false;
     void (async () => {
       const list = await fetchCollections(readProgram, new PublicKey(address)).catch(() => []);
@@ -845,6 +848,58 @@ export function NftManage({ section }: { section: Section }) {
         ))}
 
       {/* AUCTIONS */}
+
+      {section === "collections" && (
+        <div>
+          <div className="flex items-center justify-between">
+            <h2 className="text-[13px] font-bold">Your collections</h2>
+            <RefreshButton onRefresh={() => setCollectionsNonce((n) => n + 1)} />
+          </div>
+          <p className="mt-1 font-mono text-[10px] leading-relaxed text-[#6B6B6B]">
+            A collection is an on-chain parent that assets can belong to — they share it as their
+            update authority and get the stacked-deck treatment on their cards. Pick one at mint
+            time, or move assets in and out here afterwards.
+          </p>
+
+          {collections.length === 0 ? (
+            <div className="mt-4 rounded-sm border border-dashed border-white/12 p-8 text-center font-mono text-[11px] text-[#6B6B6B]">
+              No collections yet. Create one below, then add NFTs you already hold.
+            </div>
+          ) : address ? (
+            <div className="mt-4 flex flex-col gap-2.5">
+              {collections.map((c) => (
+                <CollectionShelf
+                  key={c.address}
+                  collection={c}
+                  owner={address}
+                  candidates={listableAssets}
+                  // Sizes come from the collection account, so a move has to
+                  // re-read them or the counts stay one action behind.
+                  onChanged={() => setCollectionsNonce((n) => n + 1)}
+                />
+              ))}
+            </div>
+          ) : null}
+
+          <h2 className="mt-8 text-[13px] font-bold">New collection</h2>
+          <div className="mt-2 flex max-w-md gap-1.5">
+            <input
+              value={newCollectionName}
+              onChange={(e) => setNewCollectionName(e.target.value.slice(0, 64))}
+              placeholder="New collection name"
+              className="min-w-0 flex-1 rounded-sm border border-white/10 bg-[#12181f] px-3 py-2 text-[12px] outline-none placeholder:text-[#4b5563]"
+            />
+            <button
+              onClick={() => void createCollection()}
+              disabled={creatingCollection || newCollectionName.trim() === ""}
+              className="shrink-0 rounded-sm border border-signal/40 bg-signal/10 px-3 py-2 font-mono text-[11px] font-bold text-signal disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {creatingCollection ? "CREATING…" : "CREATE"}
+            </button>
+          </div>
+        </div>
+      )}
+
       {section === "auctions" && (() => {
         const live = auctions.filter((a) => !a.complete && !auctionEnded(a, now));
         const mine = address ? live.filter((a) => a.creator === address) : [];
@@ -913,49 +968,6 @@ export function NftManage({ section }: { section: Section }) {
               </div>
             )}
 
-            {/* Collections — the parent assets a mint can join. Built here as
-                well as in the create flow, so a deck can be set up before
-                there's anything to put in it. */}
-            <h2 className="mt-8 text-[13px] font-bold">Collections</h2>
-            <p className="mt-1 font-mono text-[10px] leading-relaxed text-[#6B6B6B]">
-              Assets minted into a collection share one on-chain parent and get the stacked-deck
-              treatment on their cards. Membership is set when the asset is minted, so create the
-              collection first, then pick it on the{" "}
-              <Link href="/nft/create" className="text-signal">
-                mint page
-              </Link>
-              .
-            </p>
-            {collections.length > 0 && address && (
-              <div className="mt-3 flex flex-col gap-2.5">
-                {collections.map((c) => (
-                  <CollectionShelf
-                    key={c.address}
-                    collection={c}
-                    owner={address}
-                    candidates={listableAssets}
-                    // Sizes come from the collection account, so a move has to
-                    // re-read them or the counts stay one action behind.
-                    onChanged={() => setCollectionsNonce((n) => n + 1)}
-                  />
-                ))}
-              </div>
-            )}
-            <div className="mt-3 flex max-w-md gap-1.5">
-              <input
-                value={newCollectionName}
-                onChange={(e) => setNewCollectionName(e.target.value.slice(0, 64))}
-                placeholder="New collection name"
-                className="min-w-0 flex-1 rounded-sm border border-white/10 bg-[#12181f] px-3 py-2 text-[12px] outline-none placeholder:text-[#4b5563]"
-              />
-              <button
-                onClick={() => void createCollection()}
-                disabled={creatingCollection || newCollectionName.trim() === ""}
-                className="shrink-0 rounded-sm border border-signal/40 bg-signal/10 px-3 py-2 font-mono text-[11px] font-bold text-signal disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                {creatingCollection ? "CREATING…" : "CREATE"}
-              </button>
-            </div>
 
             {expired.length > 0 && (
               <>
