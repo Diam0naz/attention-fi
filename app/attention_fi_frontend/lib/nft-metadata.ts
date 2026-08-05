@@ -2,6 +2,7 @@ import { PublicKey } from "@solana/web3.js";
 import { getReadonlyProgram } from "@/lib/solana/program";
 import { PROGRAM_ID } from "@/lib/solana/config";
 import { skinById, type Skin } from "@/lib/nft-skins";
+import { decodeAsset } from "@/lib/solana/nft-data";
 import type { SkinClass } from "@/lib/skin-db";
 
 /**
@@ -91,6 +92,30 @@ export function paletteFor(facts: NftFacts, skinId: string | null): Skin {
     return { id: "tier", blurb: "", ...tier };
   }
   return { id: "genesis", blurb: "", ...GENESIS_DEFAULT };
+}
+
+/**
+ * Read a plain mpl-core asset account.
+ *
+ * Standalone NFTs have no program PDA describing them, so their name and owner
+ * have to come from the Core account itself. Used by the /api/nft/custom
+ * routes, which is what an asset points at when its creator supplied no
+ * artwork of their own.
+ */
+export async function readCoreAsset(
+  asset: string,
+): Promise<{ owner: string; name: string; uri: string; collection: string | null } | null> {
+  let key: PublicKey;
+  try {
+    key = new PublicKey(asset);
+  } catch {
+    return null;
+  }
+  const program = getReadonlyProgram();
+  const info = await program.provider.connection.getAccountInfo(key);
+  // Key::AssetV1 is discriminant 1; anything else is a collection, or not ours.
+  if (!info || info.data[0] !== 1) return null;
+  return decodeAsset(info.data);
 }
 
 /** Escape text interpolated into SVG — never trust a value into markup. */

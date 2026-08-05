@@ -17,7 +17,9 @@ import { nftPortfolioKey } from "@/components/nft/use-nft-portfolio";
 import { fetchCollections, fetchListableNfts, type CollectionData, type OwnedAsset } from "@/lib/solana/nft-data";
 import { handleToMint, myCreatedTokens } from "@/lib/solana/registry";
 import { solUsd } from "@/lib/solana/sol-usd";
-import { explorerTx } from "@/lib/solana/config";
+import { appOrigin, explorerTx } from "@/lib/solana/config";
+import { Notice } from "@/components/ui/notice";
+import { ConfirmGate, useConfirmGate } from "@/components/ui/confirm-gate";
 
 const DURATION_SEC: Record<string, number> = { "6h": 21_600, "12h": 43_200, "24h": 86_400, "48h": 172_800 };
 
@@ -169,6 +171,21 @@ export function NftCreateFlow() {
 
   const kindMeta = KINDS.find((k) => k.id === kind)!;
 
+  /**
+   * The externally-hosted artwork URL this mint would bake in, if any.
+   *
+   * Null when the creator supplied nothing — then the asset points at our own
+   * dynamic card, which stays under our control and can be restyled. Only a
+   * URL we can't repair is worth gating on.
+   */
+  const customArtwork: string | null =
+    kind === "genesis"
+      ? genesisImage.trim() || null
+      : kind === "nft"
+        ? nftImage.trim() || null
+        : null;
+  const artworkGate = useConfirmGate();
+
   // What the confirm step previews.
   const previewData: NftCardData =
     kind === "nft"
@@ -191,7 +208,12 @@ export function NftCreateFlow() {
   const willList = kind === "auction" || (kind === "nft" && listForSale);
   const validPricing = +startUsd > +floorUsd && +floorUsd > 0;
   const validNft = nftName.trim() !== "" && (!listForSale || validPricing);
-  const validGenesis = tokenHandle !== "" && +sharePct > 0 && +supply > 0;
+  // The program accepts an over-allocated pool and handles it coherently —
+  // fees divide across whatever the total is. It just means each NFT pays less
+  // than the share printed on it. That's a promise this flow shouldn't let a
+  // creator make by accident, so the guard lives here rather than on-chain.
+  const validGenesis =
+    tokenHandle !== "" && +sharePct > 0 && +supply > 0 && +sharePct * +supply <= 100;
   const validAuction = assetId !== "" && validPricing;
   const canContinue =
     step !== 1 || (kind === "nft" ? validNft : kind === "genesis" ? validGenesis : validAuction);
@@ -203,6 +225,14 @@ export function NftCreateFlow() {
     try {
       const asset = Keypair.generate();
       const me = new PublicKey(address);
+      // An mpl-core `uri` is written once at mint and only the update authority
+      // can ever change it, so an empty one is a permanently blank NFT — no
+      // image, no attributes, nothing for a wallet to fetch. Two genesis assets
+      // were minted that way before this existed. Artwork stays optional; when
+      // it's omitted the asset points at the dynamic card instead of nowhere.
+      const customUri = (image: string) =>
+        image.trim() || `${appOrigin()}/api/nft/custom/${asset.publicKey.toBase58()}`;
+
       let sig: string;
       if (kind === "nft" && listForSale) {
         const toLamports = (usd: string) => new BN(Math.round(((+usd || 0) / solUsd()) * 1e9));
@@ -212,14 +242,14 @@ export function NftCreateFlow() {
             toLamports(floorUsd),
             new BN(DURATION_SEC[duration] ?? 86_400),
             nftName.slice(0, 64),
-            nftImage.slice(0, 200),
+            customUri(nftImage).slice(0, 200),
           )
           .accounts({ creator: me, asset: asset.publicKey })
           .signers([asset])
           .rpc();
       } else if (kind === "nft") {
         sig = await program.methods
-          .mintNft(nftName.slice(0, 64), nftImage.slice(0, 200))
+          .mintNft(nftName.slice(0, 64), customUri(nftImage).slice(0, 200))
           .accounts({
             payer: me,
             recipient: me,
@@ -237,8 +267,12 @@ export function NftCreateFlow() {
         // Point the asset at the dynamic metadata endpoint so the genesis card
         // can be restyled later without a transaction. A creator-supplied
         // image wins — that's a deliberate choice of artwork, not a default.
+        //
+        // appOrigin() rather than window.location.origin: this string is
+        // written on-chain permanently, so minting from a preview deployment
+        // would pin the asset to a hostname that outlives the preview.
         const genesisUri =
-          genesisImage.trim() || `${window.location.origin}/api/nft/genesis/${asset.publicKey.toBase58()}`;
+          genesisImage.trim() || `${appOrigin()}/api/nft/genesis/${asset.publicKey.toBase58()}`;
         sig = await program.methods
           .mintGenesis(shareBps, genesisUri.slice(0, 200))
           .accounts({ authority: me, recipient: me, subjectMint, asset: asset.publicKey })
@@ -377,6 +411,25 @@ export function NftCreateFlow() {
                 <img src={nftImage} alt="preview" className="h-28 w-28 rounded-md border border-white/10 object-cover" />
               </div>
             )}
+
+            {/* The artwork decision is the one thing on this screen that can't
+                be revised later, so it gets said next to the field rather than
+                three steps away on Confirm. */}
+            <div className="mt-3">
+              {nftImage.trim() ? (
+                <Notice tone="danger" title="THIS LINK IS PERMANENT">
+                  Metaplex Core writes the artwork URL into the asset at mint and it can never be
+                  changed. If this host stops serving the file, the NFT is blank in every wallet,
+                  forever. Use a URL you control and intend to keep.
+                </Notice>
+              ) : (
+                <Notice tone="info" title="NO ARTWORK? THAT'S FINE">
+                  Leave this blank and the NFT points at an AttentionFi card rendered from its
+                  on-chain name — which we can restyle later. Supplying your own URL is permanent
+                  and can&apos;t be undone.
+                </Notice>
+              )}
+            </div>
 
             {/* Collection membership is fixed at mint time by Core, so it has
                 to be chosen here rather than added afterwards. */}
@@ -596,6 +649,30 @@ export function NftCreateFlow() {
               fee stream
               {+sharePct * +supply > 100 && (
                 <span className="text-noise"> · exceeds 100%</span>
+              )}
+            </div>
+
+            {/* Over-allocating isn't rejected on-chain and doesn't break
+                anything — fees are split across whatever the total happens to
+                be. What it breaks is the promise: the per-NFT number stops
+                meaning what it says, and only the arithmetic reveals it. */}
+            <div className="mt-3">
+              {+sharePct * +supply > 100 ? (
+                <Notice tone="caution" title="EACH NFT WOULD EARN LESS THAN ITS STATED SHARE">
+                  Fees divide across the total allocation, so at{" "}
+                  {(+sharePct * +supply || 0).toFixed(1)}% each holder would receive roughly{" "}
+                  {((+sharePct / (+sharePct * +supply || 1)) * 100).toFixed(2)}% of the stream, not{" "}
+                  {sharePct}%. Nothing is lost or over-paid and the program accepts this happily —
+                  but the NFT would advertise a share it never pays, so this flow won&apos;t mint
+                  it. Reduce the share or the supply until the total is 100% or less.
+                </Notice>
+              ) : (
+                <Notice tone="info" title="HOW THE FEE SHARE WORKS">
+                  Every trade on @{tokenHandle || "your token"} deposits fees into a pool. Holders
+                  accrue continuously and claim whenever they like — a genesis NFT sold on
+                  secondary carries the earning right with it, and only fees deposited after a
+                  mint are claimable by it.
+                </Notice>
               )}
             </div>
           </div>
@@ -887,11 +964,34 @@ export function NftCreateFlow() {
                 )}
               </div>
             ) : (
-              <button
-                onClick={mint}
-                className="mt-4 w-full rounded-sm bg-signal py-3 font-mono text-[13px] font-bold text-[#0A0A0A]">
-                {kind === "genesis" ? "MINT GENESIS" : willList ? "START AUCTION" : "MINT NFT"}
-              </button>
+              <>
+                {/* Only a self-hosted artwork URL earns a gate. Minting itself
+                    is ordinary, and the fallback card is permanent in a way we
+                    can still restyle — but an external link is a dependency the
+                    holder can never repair. */}
+                {customArtwork && (
+                  <ConfirmGate
+                    className="mt-4"
+                    title="ARTWORK CANNOT BE CHANGED AFTER MINTING"
+                    consequence={
+                      <>
+                        This asset will point at <span className="break-all">{customArtwork}</span>{" "}
+                        for as long as it exists. Neither you nor AttentionFi can update it later
+                        — if that URL stops resolving, the NFT is permanently blank.
+                      </>
+                    }
+                    acknowledgement="I control this URL and understand it can never be changed."
+                    checked={artworkGate.acknowledged}
+                    onChange={artworkGate.setAcknowledged}
+                  />
+                )}
+                <button
+                  onClick={mint}
+                  disabled={customArtwork !== null && !artworkGate.acknowledged}
+                  className="mt-4 w-full rounded-sm bg-signal py-3 font-mono text-[13px] font-bold text-[#0A0A0A] disabled:cursor-not-allowed disabled:opacity-40">
+                  {kind === "genesis" ? "MINT GENESIS" : willList ? "START AUCTION" : "MINT NFT"}
+                </button>
+              </>
             )}
           </div>
         )}

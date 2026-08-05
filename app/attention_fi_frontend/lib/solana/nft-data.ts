@@ -19,7 +19,7 @@ const KEY_COLLECTION_V1 = 5;
  * this narrow. `collection` is set only when UpdateAuthority::Collection(_) —
  * i.e. the asset genuinely belongs to an mpl-core collection, tag byte 2.
  */
-function decodeAsset(
+export function decodeAsset(
   data: Buffer,
 ): { owner: string; name: string; uri: string; collection: string | null } | null {
   try {
