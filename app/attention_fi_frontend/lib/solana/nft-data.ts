@@ -85,6 +85,45 @@ function decodeCollection(data: Buffer): { name: string; uri: string; size: numb
 }
 
 /**
+ * The assets that belong to `collection`.
+ *
+ * Membership in Core isn't a list on the collection — it's a property of each
+ * asset, whose `UpdateAuthority` is `Collection(address)`. So this reads from
+ * the asset side: tag byte 2 sits at offset 33 and the collection pubkey
+ * immediately after it, right where a standalone asset would carry its own
+ * authority instead.
+ *
+ * `BaseCollectionV1.current_size` gives the same count more cheaply, which is
+ * why the chips use it — this is for showing the members themselves.
+ */
+export async function fetchCollectionAssets(
+  program: Program<AttentionFi>,
+  collection: PublicKey,
+): Promise<OwnedAsset[]> {
+  const accounts = await program.provider.connection.getProgramAccounts(MPL_CORE_PROGRAM_ID, {
+    filters: [
+      { memcmp: { offset: 0, bytes: bs58.encode(Buffer.from([KEY_ASSET_V1])) } },
+      // 1 key + 32 owner = 33, the UpdateAuthority tag; Collection is variant 2.
+      { memcmp: { offset: 33, bytes: bs58.encode(Buffer.from([2])) } },
+      { memcmp: { offset: 34, bytes: collection.toBase58() } },
+    ],
+  });
+
+  const out: OwnedAsset[] = [];
+  for (const { pubkey, account } of accounts) {
+    const decoded = decodeAsset(account.data);
+    if (!decoded) continue;
+    out.push({
+      asset: pubkey.toBase58(),
+      name: decoded.name || short(pubkey.toBase58()),
+      uri: decoded.uri || undefined,
+      collection: decoded.collection,
+    });
+  }
+  return out;
+}
+
+/**
  * Collections whose update authority is `authority` — the ones this wallet may
  * mint into. Read by memcmp on mpl-core's account layout, matching the
  * approach used for assets above.

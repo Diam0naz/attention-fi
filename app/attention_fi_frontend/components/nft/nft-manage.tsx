@@ -19,6 +19,7 @@ import { fetchGlobal } from "@/lib/solana/curve";
 import { DISCOUNT_PER_LEVEL_BPS, explorerTx, PROGRAM_ID } from "@/lib/solana/config";
 import { SkinPicker } from "@/components/nft/skin-picker";
 import { AssetSkinPicker } from "@/components/nft/asset-skin-picker";
+import { CollectionShelf } from "@/components/nft/collection-shelf";
 import { RefreshButton } from "@/components/ui/refresh-button";
 import { useNftPortfolio } from "@/components/nft/use-nft-portfolio";
 import { useQueryClient } from "@tanstack/react-query";
@@ -864,18 +865,18 @@ export function NftManage({ section }: { section: Section }) {
               </Link>
               .
             </p>
-            {collections.length > 0 && (
-              <div className="mt-3 flex flex-wrap gap-2">
+            {collections.length > 0 && address && (
+              <div className="mt-3 flex flex-col gap-2.5">
                 {collections.map((c) => (
-                  <div
+                  <CollectionShelf
                     key={c.address}
-                    className="rounded-sm border border-white/[0.08] bg-[#0f1620] px-3 py-2"
-                  >
-                    <div className="font-mono text-[11px] font-bold">{c.name}</div>
-                    <div className="mt-0.5 font-mono text-[10px] text-[#6B6B6B]">
-                      {c.size} {c.size === 1 ? "asset" : "assets"} · {short(c.address)}
-                    </div>
-                  </div>
+                    collection={c}
+                    owner={address}
+                    candidates={listableAssets}
+                    // Sizes come from the collection account, so a move has to
+                    // re-read them or the counts stay one action behind.
+                    onChanged={() => setCollectionsNonce((n) => n + 1)}
+                  />
                 ))}
               </div>
             )}
