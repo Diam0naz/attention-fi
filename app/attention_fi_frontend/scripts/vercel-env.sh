@@ -41,6 +41,12 @@ KEYS=(
   # minter happened to use — a preview deployment, or localhost — into the
   # asset permanently.
   NEXT_PUBLIC_APP_URL
+  # "1" serves the v0 public site: the landing page, with /discover, /launch,
+  # /nft, /profile, /terminal and /token redirected back to it. Anything else
+  # (including unset) serves the full app. API routes are never gated either
+  # way — an NFT's uri points at them permanently and wallets fetching it have
+  # no session. Set this on the public project; leave it unset on test ones.
+  NEXT_PUBLIC_V0_GATE
   NEXT_PUBLIC_SKIN_FEE_SOL
   NEXT_PUBLIC_X_HANDLE
   NEYNAR_API_KEY
