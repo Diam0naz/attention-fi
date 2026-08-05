@@ -262,7 +262,12 @@ pub struct PerkNft {
     pub owner: Pubkey,
     /// Current level (1..=MAX_PERK_LEVEL).
     pub level: u8,
-    /// Trading-fee discount granted, in basis points.
+    /// Trading-fee discount granted, in basis points **of the fee** — 1000 is
+    /// 10% off whatever the fee happens to be, not 10 bps off it.
+    ///
+    /// Cached for display and for the IDL; `level` is the source of truth. The
+    /// trading instructions recompute from `level` so a perk minted under older
+    /// terms isn't stranded on them.
     pub discount_bps: u16,
     pub bump: u8,
 }

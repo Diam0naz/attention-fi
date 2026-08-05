@@ -16,7 +16,7 @@ import { NftLanyard } from "@/components/nft/nft-lanyard";
 import { useScrollLock } from "@/lib/use-scroll-lock";
 import { useProgram, useReadonlyProgram } from "@/lib/solana/use-program";
 import { fetchGlobal } from "@/lib/solana/curve";
-import { explorerTx, PROGRAM_ID } from "@/lib/solana/config";
+import { DISCOUNT_PER_LEVEL_BPS, explorerTx, PROGRAM_ID } from "@/lib/solana/config";
 import { SkinPicker } from "@/components/nft/skin-picker";
 import { AssetSkinPicker } from "@/components/nft/asset-skin-picker";
 import { RefreshButton } from "@/components/ui/refresh-button";
@@ -625,7 +625,7 @@ export function NftManage({ section }: { section: Section }) {
                   v={
                     level >= MAX_LEVEL
                       ? "Max level reached"
-                      : `Level ${level + 1} · ${((discountBps + 100) / 100).toFixed(0)}% off`
+                      : `Level ${level + 1} · ${((discountBps + DISCOUNT_PER_LEVEL_BPS) / 100).toFixed(0)}% off`
                   }
                 />
               </dl>

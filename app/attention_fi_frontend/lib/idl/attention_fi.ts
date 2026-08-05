@@ -14,59 +14,6 @@ export type AttentionFi = {
   },
   "instructions": [
     {
-      "name": "setAuthority",
-      "docs": [
-        "Hand protocol authority to a different wallet. Both the current and the",
-        "incoming authority must sign, so authority can't be sent to a mistyped",
-        "address that nobody controls."
-      ],
-      "discriminator": [
-        133,
-        250,
-        37,
-        21,
-        110,
-        163,
-        26,
-        121
-      ],
-      "accounts": [
-        {
-          "name": "authority",
-          "writable": true,
-          "signer": true
-        },
-        {
-          "name": "global",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  103,
-                  108,
-                  111,
-                  98,
-                  97,
-                  108
-                ]
-              }
-            ]
-          }
-        },
-        {
-          "name": "newAuthority",
-          "docs": [
-            "sign \u2014 which is what proves the key exists and is controlled, rather",
-            "than being a typo that would lock the protocol out permanently."
-          ],
-          "signer": true
-        }
-      ],
-      "args": []
-    },
-    {
       "name": "addToCollection",
       "docs": [
         "Move a Core asset the payer controls into one of their collections."
@@ -4194,6 +4141,59 @@ export type AttentionFi = {
       ]
     },
     {
+      "name": "setAuthority",
+      "docs": [
+        "Hand protocol authority to a different wallet. Both the current and the",
+        "incoming authority must sign, so authority can't be sent to a mistyped",
+        "address that nobody controls."
+      ],
+      "discriminator": [
+        133,
+        250,
+        37,
+        21,
+        110,
+        163,
+        26,
+        121
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "global",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  108,
+                  111,
+                  98,
+                  97,
+                  108
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "newAuthority",
+          "docs": [
+            "sign — which is what proves the key exists and is controlled, rather",
+            "than being a typo that would lock the protocol out permanently."
+          ],
+          "signer": true
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "setIssuer",
       "docs": [
         "Set or rotate the dedicated key authorized to sign SAS attestations",
@@ -4893,6 +4893,34 @@ export type AttentionFi = {
           }
         },
         {
+          "name": "perk",
+          "docs": [
+            "Optional perk NFT owned by the trader; grants a trading-fee discount.",
+            "Constrained to a perk PDA owned by the trader when supplied — same shape",
+            "as Buy and Sell, because a perk that stops working the moment a token",
+            "graduates is a benefit withdrawn exactly when it starts to matter."
+          ],
+          "optional": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  101,
+                  114,
+                  107
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "perk.asset",
+                "account": "perkNft"
+              }
+            ]
+          }
+        },
+        {
           "name": "systemProgram",
           "address": "11111111111111111111111111111111"
         },
@@ -5324,45 +5352,6 @@ export type AttentionFi = {
   ],
   "events": [
     {
-      "name": "AuthorityChangedEvent",
-      "discriminator": [
-        85,
-        105,
-        159,
-        188,
-        6,
-        44,
-        52,
-        28
-      ]
-    },
-    {
-      "name": "NftAuctionEvent",
-      "discriminator": [
-        123,
-        100,
-        93,
-        131,
-        133,
-        209,
-        126,
-        38
-      ]
-    },
-    {
-      "name": "NftListedEvent",
-      "discriminator": [
-        209,
-        171,
-        3,
-        47,
-        191,
-        120,
-        133,
-        103
-      ]
-    },
-    {
       "name": "ammSwapEvent",
       "discriminator": [
         190,
@@ -5373,6 +5362,19 @@ export type AttentionFi = {
         241,
         49,
         219
+      ]
+    },
+    {
+      "name": "authorityChangedEvent",
+      "discriminator": [
+        85,
+        105,
+        159,
+        188,
+        6,
+        44,
+        52,
+        28
       ]
     },
     {
@@ -5412,6 +5414,32 @@ export type AttentionFi = {
         92,
         239,
         94
+      ]
+    },
+    {
+      "name": "nftAuctionEvent",
+      "discriminator": [
+        123,
+        100,
+        93,
+        131,
+        133,
+        209,
+        126,
+        38
+      ]
+    },
+    {
+      "name": "nftListedEvent",
+      "discriminator": [
+        209,
+        171,
+        3,
+        47,
+        191,
+        120,
+        133,
+        103
       ]
     },
     {
@@ -5570,123 +5598,6 @@ export type AttentionFi = {
   ],
   "types": [
     {
-      "name": "AuthorityChangedEvent",
-      "docs": [
-        "Emitted when protocol authority moves to a different wallet.",
-        "",
-        "Authority gates every privileged instruction, so a handover is the single",
-        "most consequential administrative act \u2014 worth an indexable record rather",
-        "than only a silent field change."
-      ],
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "previous",
-            "type": "pubkey"
-          },
-          {
-            "name": "current",
-            "type": "pubkey"
-          },
-          {
-            "name": "timestamp",
-            "type": "i64"
-          }
-        ]
-      }
-    },
-    {
-      "name": "NftAuctionEvent",
-      "docs": [
-        "Emitted when a 1-of-1 auction ends \u2014 sold to a buyer, or returned unsold.",
-        "",
-        "`NftAuction.complete` is set by both paths, so account state alone can't",
-        "distinguish them after the fact; without this, an indexer had nothing to",
-        "read and a lister got no notice that their asset had sold."
-      ],
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "asset",
-            "type": "pubkey"
-          },
-          {
-            "name": "creator",
-            "type": "pubkey"
-          },
-          {
-            "name": "counterparty",
-            "docs": [
-              "The buyer on a sale; equal to `creator` on a reclaim."
-            ],
-            "type": "pubkey"
-          },
-          {
-            "name": "outcome",
-            "docs": [
-              "One of the `NFT_*` discriminants."
-            ],
-            "type": "u8"
-          },
-          {
-            "name": "price",
-            "docs": [
-              "Descending price actually paid, in lamports. Zero on a reclaim."
-            ],
-            "type": "u64"
-          },
-          {
-            "name": "fee",
-            "docs": [
-              "Protocol fee charged on top of `price`. Zero on a reclaim."
-            ],
-            "type": "u64"
-          },
-          {
-            "name": "timestamp",
-            "type": "i64"
-          }
-        ]
-      }
-    },
-    {
-      "name": "NftListedEvent",
-      "docs": [
-        "Emitted when a 1-of-1 is listed, whether freshly minted or already owned."
-      ],
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "asset",
-            "type": "pubkey"
-          },
-          {
-            "name": "creator",
-            "type": "pubkey"
-          },
-          {
-            "name": "startPrice",
-            "type": "u64"
-          },
-          {
-            "name": "floorPrice",
-            "type": "u64"
-          },
-          {
-            "name": "duration",
-            "type": "i64"
-          },
-          {
-            "name": "timestamp",
-            "type": "i64"
-          }
-        ]
-      }
-    },
-    {
       "name": "ammPool",
       "docs": [
         "Native constant-product AMM pool created when a bonding curve graduates.",
@@ -5755,6 +5666,33 @@ export type AttentionFi = {
           {
             "name": "tokenReserves",
             "type": "u64"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "authorityChangedEvent",
+      "docs": [
+        "Emitted when protocol authority moves to a different wallet.",
+        "",
+        "Authority gates every privileged instruction, so a handover is the single",
+        "most consequential administrative act — worth an indexable record rather",
+        "than only a silent field change."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "previous",
+            "type": "pubkey"
+          },
+          {
+            "name": "current",
+            "type": "pubkey"
           },
           {
             "name": "timestamp",
@@ -6460,6 +6398,96 @@ export type AttentionFi = {
       }
     },
     {
+      "name": "nftAuctionEvent",
+      "docs": [
+        "Emitted when a 1-of-1 auction ends — sold to a buyer, or returned unsold.",
+        "",
+        "`NftAuction.complete` is set by both paths, so account state alone can't",
+        "distinguish them after the fact; without this, an indexer had nothing to",
+        "read and a lister got no notice that their asset had sold."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "asset",
+            "type": "pubkey"
+          },
+          {
+            "name": "creator",
+            "type": "pubkey"
+          },
+          {
+            "name": "counterparty",
+            "docs": [
+              "The buyer on a sale; equal to `creator` on a reclaim."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "outcome",
+            "docs": [
+              "One of the `NFT_*` discriminants."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "price",
+            "docs": [
+              "Descending price actually paid, in lamports. Zero on a reclaim."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "fee",
+            "docs": [
+              "Protocol fee charged on top of `price`. Zero on a reclaim."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "nftListedEvent",
+      "docs": [
+        "Emitted when a 1-of-1 is listed, whether freshly minted or already owned."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "asset",
+            "type": "pubkey"
+          },
+          {
+            "name": "creator",
+            "type": "pubkey"
+          },
+          {
+            "name": "startPrice",
+            "type": "u64"
+          },
+          {
+            "name": "floorPrice",
+            "type": "u64"
+          },
+          {
+            "name": "duration",
+            "type": "i64"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
       "name": "perkGrant",
       "docs": [
         "A pending perk grant, awaiting the recipient to claim it.",
@@ -6534,7 +6562,12 @@ export type AttentionFi = {
           {
             "name": "discountBps",
             "docs": [
-              "Trading-fee discount granted, in basis points."
+              "Trading-fee discount granted, in basis points **of the fee** — 1000 is",
+              "10% off whatever the fee happens to be, not 10 bps off it.",
+              "",
+              "Cached for display and for the IDL; `level` is the source of truth. The",
+              "trading instructions recompute from `level` so a perk minted under older",
+              "terms isn't stranded on them."
             ],
             "type": "u16"
           },

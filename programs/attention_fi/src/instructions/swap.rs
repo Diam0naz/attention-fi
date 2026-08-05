@@ -4,10 +4,11 @@ use anchor_spl::associated_token::AssociatedToken;
 use anchor_spl::token::{self, Mint, Token, TokenAccount, Transfer};
 
 use crate::amm::swap_quote;
-use crate::constants::{AMM_SEED, GLOBAL_SEED};
+use crate::constants::{AMM_SEED, GLOBAL_SEED, PERK_SEED};
 use crate::error::AttentionError;
 use crate::events::AmmSwapEvent;
-use crate::state::{AmmPool, Global};
+use crate::nft::{discounted_fee_bps, perk_discount_bps};
+use crate::state::{AmmPool, Global, PerkNft};
 
 #[derive(Accounts)]
 pub struct Swap<'info> {
@@ -38,6 +39,17 @@ pub struct Swap<'info> {
     )]
     pub trader_token_account: Account<'info, TokenAccount>,
 
+    /// Optional perk NFT owned by the trader; grants a trading-fee discount.
+    /// Constrained to a perk PDA owned by the trader when supplied — same shape
+    /// as Buy and Sell, because a perk that stops working the moment a token
+    /// graduates is a benefit withdrawn exactly when it starts to matter.
+    #[account(
+        seeds = [PERK_SEED, perk.asset.as_ref()],
+        bump = perk.bump,
+        constraint = perk.owner == trader.key() @ AttentionError::Unauthorized,
+    )]
+    pub perk: Option<Account<'info, PerkNft>>,
+
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,
     pub associated_token_program: Program<'info, AssociatedToken>,
@@ -53,7 +65,15 @@ pub fn swap_handler(
 ) -> Result<()> {
     require!(amount_in > 0, AttentionError::ZeroAmount);
 
-    let fee_bps = ctx.accounts.global.fee_bps;
+    // The pool retains its fee rather than routing it out, so a discount here
+    // slows protocol-owned liquidity rather than cutting anyone's revenue —
+    // the price of keeping one promise ("off every trade") across both venues.
+    let fee_bps = match &ctx.accounts.perk {
+        Some(perk) => {
+            discounted_fee_bps(ctx.accounts.global.fee_bps, perk_discount_bps(perk.level))
+        }
+        None => ctx.accounts.global.fee_bps,
+    };
     let mint_key = ctx.accounts.mint.key();
     let trader_key = ctx.accounts.trader.key();
     let pool_bump = ctx.accounts.pool.bump;

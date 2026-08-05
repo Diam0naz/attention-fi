@@ -27,8 +27,15 @@ pub const LAMPORTS_PER_SOL: u64 = 1_000_000_000;
 // ---- Perk NFTs ----
 /// Highest perk level reachable.
 pub const MAX_PERK_LEVEL: u8 = 5;
-/// Fee discount granted per perk level, in basis points (1% per level).
-pub const DISCOUNT_PER_LEVEL_BPS: u16 = 100;
+/// Fee discount granted per perk level, as basis points **of the trading fee**
+/// — 1000 = 10% off the fee per level, so level 5 halves it.
+///
+/// Deliberately a share of the fee rather than a flat subtraction from it. The
+/// flat version was 100 bps/level against a 100 bps fee, so level 1 waived the
+/// entire fee and levels 2-5 changed nothing: every perk was identical, and a
+/// perk holder's trades paid the creator and the treasury zero. A proportional
+/// discount can't do that no matter how the fee is later retuned.
+pub const DISCOUNT_PER_LEVEL_BPS: u16 = 1000;
 /// Cumulative activity score (TraderStats::activity_score, lamports) required
 /// to reach each level. Index 0 = level 1's requirement, etc.
 pub const PERK_LEVEL_ACTIVITY_LAMPORTS: [u64; MAX_PERK_LEVEL as usize] = [

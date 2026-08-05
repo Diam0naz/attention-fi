@@ -418,7 +418,7 @@ export function getNftState(address: string): NftState {
   const verified = rand() > 0.4;
   const hasPerk = rand() > 0.3;
   const level = hasPerk ? 1 + Math.floor(rand() * 4) : 0; // 1..4 (cap 5%)
-  const perk = hasPerk ? { level, discountBps: Math.min(500, level * 100) } : null;
+  const perk = hasPerk ? { level, discountBps: Math.min(5000, level * 1000) } : null;
   // Always hold at least one genesis (demo previews the fee-share card); the
   // first has non-zero claimable so the CLAIM action is exercised too.
   const genesis: GenesisNft[] = Array.from({ length: 1 + Math.floor(rand() * 2) }, (_, i) => ({

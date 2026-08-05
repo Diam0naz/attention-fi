@@ -22,6 +22,16 @@ export const USDC_MINT =
   process.env.NEXT_PUBLIC_USDC_MINT ?? "Gh9ZwEmdLJ8DscKNTkTqPbNwLNNBjuSzaG9Vp2KGtKJr";
 
 /**
+ * Fee discount granted per perk level, in basis points **of the trading fee**
+ * — 1000 means a level-1 perk pays 90% of the going fee.
+ *
+ * Mirrors `DISCOUNT_PER_LEVEL_BPS` in programs/attention_fi/src/constants.rs.
+ * That one isn't marked `#[constant]`, so it never reaches the IDL and this
+ * copy has to be kept in step by hand.
+ */
+export const DISCOUNT_PER_LEVEL_BPS = 1000;
+
+/**
  * Canonical public origin, used to build NFT metadata URIs.
  *
  * This matters more than a normal base-url setting: a verification NFT's `uri`

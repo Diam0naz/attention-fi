@@ -777,7 +777,7 @@ describe("attention_fi perk & genesis NFTs", () => {
 
     let perk = await program.account.perkNft.fetch(perkPda);
     assert.strictEqual(perk.level, 1);
-    assert.strictEqual(perk.discountBps, 100, "level 1 => 1% discount");
+    assert.strictEqual(perk.discountBps, 1000, "level 1 => 10% off the fee");
 
     await program.methods
       .levelUp()
@@ -794,7 +794,7 @@ describe("attention_fi perk & genesis NFTs", () => {
 
     perk = await program.account.perkNft.fetch(perkPda);
     assert.strictEqual(perk.level, 2, "leveled up");
-    assert.strictEqual(perk.discountBps, 200, "level 2 => 2% discount");
+    assert.strictEqual(perk.discountBps, 2000, "level 2 => 20% off the fee");
 
     // Confirm the Core asset itself is real and Core-owned.
     const acc = await provider.connection.getAccountInfo(asset.publicKey);
@@ -1112,13 +1112,23 @@ describe("attention_fi perk fee discount", () => {
     return (await provider.connection.getBalance(treasury)) - before;
   }
 
-  it("waives the fee for a perk holder (1% discount vs 1% base fee)", async () => {
+  it("discounts the fee for a perk holder without waiving it", async () => {
     const feeNoPerk = await buy(null);
     const feeWithPerk = await buy(perkPda);
 
     // 1% fee on 1 SOL = 0.01, of which the protocol keeps half (creator gets the rest).
     assert.strictEqual(feeNoPerk, 0.005 * LAMPORTS_PER_SOL, "protocol half of the 1% fee");
-    assert.strictEqual(feeWithPerk, 0, "level-1 perk waives the 1% fee");
+
+    // A level-1 perk takes 10% off the fee: 100 bps becomes 90, so the protocol
+    // half of 0.9% on 1 SOL is 0.0045 SOL.
+    assert.strictEqual(feeWithPerk, 0.0045 * LAMPORTS_PER_SOL, "10% off, not free");
+
+    // This assertion previously read `feeWithPerk === 0` and passed, which is
+    // how the bug survived: a flat 100 bps discount against a 100 bps fee
+    // waived it entirely, and the test recorded that as the intent. Creators
+    // and the treasury earned nothing on any perk holder's trade.
+    assert.ok(feeWithPerk > 0, "a perk must never zero the fee");
+    assert.ok(feeWithPerk < feeNoPerk, "but it must still be cheaper");
   });
 });
 
@@ -1249,6 +1259,7 @@ describe("attention_fi AMM graduation", () => {
         mint: mintKp.publicKey,
         poolVault,
         traderTokenAccount: walletAta,
+        perk: null,
         systemProgram: SystemProgram.programId,
         tokenProgram: TOKEN_PROGRAM_ID,
         associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
@@ -1274,6 +1285,7 @@ describe("attention_fi AMM graduation", () => {
         mint: mintKp.publicKey,
         poolVault,
         traderTokenAccount: walletAta,
+        perk: null,
         systemProgram: SystemProgram.programId,
         tokenProgram: TOKEN_PROGRAM_ID,
         associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,

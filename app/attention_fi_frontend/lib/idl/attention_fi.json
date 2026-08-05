@@ -1165,7 +1165,7 @@
     {
       "name": "claim_creator_fee",
       "docs": [
-        "Claim a token's accrued creator fees \u2014 gated on the creator being",
+        "Claim a token's accrued creator fees — gated on the creator being",
         "SAS-verified (they must hold a `Verification` record)."
       ],
       "discriminator": [
@@ -1219,7 +1219,7 @@
           "name": "verification",
           "docs": [
             "The creator's SAS verification record. Its existence at this PDA gates the",
-            "claim \u2014 an unverified creator cannot construct a valid transaction, which",
+            "claim — an unverified creator cannot construct a valid transaction, which",
             "is exactly the brief's \"claimable by the X account owner once they verify\"."
           ],
           "pda": {
@@ -2013,7 +2013,7 @@
       "name": "grant_perk",
       "docs": [
         "Authorise a wallet to claim a perk NFT, without minting it. Lets the",
-        "protocol approve a batch of task completions cheaply \u2014 each recipient",
+        "protocol approve a batch of task completions cheaply — each recipient",
         "pays for their own asset via `claim_perk`."
       ],
       "discriminator": [
@@ -2395,7 +2395,7 @@
           "name": "feed",
           "docs": [
             "Switchboard program) is checked in the handler, then parsed +",
-            "staleness-validated \u2014 a single `owner =` constraint can't accept either",
+            "staleness-validated — a single `owner =` constraint can't accept either",
             "cluster's program id."
           ]
         },
@@ -3098,7 +3098,7 @@
         {
           "name": "asset",
           "docs": [
-            "rejects the transfer unless `creator` is the current owner \u2014 the same",
+            "rejects the transfer unless `creator` is the current owner — the same",
             "guarantee an `owner =` constraint would give, without decoding Core's",
             "account layout here."
           ],
@@ -3188,7 +3188,7 @@
         {
           "name": "curve",
           "docs": [
-            "The subject token's bonding curve \u2014 gates issuance to its creator."
+            "The subject token's bonding curve — gates issuance to its creator."
           ],
           "pda": {
             "seeds": [
@@ -3464,7 +3464,7 @@
       "name": "reclaim_nft_auction",
       "docs": [
         "Return an unsold 1-of-1 to its lister once the auction window closes.",
-        "Without this an expired auction locks the NFT in escrow permanently \u2014",
+        "Without this an expired auction locks the NFT in escrow permanently —",
         "`buy_nft` refuses after the deadline and nothing else can move it."
       ],
       "discriminator": [
@@ -3481,7 +3481,7 @@
         {
           "name": "payer",
           "docs": [
-            "Pays the transaction. Reclaiming is permissionless \u2014 the asset can only",
+            "Pays the transaction. Reclaiming is permissionless — the asset can only",
             "ever go back to `auction.creator`, so anyone may trigger the return",
             "(a keeper, or the lister themselves)."
           ],
@@ -4179,7 +4179,7 @@
         {
           "name": "new_authority",
           "docs": [
-            "sign \u2014 which is what proves the key exists and is controlled, rather",
+            "sign — which is what proves the key exists and is controlled, rather",
             "than being a typo that would lock the protocol out permanently."
           ],
           "signer": true
@@ -4887,6 +4887,34 @@
           }
         },
         {
+          "name": "perk",
+          "docs": [
+            "Optional perk NFT owned by the trader; grants a trading-fee discount.",
+            "Constrained to a perk PDA owned by the trader when supplied — same shape",
+            "as Buy and Sell, because a perk that stops working the moment a token",
+            "graduates is a benefit withdrawn exactly when it starts to matter."
+          ],
+          "optional": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  101,
+                  114,
+                  107
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "perk.asset",
+                "account": "PerkNft"
+              }
+            ]
+          }
+        },
+        {
           "name": "system_program",
           "address": "11111111111111111111111111111111"
         },
@@ -4981,7 +5009,7 @@
     {
       "name": "verify_handle",
       "docs": [
-        "Verify an X handle\u2194wallet binding against a Solana Attestation Service",
+        "Verify an X handle↔wallet binding against a Solana Attestation Service",
         "attestation and mint a soulbound verification NFT (Metaplex Core)."
       ],
       "discriminator": [
@@ -4998,7 +5026,7 @@
         {
           "name": "payer",
           "docs": [
-            "Pays for the credential accounts. Can be anyone (subject or a relayer) \u2014",
+            "Pays for the credential accounts. Can be anyone (subject or a relayer) —",
             "trust comes from the attestation, not from who submits the transaction."
           ],
           "writable": true,
@@ -5646,7 +5674,7 @@
         "Emitted when protocol authority moves to a different wallet.",
         "",
         "Authority gates every privileged instruction, so a handover is the single",
-        "most consequential administrative act \u2014 worth an indexable record rather",
+        "most consequential administrative act — worth an indexable record rather",
         "than only a silent field change."
       ],
       "type": {
@@ -6366,7 +6394,7 @@
     {
       "name": "NftAuctionEvent",
       "docs": [
-        "Emitted when a 1-of-1 auction ends \u2014 sold to a buyer, or returned unsold.",
+        "Emitted when a 1-of-1 auction ends — sold to a buyer, or returned unsold.",
         "",
         "`NftAuction.complete` is set by both paths, so account state alone can't",
         "distinguish them after the fact; without this, an indexer had nothing to",
@@ -6460,7 +6488,7 @@
         "",
         "Splits `mint_perk` into authorise-then-claim so the protocol can approve a",
         "batch of task completions cheaply while each recipient pays for their own",
-        "Core asset. The authority still decides who gets one \u2014 this account IS the",
+        "Core asset. The authority still decides who gets one — this account IS the",
         "authorisation, and `claim_perk` mints only when it exists."
       ],
       "type": {
@@ -6483,7 +6511,7 @@
           {
             "name": "granter",
             "docs": [
-              "Refund target when the grant is consumed \u2014 whoever paid to create it."
+              "Refund target when the grant is consumed — whoever paid to create it."
             ],
             "type": "pubkey"
           },
@@ -6528,7 +6556,12 @@
           {
             "name": "discount_bps",
             "docs": [
-              "Trading-fee discount granted, in basis points."
+              "Trading-fee discount granted, in basis points **of the fee** — 1000 is",
+              "10% off whatever the fee happens to be, not 10 bps off it.",
+              "",
+              "Cached for display and for the IDL; `level` is the source of truth. The",
+              "trading instructions recompute from `level` so a perk minted under older",
+              "terms isn't stranded on them."
             ],
             "type": "u16"
           },

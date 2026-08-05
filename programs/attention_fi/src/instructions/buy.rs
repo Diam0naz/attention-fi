@@ -7,7 +7,7 @@ use crate::constants::{CURVE_SEED, GLOBAL_SEED, PERK_SEED};
 use crate::curve::{buy_quote, split_creator_fee};
 use crate::error::AttentionError;
 use crate::events::{GraduateEvent, TradeEvent};
-use crate::nft::discounted_fee_bps;
+use crate::nft::{discounted_fee_bps, perk_discount_bps};
 use crate::state::{BondingCurve, Global, PerkNft};
 
 #[derive(Accounts)]
@@ -64,7 +64,11 @@ pub fn buy_handler(ctx: Context<Buy>, sol_amount: u64, min_tokens_out: u64) -> R
     let curve = &ctx.accounts.curve;
     // A perk NFT held by the buyer reduces the trading fee.
     let fee_bps = match &ctx.accounts.perk {
-        Some(perk) => discounted_fee_bps(global.fee_bps, perk.discount_bps),
+        // Derived from level rather than read from perk.discount_bps: the
+        // stored field was written under whatever the discount meant on the
+        // day the perk was minted, so reading it would leave older NFTs on
+        // stale terms after any retune.
+        Some(perk) => discounted_fee_bps(global.fee_bps, perk_discount_bps(perk.level)),
         None => global.fee_bps,
     };
     let quote = buy_quote(
