@@ -12,13 +12,15 @@ import { getConnection } from "./program";
  */
 export function useTokenBalance(mint: string): number | null {
   const { address } = useWallet();
-  const [balance, setBalance] = useState<number | null>(null);
+  // Keyed by wallet *and* mint, then derived — see useSolBalance for why this
+  // beats clearing in an effect. It matters more here: this hook is called once
+  // per mint on screen, so a stale reading would attribute one token's balance
+  // to another for as long as the fetch took.
+  const [snapshot, setSnapshot] = useState<{ key: string; amount: number } | null>(null);
+  const key = `${address ?? ""}:${mint}`;
 
   useEffect(() => {
-    if (!address) {
-      setBalance(null);
-      return;
-    }
+    if (!address) return;
     let cancelled = false;
     const connection = getConnection();
     const owner = new PublicKey(address);
@@ -26,7 +28,8 @@ export function useTokenBalance(mint: string): number | null {
     try {
       mintPk = new PublicKey(mint);
     } catch {
-      setBalance(null);
+      // Not a valid mint — leave the snapshot stale; the key won't match, so
+      // the derived value is null anyway.
       return;
     }
     const load = () =>
@@ -38,10 +41,10 @@ export function useTokenBalance(mint: string): number | null {
             (sum, acc) => sum + (acc.account.data.parsed.info.tokenAmount.uiAmount ?? 0),
             0,
           );
-          setBalance(total);
+          setSnapshot({ key: `${address}:${mint}`, amount: total });
         })
         .catch(() => {
-          if (!cancelled) setBalance(null);
+          if (!cancelled) setSnapshot(null);
         });
 
     load();
@@ -52,5 +55,5 @@ export function useTokenBalance(mint: string): number | null {
     };
   }, [address, mint]);
 
-  return balance;
+  return snapshot && snapshot.key === key ? snapshot.amount : null;
 }

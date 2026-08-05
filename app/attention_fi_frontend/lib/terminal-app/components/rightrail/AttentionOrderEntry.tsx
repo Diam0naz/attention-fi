@@ -59,10 +59,19 @@ export function AttentionOrderEntry() {
 
   const mint = handleToMint(symbol);
 
-  // keep the quote fresh while the ticket is open
-  useEffect(() => {
+  // Switching market invalidates both the quote and any transaction result
+  // still on screen. Cleared during render so there is no frame in which the
+  // new symbol is shown next to the old market's reserves — the number the
+  // trader would be sizing an order against.
+  const [prevSymbol, setPrevSymbol] = useState(symbol);
+  if (symbol !== prevSymbol) {
+    setPrevSymbol(symbol);
     setCurve(null);
     setTx({ kind: "idle" });
+  }
+
+  // keep the quote fresh while the ticket is open
+  useEffect(() => {
     if (!mint) return;
     let cancelled = false;
     const load = async () => {

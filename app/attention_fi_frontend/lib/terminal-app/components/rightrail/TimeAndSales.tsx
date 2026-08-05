@@ -31,8 +31,16 @@ export function TimeAndSales() {
   const idCounter = useRef(0);
   const avgSize = useRef(0);
 
-  useEffect(() => {
+  // The tape is per-symbol, so it empties on switch. Only `rows` moves to
+  // render — the refs stay in the effect, since writing a ref isn't state and
+  // clearing them early would strand the in-flight frame's buffer.
+  const [prevSymbol, setPrevSymbol] = useState(symbol);
+  if (symbol !== prevSymbol) {
+    setPrevSymbol(symbol);
     setRows([]);
+  }
+
+  useEffect(() => {
     buffer.current = [];
     avgSize.current = 0;
     let cancelled = false;

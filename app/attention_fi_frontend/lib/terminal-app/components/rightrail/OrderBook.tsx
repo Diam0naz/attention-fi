@@ -29,8 +29,18 @@ export function OrderBook() {
   const pending = useRef<Book | null>(null);
   const rafId = useRef(0);
 
-  useEffect(() => {
+  // Clearing the book on a symbol change is an adjustment to existing state,
+  // not a synchronisation with anything external, so it belongs in render.
+  // React re-runs the component immediately without committing the stale
+  // value; from an effect it would paint the previous symbol's depth first and
+  // then throw that render away.
+  const [prevSymbol, setPrevSymbol] = useState(symbol);
+  if (symbol !== prevSymbol) {
+    setPrevSymbol(symbol);
     setBook(null);
+  }
+
+  useEffect(() => {
     const unsub = provider.subscribeOrderBook(symbol, DEPTH, (b) => {
       pending.current = b;
       if (!rafId.current) {

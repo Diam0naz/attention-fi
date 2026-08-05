@@ -122,6 +122,19 @@ export function LaunchFlow() {
 
   // Returning from the X redirect: /launch?x=<handle> or ?x_error=<reason>.
   // Restore the pre-redirect draft and resume at the verify step.
+  //
+  // The set-state-in-effect rule is suppressed here rather than worked around,
+  // because every way around it is worse. /launch is prerendered, so reading
+  // sessionStorage from a useState initialiser would produce markup that
+  // disagrees with the server's and trigger a hydration mismatch — on the one
+  // path where the user is mid-OAuth and least able to afford a glitch.
+  // Deferring the writes behind an await would satisfy the linter while
+  // changing nothing about the cascading render it exists to prevent.
+  //
+  // This is also the case the rule explicitly carves out: reading state back
+  // from an external system (sessionStorage and the URL) once on mount, which
+  // is what effects are for. It runs only when ?x= or ?x_error= is present.
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (typeof window === "undefined") return;
     const sp = new URLSearchParams(window.location.search);
@@ -154,6 +167,7 @@ export function LaunchFlow() {
     }
     window.history.replaceState({}, "", "/launch");
   }, []);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   useEffect(() => {
     if (!address || !program) return;

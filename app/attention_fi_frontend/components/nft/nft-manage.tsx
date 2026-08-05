@@ -123,11 +123,20 @@ export function NftManage({ section }: { section: Section }) {
   const [newCollectionName, setNewCollectionName] = useState("");
   const [creatingCollection, setCreatingCollection] = useState(false);
 
+  // Re-entering the auctions tab shows a spinner rather than the previous
+  // visit's listings. Set during render because from the effect it committed a
+  // frame of stale auctions — prices that may already have decayed — before
+  // replacing them.
+  const [prevSection, setPrevSection] = useState(section);
+  if (section !== prevSection) {
+    setPrevSection(section);
+    if (section === "auctions") setAuctionsStatus("loading");
+  }
+
   // Real 1-of-1 auctions from the chain — only while this section is open.
   useEffect(() => {
     if (section !== "auctions") return;
     let cancelled = false;
-    setAuctionsStatus("loading");
     Promise.all([fetchNftAuctions(readProgram), fetchGlobal(readProgram)])
       .then(([list, global]) => {
         if (cancelled) return;

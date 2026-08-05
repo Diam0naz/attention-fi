@@ -32,9 +32,16 @@ export function OrderEntry() {
     return () => window.removeEventListener(SET_ORDER_PRICE_EVENT, onSetPrice);
   }, []);
 
-  useEffect(() => {
+  // A price typed for one symbol means nothing for the next, so it clears on
+  // switch. Adjusted during render rather than in an effect: the effect version
+  // committed a render in which the new symbol was shown alongside the old
+  // symbol's price — briefly offering a limit order at a price from a different
+  // market.
+  const [prevSymbol, setPrevSymbol] = useState(symbol);
+  if (symbol !== prevSymbol) {
+    setPrevSymbol(symbol);
     setPrice("");
-  }, [symbol]);
+  }
 
   const qtyNum = parseFloat(qty) || 0;
   const priceNum = type === "market" ? (mark ?? 0) : parseFloat(price) || 0;

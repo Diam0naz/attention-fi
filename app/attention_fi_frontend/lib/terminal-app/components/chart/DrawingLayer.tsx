@@ -80,7 +80,11 @@ export function DrawingLayer({
 
   /* ----- coordinate space ------------------------------------------------ */
 
-  const makeSpace = useCallback((): CoordSpace | null => {
+  // Not useCallback: the compiler bails on the whole component when it can't
+  // prove a hand-written dep list equivalent to the real one, and then nothing
+  // here gets optimized. scheduleDraw below keeps its useCallback([]) — that
+  // one is deliberate, pairing with paintRef to stay stable across renders.
+  const makeSpace = (): CoordSpace | null => {
     const el = container.current;
     const first = feed.candles[0];
     if (!el || !first) return null;
@@ -102,7 +106,7 @@ export function DrawingLayer({
       priceToY: (price) => series.priceToCoordinate(price),
       yToPrice: (y) => series.coordinateToPrice(y),
     };
-  }, [chart, series, feed, container]);
+  };
 
   /* ----- painting -------------------------------------------------------- */
 
@@ -110,7 +114,6 @@ export function DrawingLayer({
   // through a ref so a stable scheduleDraw never pins a stale closure
   // (the series is recreated on chart-type/timeframe changes).
   const paintRef = useRef<() => void>(() => {});
-  paintRef.current = paint;
   const scheduleDraw = useCallback(() => {
     if (rafRef.current) return;
     rafRef.current = requestAnimationFrame(() => {
@@ -164,6 +167,16 @@ export function DrawingLayer({
     }
     ctx.restore();
   }
+
+  // Keep the ref pointing at the current render's `paint`. Written after
+  // commit rather than during render, and placed below `paint` rather than
+  // beside the ref: the assignment relied on the declaration being hoisted,
+  // which the compiler reads as using the binding before it exists.
+  // scheduleDraw only dereferences this inside a rAF callback, long after
+  // effects have flushed.
+  useEffect(() => {
+    paintRef.current = paint;
+  });
 
   /* repaint triggers — including when the underlying series is recreated */
   useEffect(() => {

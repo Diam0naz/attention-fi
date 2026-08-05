@@ -12,13 +12,16 @@ import { LAMPORTS_PER_SOL } from "./curve";
  */
 export function useSolBalance(): number | null {
   const { address } = useWallet();
-  const [balance, setBalance] = useState<number | null>(null);
+  // The reading is stored with the address it belongs to, and the answer is
+  // derived by comparing that against the current one. Clearing it in an
+  // effect instead would be both a cascading render and, as written, wrong:
+  // the reset only fired when `address` became falsy, so switching from one
+  // wallet to another kept showing the previous wallet's balance until the new
+  // fetch landed. Derived, there is no render where the two disagree.
+  const [snapshot, setSnapshot] = useState<{ address: string; sol: number } | null>(null);
 
   useEffect(() => {
-    if (!address) {
-      setBalance(null);
-      return;
-    }
+    if (!address) return;
     let cancelled = false;
     const connection = getConnection();
     const pubkey = new PublicKey(address);
@@ -26,7 +29,7 @@ export function useSolBalance(): number | null {
       connection
         .getBalance(pubkey)
         .then((lamports) => {
-          if (!cancelled) setBalance(lamports / LAMPORTS_PER_SOL);
+          if (!cancelled) setSnapshot({ address, sol: lamports / LAMPORTS_PER_SOL });
         })
         .catch(() => undefined);
 
@@ -38,5 +41,5 @@ export function useSolBalance(): number | null {
     };
   }, [address]);
 
-  return balance;
+  return snapshot && snapshot.address === address ? snapshot.sol : null;
 }

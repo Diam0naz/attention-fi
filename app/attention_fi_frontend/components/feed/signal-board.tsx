@@ -33,10 +33,15 @@ export function SignalBoard() {
   const [tokens, setTokens] = useState<IndexedToken[]>(indexed);
   const [vertical, setVertical] = useState<Vertical>("All");
 
-  // re-seed whenever the on-chain snapshot upgrades entries
-  useEffect(() => {
+  // Re-seed whenever the on-chain snapshot upgrades entries. Same shape as
+  // TrendingWall: the tick timer below owns `tokens` between snapshots, so
+  // this is a prop-driven reset of drifting local state rather than something
+  // derivable, and it belongs in render rather than an effect.
+  const [prevIndexed, setPrevIndexed] = useState(indexed);
+  if (indexed !== prevIndexed) {
+    setPrevIndexed(indexed);
     setTokens(indexed);
-  }, [indexed]);
+  }
 
   // "Live" feel — client-only so server and first client render match.
   useEffect(() => {

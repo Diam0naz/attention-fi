@@ -22,26 +22,29 @@ export interface OwnedNfts {
 export function useOwnedNfts(): OwnedNfts {
   const { address } = useWallet();
   const program = useReadonlyProgram();
-  const [state, setState] = useState<OwnedNfts>({ status: "idle", data: [] });
+  // Only settled results are stored, tagged with the wallet they describe.
+  // "idle" and "loading" are derived rather than written, which removes both
+  // effect-body writes and the bug they carried: the loading state preserved
+  // `data` across a wallet switch, so wallet B briefly rendered wallet A's
+  // NFTs as its own.
+  const [settled, setSettled] = useState<{ address: string; result: OwnedNfts } | null>(null);
 
   useEffect(() => {
-    if (!address) {
-      setState({ status: "idle", data: [] });
-      return;
-    }
+    if (!address) return;
     let cancelled = false;
-    setState((s) => ({ status: "loading", data: s.data }));
     fetchOwnedNfts(program, new PublicKey(address))
       .then((data) => {
-        if (!cancelled) setState({ status: "ready", data });
+        if (!cancelled) setSettled({ address, result: { status: "ready", data } });
       })
       .catch(() => {
-        if (!cancelled) setState({ status: "error", data: [] });
+        if (!cancelled) setSettled({ address, result: { status: "error", data: [] } });
       });
     return () => {
       cancelled = true;
     };
   }, [address, program]);
 
-  return state;
+  if (!address) return { status: "idle", data: [] };
+  if (!settled || settled.address !== address) return { status: "loading", data: [] };
+  return settled.result;
 }

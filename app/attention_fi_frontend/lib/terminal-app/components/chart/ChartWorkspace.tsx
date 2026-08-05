@@ -47,8 +47,13 @@ export function ChartWorkspace({
   );
 
   const panesRef = useRef(new Map<string, PaneHandlers>());
+  // Latest-value ref, written after commit rather than during render. Only the
+  // pane sync handlers read it, and those fire from chart events well after
+  // effects have flushed, so they still see the current value.
   const syncEnabledRef = useRef(false);
-  syncEnabledRef.current = gridLayout !== "1" && syncEnabled;
+  useEffect(() => {
+    syncEnabledRef.current = gridLayout !== "1" && syncEnabled;
+  });
 
   const sync = useMemo<PaneSyncApi>(() => {
     const panes = panesRef.current;

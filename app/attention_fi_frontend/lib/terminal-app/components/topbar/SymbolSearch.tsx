@@ -46,7 +46,15 @@ export function SymbolSearch() {
     return () => window.removeEventListener("pointerdown", onDown, true);
   }, [open]);
 
-  useEffect(() => setHighlight(0), [query, open]);
+  // The highlighted row is an index into a list that both of these change, so
+  // it resets whenever either does — during render, since a stale index can
+  // point past the end of the new results.
+  const [prevKey, setPrevKey] = useState(`${query}:${open}`);
+  const key = `${query}:${open}`;
+  if (key !== prevKey) {
+    setPrevKey(key);
+    setHighlight(0);
+  }
 
   const choose = (sym: string) => {
     setSymbol(sym);

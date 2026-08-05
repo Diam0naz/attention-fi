@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { cn } from "@/lib/terminal-app/lib/cn";
 import { useProvider } from "@/lib/terminal-app/lib/providers";
 import { TIMEFRAMES, type ChartType } from "@/lib/terminal-app/lib/types";
@@ -24,12 +24,18 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
   const [query, setQuery] = useState("");
   const [highlight, setHighlight] = useState(0);
 
-  useEffect(() => {
+  // Each opening starts blank. Adjusted during render so the palette never
+  // paints one frame carrying the previous session's query — which, with the
+  // list filtered by it, meant the first thing shown on open was occasionally
+  // last time's results.
+  const [wasOpen, setWasOpen] = useState(open);
+  if (open !== wasOpen) {
+    setWasOpen(open);
     if (open) {
       setQuery("");
       setHighlight(0);
     }
-  }, [open]);
+  }
 
   const commands = useMemo<Command[]>(() => {
     const settings = useSettings.getState();

@@ -1,7 +1,7 @@
 "use client";
 
 import type { IChartApi, ISeriesApi, Logical, SeriesType } from "lightweight-charts";
-import { useCallback, useEffect, useRef, type RefObject } from "react";
+import { useEffect, useRef, type RefObject } from "react";
 import type { CandleFeed } from "@/lib/terminal-app/lib/chart/feed";
 import { INDICATORS } from "@/lib/terminal-app/lib/indicators/registry";
 import type { LinePoint } from "@/lib/terminal-app/lib/indicators/compute";
@@ -29,7 +29,11 @@ export function IndicatorPaintLayer({
   const lastCompute = useRef(0);
   const instances = useIndicators((s) => s.instances);
 
-  const paint = useCallback(() => {
+  // Not useCallback: the React Compiler refuses to compile a component whose
+  // manual memoization it can't prove equivalent, and bails on the whole file.
+  // Letting it memoize this itself is both the intended remedy and strictly
+  // better — it tracks the real dependencies rather than the hand-written list.
+  const paint = () => {
     const canvas = canvasRef.current;
     const el = container.current;
     const first = feed.candles[0];
@@ -110,15 +114,15 @@ export function IndicatorPaintLayer({
       }
     }
     ctx.restore();
-  }, [chart, series, feed, container]);
+  };
 
-  const schedule = useCallback(() => {
+  const schedule = () => {
     if (rafRef.current) return;
     rafRef.current = requestAnimationFrame(() => {
       rafRef.current = 0;
       paint();
     });
-  }, [paint]);
+  };
 
   useEffect(() => {
     schedule();

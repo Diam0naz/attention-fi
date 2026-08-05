@@ -16,10 +16,18 @@ export function TrendingWall() {
   const { tokens: indexed } = useTokenIndex();
   const [tokens, setTokens] = useState<IndexedToken[]>(() => [...indexed].sort(byMindshare).slice(0, 5));
 
-  // re-seed whenever the on-chain snapshot upgrades entries
-  useEffect(() => {
+  // Re-seed whenever the on-chain snapshot upgrades entries.
+  //
+  // This is local state that starts from a prop and then drifts on its own —
+  // the jitter timer below owns it between snapshots — so it can't simply be
+  // derived. React's pattern for that is to compare against the previous prop
+  // during render; done from an effect it paints the old ranking once and
+  // immediately re-renders over it.
+  const [prevIndexed, setPrevIndexed] = useState(indexed);
+  if (indexed !== prevIndexed) {
+    setPrevIndexed(indexed);
     setTokens([...indexed].sort(byMindshare).slice(0, 5));
-  }, [indexed]);
+  }
 
   // "Live" tick — jitter mindshare and re-rank every couple seconds (client-only
   // so SSR and first paint stay deterministic).

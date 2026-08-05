@@ -9,7 +9,6 @@ import {
   fetchNftOutcomes,
   fetchPerkGrant,
   type NftOutcome,
-  type PerkGrantData,
 } from "@/lib/solana/nft-data";
 import type { AppNotification } from "@/components/notifications/notifications-panel";
 
