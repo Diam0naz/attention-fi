@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Keypair, PublicKey } from "@solana/web3.js";
+import { Keypair, PublicKey, Transaction } from "@solana/web3.js";
 import { BN } from "@anchor-lang/core";
 import { ArrowLeft, BadgeCheck, Gavel, Gift, Loader2, Lock, Plus, TrendingUp, X } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -116,6 +116,7 @@ export function NftManage({ section }: { section: Section }) {
   // mints the NFT, and the recipient pays for it.
   const [perkGrant, setPerkGrant] = useState<PerkGrantData | null>(null);
   const [claiming, setClaiming] = useState(false);
+  const [reclaimingAll, setReclaimingAll] = useState(false);
   const [skinBusy, setSkinBusy] = useState(false);
   const listableAssets = address && listable.owner === address ? listable.assets : [];
   // Collections this wallet is the update authority for.
@@ -370,6 +371,66 @@ export function NftManage({ section }: { section: Section }) {
         title: "Reclaim failed",
         detail: e instanceof Error ? e.message : "Transaction failed",
       });
+    }
+  }
+
+  /**
+   * Reclaim every expired listing of the caller's in as few transactions as
+   * possible.
+   *
+   * A creator who listed a dozen 1-of-1s had to sign a dozen times, one card at
+   * a time, to get assets back that were only sitting in escrow because nobody
+   * bought them. Six per transaction: each reclaim adds the asset and its
+   * auction PDA to the message (payer, system and Core dedupe across the
+   * batch), which leaves room under the 1232-byte limit.
+   *
+   * Partial success is real and reported as such — an early batch can land and
+   * a later one fail, so the count says how many actually came back rather
+   * than treating the whole run as one outcome.
+   */
+  async function reclaimAll(list: NftAuctionData[]) {
+    if (!signProgram || !address) return setWalletOpen(true);
+    const BATCH = 6;
+    setReclaimingAll(true);
+    setTx({ state: "pending", title: "Reclaiming assets…", detail: `${list.length} listings` });
+    let done = 0;
+    try {
+      const me = new PublicKey(address);
+      for (let i = 0; i < list.length; i += BATCH) {
+        const slice = list.slice(i, i + BATCH);
+        const ixs = await Promise.all(
+          slice.map((a) =>
+            signProgram.methods
+              .reclaimNftAuction()
+              .accountsPartial({
+                payer: me,
+                creator: new PublicKey(a.creator),
+                asset: new PublicKey(a.asset),
+              })
+              .instruction(),
+          ),
+        );
+        const tx = ixs.reduce((t, ix) => t.add(ix), new Transaction());
+        await signProgram.provider.sendAndConfirm!(tx, [], { commitment: "confirmed" });
+        done += slice.length;
+        const reclaimed = new Set(slice.map((a) => a.asset));
+        setAuctions((prev) =>
+          prev.map((x) => (reclaimed.has(x.asset) ? { ...x, complete: true } : x)),
+        );
+      }
+      setTx({
+        state: "confirmed",
+        title: "Reclaimed",
+        detail: `${done} ${done === 1 ? "asset" : "assets"} returned`,
+      });
+    } catch (e) {
+      setTx({
+        state: "failed",
+        title: done > 0 ? `Reclaimed ${done}, then failed` : "Reclaim failed",
+        detail: e instanceof Error ? e.message : "Transaction failed",
+      });
+    } finally {
+      setReclaimingAll(false);
     }
   }
 
@@ -898,7 +959,21 @@ export function NftManage({ section }: { section: Section }) {
 
             {expired.length > 0 && (
               <>
-                <h2 className="mt-8 text-[13px] font-bold">Ended without a buyer</h2>
+                <div className="mt-8 flex flex-wrap items-center justify-between gap-2">
+                  <h2 className="text-[13px] font-bold">Ended without a buyer</h2>
+                  {mineExpired.length > 1 && (
+                    <button
+                      onClick={() => void reclaimAll(mineExpired)}
+                      disabled={reclaimingAll}
+                      className="inline-flex items-center gap-1.5 rounded-sm border border-signal/40 bg-signal/10 px-3 py-1.5 font-mono text-[10px] font-bold text-signal disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      {reclaimingAll && <Loader2 className="h-3 w-3 animate-spin" />}
+                      {reclaimingAll
+                        ? "RECLAIMING…"
+                        : `RECLAIM ALL (${mineExpired.length})`}
+                    </button>
+                  )}
+                </div>
                 <p className="mt-1 font-mono text-[10px] leading-relaxed text-[#6B6B6B]">
                   The asset is still held in escrow by the auction. Reclaiming returns it to
                   whoever listed it — anyone can trigger it, and it can only ever go back to

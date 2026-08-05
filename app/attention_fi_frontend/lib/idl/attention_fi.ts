@@ -345,6 +345,97 @@ export type AttentionFi = {
       ]
     },
     {
+      "name": "burnCollection",
+      "docs": [
+        "Delete an empty collection and reclaim its rent. Core rejects this while",
+        "it still holds assets."
+      ],
+      "discriminator": [
+        229,
+        178,
+        26,
+        169,
+        246,
+        141,
+        86,
+        26
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "docs": [
+            "Authority over the collection, and where its rent is returned."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "collection",
+          "docs": [
+            "that it holds no assets."
+          ],
+          "writable": true
+        },
+        {
+          "name": "mplCoreProgram",
+          "address": "CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d"
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "burnNft",
+      "docs": [
+        "Burn a Core asset the caller owns, reclaiming its rent. Core rejects",
+        "frozen assets, so soulbound credentials can't be destroyed this way."
+      ],
+      "discriminator": [
+        119,
+        13,
+        183,
+        17,
+        194,
+        243,
+        38,
+        31
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "docs": [
+            "Owner of the asset, and the account rent is returned to."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "asset",
+          "writable": true
+        },
+        {
+          "name": "collection",
+          "docs": [
+            "has one — Core decrements the collection's size as part of the burn."
+          ],
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "mplCoreProgram",
+          "address": "CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d"
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "buy",
       "docs": [
         "Buy tokens along the curve with SOL (slippage-guarded)."
@@ -3531,6 +3622,53 @@ export type AttentionFi = {
           "relations": [
             "auction"
           ]
+        },
+        {
+          "name": "mplCoreProgram",
+          "address": "CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d"
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "removeFromCollection",
+      "docs": [
+        "Take an asset out of a collection, restoring the caller as its update",
+        "authority. Also the prerequisite for burning the collection."
+      ],
+      "discriminator": [
+        219,
+        186,
+        132,
+        120,
+        81,
+        206,
+        95,
+        220
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "docs": [
+            "Authority over the collection, and the asset's update authority after."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "asset",
+          "writable": true
+        },
+        {
+          "name": "collection",
+          "docs": [
+            "payer's authority over it."
+          ],
+          "writable": true
         },
         {
           "name": "mplCoreProgram",

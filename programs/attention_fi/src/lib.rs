@@ -223,6 +223,24 @@ pub mod attention_fi {
         add_to_collection::add_to_collection_handler(ctx)
     }
 
+    /// Burn a Core asset the caller owns, reclaiming its rent. Core rejects
+    /// frozen assets, so soulbound credentials can't be destroyed this way.
+    pub fn burn_nft(ctx: Context<BurnNft>) -> Result<()> {
+        burn_nft::burn_nft_handler(ctx)
+    }
+
+    /// Take an asset out of a collection, restoring the caller as its update
+    /// authority. Also the prerequisite for burning the collection.
+    pub fn remove_from_collection(ctx: Context<RemoveFromCollection>) -> Result<()> {
+        remove_from_collection::remove_from_collection_handler(ctx)
+    }
+
+    /// Delete an empty collection and reclaim its rent. Core rejects this while
+    /// it still holds assets.
+    pub fn burn_collection(ctx: Context<BurnCollection>) -> Result<()> {
+        burn_collection::burn_collection_handler(ctx)
+    }
+
     /// Start a Dutch auction for a 1-of-1 Core NFT (escrowed under the auction PDA).
     pub fn start_nft_auction(
         ctx: Context<StartNftAuction>,
