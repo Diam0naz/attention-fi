@@ -184,6 +184,17 @@ export function NftCreateFlow() {
       : kind === "nft"
         ? nftImage.trim() || null
         : null;
+
+  /**
+   * Whether the artwork URL will be beyond the minter's reach after this.
+   *
+   * mint_nft and mint_genesis both hand update authority back to the minter,
+   * so those URIs stay repointable — which is exactly what
+   * scripts/repair-nft-uri.ts relies on. start_nft_auction does not: it sets
+   * the auction PDA as update authority, and no instruction exists to update
+   * an asset held there. Only that case is genuinely one-way.
+   */
+  const uriIsPermanent = kind === "auction" || (kind === "nft" && listForSale);
   const artworkGate = useConfirmGate();
 
   // What the confirm step previews.
@@ -417,15 +428,26 @@ export function NftCreateFlow() {
                 three steps away on Confirm. */}
             <div className="mt-3">
               {nftImage.trim() ? (
-                <Notice tone="danger" title="THIS LINK IS PERMANENT">
-                  Metaplex Core writes the artwork URL into the asset at mint and it can never be
-                  changed. If this host stops serving the file, the NFT is blank in every wallet,
-                  forever. Use a URL you control and intend to keep.
-                </Notice>
+                uriIsPermanent ? (
+                  <Notice tone="danger" title="THIS LINK CAN'T BE CHANGED LATER">
+                    Listing mints the asset into the auction escrow, which becomes its update
+                    authority — so unlike an NFT you mint to yourself, you won&apos;t be able to
+                    repoint this URL afterwards. If the host stops serving the file, the NFT is
+                    blank in every wallet. Use a URL you control and intend to keep.
+                  </Notice>
+                ) : (
+                  <Notice tone="caution" title="USE A URL YOU INTEND TO KEEP">
+                    Written into the asset at mint. You keep update authority on what you mint to
+                    yourself, so this can be repointed later — but only by you, and only while you
+                    hold that key. If the host stops serving the file before then, the NFT is blank
+                    in every wallet.
+                  </Notice>
+                )
               ) : (
                 <Notice tone="info" title="NO ARTWORK? THAT'S FINE">
                   Leave this blank and the NFT points at an AttentionFi card rendered from its
-                  on-chain name — which we can restyle later. Supplying your own URL is permanent
+                  on-chain name — which we can restyle later. Supplying your own URL is harder to
+                  undo
                   and can&apos;t be undone.
                 </Notice>
               )}
@@ -969,25 +991,26 @@ export function NftCreateFlow() {
                     is ordinary, and the fallback card is permanent in a way we
                     can still restyle — but an external link is a dependency the
                     holder can never repair. */}
-                {customArtwork && (
+                {customArtwork && uriIsPermanent && (
                   <ConfirmGate
                     className="mt-4"
-                    title="ARTWORK CANNOT BE CHANGED AFTER MINTING"
+                    title="ARTWORK CANNOT BE CHANGED AFTER LISTING"
                     consequence={
                       <>
                         This asset will point at <span className="break-all">{customArtwork}</span>{" "}
-                        for as long as it exists. Neither you nor AttentionFi can update it later
+                        for as long as it exists. Listing puts it under the auction escrow&apos;s
+                        update authority, so neither you nor AttentionFi can repoint it afterwards
                         — if that URL stops resolving, the NFT is permanently blank.
                       </>
                     }
-                    acknowledgement="I control this URL and understand it can never be changed."
+                    acknowledgement="I control this URL and understand it can't be changed once listed."
                     checked={artworkGate.acknowledged}
                     onChange={artworkGate.setAcknowledged}
                   />
                 )}
                 <button
                   onClick={mint}
-                  disabled={customArtwork !== null && !artworkGate.acknowledged}
+                  disabled={customArtwork !== null && uriIsPermanent && !artworkGate.acknowledged}
                   className="mt-4 w-full rounded-sm bg-signal py-3 font-mono text-[13px] font-bold text-[#0A0A0A] disabled:cursor-not-allowed disabled:opacity-40">
                   {kind === "genesis" ? "MINT GENESIS" : willList ? "START AUCTION" : "MINT NFT"}
                 </button>
