@@ -16,3 +16,4 @@ __pycache__/
 buffer.json
 deploy-buffer.json
 *-keypair.json
+.vercel

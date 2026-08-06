@@ -21,6 +21,7 @@ import { SkinPicker } from "@/components/nft/skin-picker";
 import { AssetSkinPicker } from "@/components/nft/asset-skin-picker";
 import { CollectionShelf } from "@/components/nft/collection-shelf";
 import { RefreshButton } from "@/components/ui/refresh-button";
+import { artworkUrl } from "@/lib/nft-artwork";
 import { Notice } from "@/components/ui/notice";
 import { ConfirmGate } from "@/components/ui/confirm-gate";
 import { useNftPortfolio } from "@/components/nft/use-nft-portfolio";
@@ -916,7 +917,7 @@ export function NftManage({ section }: { section: Section }) {
                 id: g.id,
                 skinId: genesisSkins[g.asset]?.id ?? null,
                 skinUri: genesisSkins[g.asset]?.uri ?? null,
-                ...(g.uri ? { image: g.uri } : {}),
+                ...(artworkUrl(g.uri) ? { image: artworkUrl(g.uri)! } : {}),
               };
               return (
               <div key={g.asset} className="rounded-sm border border-white/[0.08] bg-[#0f1620] p-4">
@@ -1006,10 +1007,10 @@ export function NftManage({ section }: { section: Section }) {
                     className="af-pack-card group rounded-sm border border-white/[0.08] bg-[#0f1620] p-3"
                   >
                     <div className="aspect-square w-full overflow-hidden rounded-md bg-black/40">
-                      {a.uri ? (
+                      {artworkUrl(a.uri) ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img
-                          src={a.uri}
+                          src={artworkUrl(a.uri)}
                           alt={a.name}
                           className="h-full w-full object-cover"
                           loading="lazy"
@@ -1664,9 +1665,9 @@ function BurnConfirm({
 
         <div className="mt-4 flex items-center gap-3 rounded-sm border border-white/[0.08] bg-[#0A0A0A] p-3">
           <div className="h-14 w-14 shrink-0 overflow-hidden rounded-md bg-black/40">
-            {asset.uri ? (
+            {artworkUrl(asset.uri) ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={asset.uri} alt={asset.name} className="h-full w-full object-cover" />
+              <img src={artworkUrl(asset.uri)} alt={asset.name} className="h-full w-full object-cover" />
             ) : (
               <div className="flex h-full w-full items-center justify-center">
                 <Boxes className="h-5 w-5 text-[#3a4553]" />

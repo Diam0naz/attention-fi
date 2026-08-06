@@ -6,6 +6,7 @@ import { PublicKey, Transaction } from "@solana/web3.js";
 import { ChevronDown, Loader2, PackageOpen, Plus, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { NftCardFace, type NftCardData } from "@/components/nft/nft-card";
+import { artworkUrl } from "@/lib/nft-artwork";
 import { Notice } from "@/components/ui/notice";
 import { useProgram, useReadonlyProgram } from "@/lib/solana/use-program";
 import {
@@ -35,7 +36,10 @@ const short = (a: string) => `${a.slice(0, 4)}…${a.slice(-4)}`;
 const BATCH = 8;
 
 function toCard(a: OwnedAsset): NftCardData {
-  return { kind: "custom", name: a.name, ...(a.uri ? { image: a.uri } : {}) };
+  // artworkUrl, not a.uri: an asset minted without its own picture points at
+  // the metadata document, which renders as nothing in an <img>.
+  const image = artworkUrl(a.uri);
+  return { kind: "custom", name: a.name, ...(image ? { image } : {}) };
 }
 
 export function CollectionShelf({
