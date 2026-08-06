@@ -17,6 +17,7 @@ import { useLiveTokenDetail } from "@/components/token/use-live-token";
 import { MindshareSourceBadge } from "@/components/feed/mindshare-source";
 import { AuctionPanel } from "@/components/token/auction-panel";
 import { RefreshButton } from "@/components/ui/refresh-button";
+import { Notice } from "@/components/ui/notice";
 import { ConvictionPanel } from "@/components/token/conviction-panel";
 import { RevenuePanel } from "@/components/token/revenue-panel";
 import { useTokenIndex } from "@/lib/token-index";
@@ -25,7 +26,8 @@ import { useSolBalance } from "@/lib/solana/use-sol-balance";
 import { useSolUsd } from "@/lib/solana/sol-usd";
 import { useTokenBalance } from "@/lib/solana/use-token-balance";
 import { handleToMint } from "@/lib/solana/registry";
-import { buyTokens, sellTokens } from "@/lib/solana/trade";
+import { useVenue } from "@/lib/solana/use-venue";
+import { graduateToken, tradeOnVenue, venueQuote, venueSpot } from "@/lib/solana/venue";
 import { explorerTx } from "@/lib/solana/config";
 import { TxStatus, type TxState } from "@/components/wallet/tx-status";
 
@@ -45,7 +47,10 @@ export function TokenDetailTerminal({ token: tokenProp }: { token: TokenDetail }
   const program = useProgram();
   const solBalance = useSolBalance();
   const solUsdRate = useSolUsd();
-  const tokenMint = handleToMint(token.handle)?.toBase58() ?? "";
+  const mintKey = handleToMint(token.handle);
+  const tokenMint = mintKey?.toBase58() ?? "";
+  // Which venue is live decides both the quote and where the order goes.
+  const { venue, decimals: venueDecimals, feeBps, refresh: refreshVenue } = useVenue(mintKey);
   // How many of THIS token the wallet holds (null when none / unregistered).
   const heldTokens = useTokenBalance(tokenMint);
   // Real wallet SOL when connected; mock as a preview fallback.
@@ -85,10 +90,21 @@ export function TokenDetailTerminal({ token: tokenProp }: { token: TokenDetail }
   };
   const mechLabel = token.mechanism ? MECH_LABEL[token.mechanism] : MECH_LABEL.bonding;
   const amt = parseFloat(amount) || 0;
-  // Price estimate (SOL/token) from market cap (works for live + mock); the real
-  // fill comes from the on-chain curve. Buy: SOL→tokens; Sell: tokens→SOL.
-  const priceSol = token.marketCap / solUsdRate / 1_000_000_000;
-  const receive = side === "buy" ? (priceSol > 0 ? amt / priceSol : 0) : amt * priceSol;
+  // Quote from the venue that will actually fill the order. The market-cap
+  // estimate below is the fallback for catalog tokens that aren't on-chain at
+  // all; using it for a live token would price a trade against a number derived
+  // from a different source than the one executing it.
+  const fallbackPriceSol = token.marketCap / solUsdRate / 1_000_000_000;
+  const receive = venue
+    ? venueQuote(venue, side, amt, venueDecimals, feeBps)
+    : side === "buy"
+      ? fallbackPriceSol > 0
+        ? amt / fallbackPriceSol
+        : 0
+      : amt * fallbackPriceSol;
+  // Between completion and migration the token trades nowhere — the curve
+  // refuses and the pool doesn't exist yet.
+  const stranded = venue?.kind === "stranded";
   // Balance for the active side: SOL when buying, token holdings when selling.
   const sideBalance = side === "buy" ? walletSol : heldTokens ?? 0;
   const balLoading = connected && (side === "buy" ? solBalance == null : heldTokens == null);
@@ -110,12 +126,32 @@ export function TokenDetailTerminal({ token: tokenProp }: { token: TokenDetail }
 
     try {
       const wallet = new PublicKey(address);
-      const sig =
-        side === "buy"
-          ? await buyTokens(program, wallet, mint, amt)
-          : await sellTokens(program, wallet, mint, amt, 6);
+      const sig = await tradeOnVenue(program, wallet, mint, side, amt, venueDecimals);
       setTxSig(sig);
       setTx("confirmed");
+    } catch (e) {
+      setTxErr(e instanceof Error ? e.message : String(e));
+      setTx("failed");
+    }
+  }
+
+  /**
+   * Run the curve→pool migration. Exposed to anyone, not just the creator: the
+   * curve stops trading the moment it completes, so gating this on the creator
+   * showing up would strand every holder until they did.
+   */
+  async function migrate() {
+    if (!connected) return setWalletOpen(true);
+    const mint = handleToMint(token.handle);
+    if (!program || !mint || !address) return;
+    setTx("pending");
+    setTxSig(null);
+    setTxErr(null);
+    try {
+      const sig = await graduateToken(program, new PublicKey(address), mint);
+      setTxSig(sig);
+      setTx("confirmed");
+      refreshVenue();
     } catch (e) {
       setTxErr(e instanceof Error ? e.message : String(e));
       setTx("failed");
@@ -380,6 +416,29 @@ export function TokenDetailTerminal({ token: tokenProp }: { token: TokenDetail }
             <RevenuePanel mint={tokenMint} symbol={token.symbol} />
           ) : (
           <div className="rounded-sm border border-white/[0.08] bg-[#0f1620] p-4">
+            {/* A token that has completed but not migrated trades nowhere. The
+                buy/sell controls stay visible but disabled, because hiding them
+                would read as "this token is gone" rather than "one step is
+                outstanding, and you can take it". */}
+            {stranded && (
+              <div className="mb-3">
+                <Notice tone="caution" title="Awaiting migration">
+                  ${token.symbol} hit its graduation threshold, so the bonding
+                  curve has stopped trading — and its AMM pool hasn&apos;t been
+                  created yet, so nothing has picked it up. Until the migration
+                  runs it can&apos;t be bought or sold. Anyone can run it: it
+                  moves the curve&apos;s SOL and remaining tokens into the pool,
+                  takes no cut, and doesn&apos;t need the creator.
+                </Notice>
+                <button
+                  onClick={migrate}
+                  className="mt-2 w-full rounded-sm bg-signal py-2 font-mono text-[11px] font-bold tracking-wide text-[#0A0A0A]"
+                >
+                  {connected ? "RUN MIGRATION" : "CONNECT TO MIGRATE"}
+                </button>
+              </div>
+            )}
+
             {/* buy/sell toggle */}
             <div className="grid grid-cols-2 gap-1 rounded-sm bg-white/[0.04] p-1">
               {(["buy", "sell"] as const).map((s) => (
@@ -443,7 +502,18 @@ export function TokenDetailTerminal({ token: tokenProp }: { token: TokenDetail }
               </div>
             </div>
 
-            <div className="mt-2.5 flex justify-between font-mono text-[10px] text-[#6B6B6B]">
+            {/* Spot from the venue that will fill the order. Shown next to the
+                estimate so the gap between them — the cost of size — is legible
+                rather than something the trader has to work out. */}
+            {venue && (
+              <div className="mt-2.5 flex justify-between font-mono text-[10px] text-[#6B6B6B]">
+                <span>Spot</span>
+                <span className="text-[#F5F4F0]">
+                  {venueSpot(venue, venueDecimals).toPrecision(4)} SOL
+                </span>
+              </div>
+            )}
+            <div className="mt-1 flex justify-between font-mono text-[10px] text-[#6B6B6B]">
               <span>You receive</span>
               <span className="text-[#F5F4F0]">
                 ≈ {receive.toLocaleString(undefined, { maximumFractionDigits: side === "buy" ? 0 : 4 })}{" "}
@@ -457,14 +527,23 @@ export function TokenDetailTerminal({ token: tokenProp }: { token: TokenDetail }
 
             <button
               onClick={submit}
+              disabled={stranded}
               className={cn(
-                "mt-4 w-full rounded-sm py-3 font-mono text-[13px] font-bold tracking-wide text-[#0A0A0A]",
+                "mt-4 w-full rounded-sm py-3 font-mono text-[13px] font-bold tracking-wide text-[#0A0A0A] disabled:cursor-not-allowed disabled:opacity-40",
                 side === "buy" ? "bg-signal" : "bg-noise",
               )}
             >
-              {connected ? `${side.toUpperCase()} $${token.symbol}` : "CONNECT TO TRADE"}
+              {stranded
+                ? "MIGRATION REQUIRED"
+                : connected
+                  ? `${side.toUpperCase()} $${token.symbol}`
+                  : "CONNECT TO TRADE"}
             </button>
-            <div className="mt-2 text-center font-mono text-[10px] text-[#4b5563]">{mechLabel}</div>
+            {/* Name the venue that will fill the order, not the one the token
+                launched on — after graduation they're different. */}
+            <div className="mt-2 text-center font-mono text-[10px] text-[#4b5563]">
+              {venue?.kind === "pool" ? "Graduated · constant-product AMM pool" : mechLabel}
+            </div>
 
             {tx && (
               <div className="mt-3">

@@ -5,7 +5,6 @@ import {
   ata,
   auctionPda,
   convictionPda,
-  curvePda,
   globalPda,
   positionPda,
   revenuePda,
@@ -16,77 +15,20 @@ import {
   auctionQuote,
   fetchAuctionDetail,
   fetchConvictionDetail,
-  fetchCurve,
   quoteBuy,
   quoteSell,
   type ConvictionDetail,
 } from "./curve";
 
-/**
- * Buy `solAmount` SOL worth of `mint` from its bonding curve. Computes a
- * slippage-protected min-out from the current reserves. Returns the tx sig.
- * Account layout verified against the IDL (see scripts/buy-token.ts).
- */
-export async function buyTokens(
-  program: Program<AttentionFi>,
-  buyer: PublicKey,
-  mint: PublicKey,
-  solAmount: number,
-  slippageBps = 100,
-): Promise<string> {
-  const global = await program.account.global.fetch(globalPda());
-  const curve = await fetchCurve(program, mint);
-  if (!curve) throw new Error("This token isn't live on-chain yet.");
-
-  const lamports = Math.floor(solAmount * LAMPORTS_PER_SOL);
-  const minOut = Math.max(0, Math.floor(quoteBuy(curve, solAmount) * (1 - slippageBps / 10_000)));
-  const curveKey = curvePda(mint);
-
-  return program.methods
-    .buy(new BN(lamports), new BN(minOut))
-    .accountsPartial({
-      buyer,
-      treasury: global.treasury,
-      curve: curveKey,
-      mint,
-      vault: ata(curveKey, mint),
-      buyerTokenAccount: ata(buyer, mint),
-      perk: null,
-    })
-    .rpc();
-}
-
-/** Sell `tokenAmount` whole tokens back to the curve. */
-export async function sellTokens(
-  program: Program<AttentionFi>,
-  seller: PublicKey,
-  mint: PublicKey,
-  tokenAmount: number,
-  decimals: number,
-  slippageBps = 100,
-): Promise<string> {
-  const global = await program.account.global.fetch(globalPda());
-  const curve = await fetchCurve(program, mint);
-  if (!curve) throw new Error("This token isn't live on-chain yet.");
-
-  const rawTokens = Math.floor(tokenAmount * 10 ** decimals);
-  const expectedSol = quoteSell(curve, rawTokens);
-  const minSol = Math.max(0, Math.floor(expectedSol * (1 - slippageBps / 10_000) * LAMPORTS_PER_SOL));
-  const curveKey = curvePda(mint);
-
-  return program.methods
-    .sell(new BN(rawTokens), new BN(minSol))
-    .accountsPartial({
-      seller,
-      treasury: global.treasury,
-      curve: curveKey,
-      mint,
-      vault: ata(curveKey, mint),
-      sellerTokenAccount: ata(seller, mint),
-      perk: null,
-    })
-    .rpc();
-}
+// Plain buy/sell live in ./venue, not here.
+//
+// A bonding curve is only one of the two venues a token trades on over its life,
+// and which one is live is not a property of the trade — it's a property of the
+// token at that moment. Building the instruction without first resolving the
+// venue is how a screen ends up sending `buy` to a curve that has completed,
+// which fails with `CurveComplete` and reads to the trader as the app being
+// broken. The mechanisms below don't have that problem: an auction, a conviction
+// curve and a revenue offering each trade in exactly one place, forever.
 
 // --- Dutch auction -----------------------------------------------------------
 // An auction is not a curve with different numbers: there is no sell side, the

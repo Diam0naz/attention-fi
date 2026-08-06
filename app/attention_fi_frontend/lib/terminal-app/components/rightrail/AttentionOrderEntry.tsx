@@ -5,16 +5,16 @@ import { PublicKey } from "@solana/web3.js";
 import { WalletConnectModal } from "@/components/wallet/wallet-connect-modal";
 import { useWallet } from "@/components/wallet/wallet-provider";
 import { explorerTx } from "@/lib/solana/config";
-import {
-  fetchCurve,
-  fetchGlobal,
-  quoteBuy,
-  quoteSell,
-  spotPriceSol,
-  type CurveState,
-} from "@/lib/solana/curve";
+import { fetchGlobal } from "@/lib/solana/curve";
 import { handleToMint } from "@/lib/solana/registry";
-import { buyTokens, sellTokens } from "@/lib/solana/trade";
+import {
+  graduateToken,
+  resolveVenue,
+  tradeOnVenue,
+  venueQuote,
+  venueSpot,
+  type Venue,
+} from "@/lib/solana/venue";
 import { useProgram, useReadonlyProgram } from "@/lib/solana/use-program";
 import { useSolBalance } from "@/lib/solana/use-sol-balance";
 import { useTokenBalance } from "@/lib/solana/use-token-balance";
@@ -72,8 +72,9 @@ export function AttentionOrderEntry() {
   const [side, setSide] = useState<"buy" | "sell">("buy");
   const [amount, setAmount] = useState("0.1");
   const [slippageBps, setSlippageBps] = useState<number>(100);
-  const [curve, setCurve] = useState<CurveState | null>(null);
+  const [venue, setVenue] = useState<Venue | null>(null);
   const [decimals, setDecimals] = useState(6);
+  const [feeBps, setFeeBps] = useState(100);
   const [tx, setTx] = useState<TxState>({ kind: "idle" });
   const [walletModal, setWalletModal] = useState(false);
 
@@ -88,7 +89,7 @@ export function AttentionOrderEntry() {
   const [prevSymbol, setPrevSymbol] = useState(symbol);
   if (symbol !== prevSymbol) {
     setPrevSymbol(symbol);
-    setCurve(null);
+    setVenue(null);
     setTx({ kind: "idle" });
   }
 
@@ -97,10 +98,13 @@ export function AttentionOrderEntry() {
     if (!mint) return;
     let cancelled = false;
     const load = async () => {
-      const [c, g] = await Promise.all([fetchCurve(readonly, mint), getGlobalOnce(readonly)]);
+      const [v, g] = await Promise.all([resolveVenue(readonly, mint), getGlobalOnce(readonly)]);
       if (cancelled) return;
-      if (c) setCurve(c);
-      if (g) setDecimals(g.tokenDecimals);
+      if (v) setVenue(v);
+      if (g) {
+        setDecimals(g.tokenDecimals);
+        setFeeBps(g.feeBps);
+      }
     };
     void load();
     const timer = setInterval(() => void load(), 10_000);
@@ -136,26 +140,21 @@ export function AttentionOrderEntry() {
       : tokenBalance;
 
   const amountNum = parseFloat(amount) || 0;
-  const spot = curve ? spotPriceSol(curve, decimals) : 0;
-  const estimate =
-    curve && amountNum > 0
-      ? side === "buy"
-        ? quoteBuy(curve, amountNum) / 10 ** decimals // tokens out
-        : quoteSell(curve, amountNum * 10 ** decimals) // SOL out
-      : 0;
+  const spot = venue ? venueSpot(venue, decimals) : 0;
+  const estimate = venue ? venueQuote(venue, side, amountNum, decimals, feeBps) : 0;
+  // Nothing trades between completion and migration, so the ticket becomes a
+  // graduate button rather than a buy button that is certain to fail.
+  const stranded = venue?.kind === "stranded";
 
   const canSubmit =
-    connected && program !== null && curve !== null && amountNum > 0 && tx.kind !== "pending";
+    connected && program !== null && venue !== null && !stranded && amountNum > 0 && tx.kind !== "pending";
 
   const submit = async () => {
     if (!program || !address || !mint) return;
     setTx({ kind: "pending" });
     try {
-      const buyer = new PublicKey(address);
-      const sig =
-        side === "buy"
-          ? await buyTokens(program, buyer, mint, amountNum, slippageBps)
-          : await sellTokens(program, buyer, mint, amountNum, decimals, slippageBps);
+      const trader = new PublicKey(address);
+      const sig = await tradeOnVenue(program, trader, mint, side, amountNum, decimals, slippageBps);
       setTx({ kind: "success", sig });
       useTrading
         .getState()
@@ -171,6 +170,23 @@ export function AttentionOrderEntry() {
     }
   };
 
+  const graduate = async () => {
+    if (!program || !address || !mint) return;
+    setTx({ kind: "pending" });
+    try {
+      const sig = await graduateToken(program, new PublicKey(address), mint);
+      setTx({ kind: "success", sig });
+      useTrading
+        .getState()
+        .appendLog("alert", `${symbol} migrated to its AMM pool (${sig.slice(0, 8)}…)`);
+      const next = await resolveVenue(readonly, mint);
+      if (next) setVenue(next);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Graduation failed";
+      setTx({ kind: "error", message });
+    }
+  };
+
   return (
     <div className="flex h-full flex-col gap-3 overflow-y-auto p-3">
       <div className="flex items-center justify-between">
@@ -178,12 +194,46 @@ export function AttentionOrderEntry() {
         <span
           className={cn(
             "rounded px-1.5 py-0.5 text-2xs uppercase",
-            curve ? "bg-up-muted text-up" : "bg-warn-muted text-warn",
+            !venue || stranded ? "bg-warn-muted text-warn" : "bg-up-muted text-up",
           )}
         >
-          {curve ? (curve.complete ? "graduated" : "live · devnet") : "loading curve…"}
+          {!venue
+            ? "loading venue…"
+            : venue.kind === "pool"
+              ? "amm pool · devnet"
+              : stranded
+                ? "awaiting migration"
+                : "curve · devnet"}
         </span>
       </div>
+
+      {stranded && (
+        <div className="rounded border border-warn/40 bg-warn-muted p-2">
+          <p className="text-2xs leading-4 text-warn">
+            This token hit its graduation threshold, so the curve has stopped
+            trading — and its AMM pool doesn&apos;t exist yet, so nothing else
+            has picked it up. Until the migration runs it can&apos;t be bought or
+            sold at all.
+          </p>
+          <p className="mt-1 text-2xs leading-4 text-mid">
+            Anyone can run it, including you. It moves the curve&apos;s SOL and
+            remaining tokens into the pool; it doesn&apos;t take a cut and
+            doesn&apos;t need the creator.
+          </p>
+          <button
+            type="button"
+            disabled={!connected || !program || tx.kind === "pending"}
+            className="mt-2 h-7 w-full rounded bg-warn text-2xs font-semibold uppercase tracking-wide text-black transition-opacity duration-150 hover:opacity-90 disabled:opacity-50"
+            onClick={() => void graduate()}
+          >
+            {tx.kind === "pending"
+              ? "Confirm in wallet…"
+              : connected
+                ? "Run migration"
+                : "Connect wallet to migrate"}
+          </button>
+        </div>
+      )}
 
       <div className="grid grid-cols-2 gap-1 rounded border border-edge bg-tinput p-0.5">
         {(["buy", "sell"] as const).map((s) => (
@@ -317,8 +367,9 @@ export function AttentionOrderEntry() {
       )}
 
       <p className="text-2xs leading-4 text-low">
-        Trades execute against the bonding curve program on devnet. Estimates
-        use current reserves; the instruction enforces your slippage minimum.
+        {venue?.kind === "pool"
+          ? "This token has graduated — trades execute against its constant-product AMM pool on devnet. Quotes are net of the swap fee, which stays in the pool. The instruction enforces your slippage minimum."
+          : "Trades execute against the bonding curve program on devnet. Estimates use current reserves; the instruction enforces your slippage minimum."}
       </p>
       <WalletConnectModal open={walletModal} onClose={() => setWalletModal(false)} />
     </div>

@@ -1,5 +1,4 @@
 import type { Program } from "@anchor-lang/core";
-import { BN } from "@anchor-lang/core";
 import { PublicKey } from "@solana/web3.js";
 import type { AttentionFi } from "@/lib/idl/attention_fi";
 import { PROGRAM_ID } from "@/lib/solana/config";
@@ -94,48 +93,6 @@ export function poolSpotSol(pool: PoolState, decimals: number): number {
   return Number(pool.solReserves) / 1e9 / tokens;
 }
 
-/**
- * Migrate a completed curve into its AMM pool.
- *
- * Permissionless by design: the curve stops trading the moment it completes, so
- * anyone must be able to finish the migration rather than the token waiting on
- * its creator. Once-only — the pool PDA is `init`, so a second call fails
- * rather than double-migrating.
- */
-export async function graduateCurve(
-  program: Program<AttentionFi>,
-  payer: PublicKey,
-  mint: PublicKey,
-): Promise<string> {
-  return program.methods
-    .graduate()
-    .accountsPartial({ payer, mint })
-    .rpc();
-}
-
-/**
- * Trade against a graduated pool.
- *
- * `minAmountOut` is enforced on-chain, so the slippage the caller sets is the
- * slippage they get — the quote here is only what the UI shows.
- */
-export async function swapOnPool(
-  program: Program<AttentionFi>,
-  trader: PublicKey,
-  mint: PublicKey,
-  amountIn: bigint,
-  minAmountOut: bigint,
-  isBuy: boolean,
-  perk?: PublicKey | null,
-): Promise<string> {
-  return program.methods
-    .swap(new BN(amountIn.toString()), new BN(minAmountOut.toString()), isBuy)
-    .accountsPartial({
-      trader,
-      mint,
-      // The perk is optional on-chain; passing null means "no discount" rather
-      // than failing, so a wallet without one still trades.
-      perk: perk ?? null,
-    })
-    .rpc();
-}
+// Sending a `swap` or `graduate` transaction lives in ./venue, alongside the
+// curve's buy/sell — the point of that module is that a screen picks a venue
+// once and cannot quote one while submitting to the other.

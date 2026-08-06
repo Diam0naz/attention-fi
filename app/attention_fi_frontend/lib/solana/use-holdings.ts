@@ -144,7 +144,10 @@ export function useHoldings(nonce = 0): HoldingsState {
               Number(swapQuote(pool.tokenReserves, pool.solReserves, base, feeBps)) / 1e9;
           } else {
             spot = spotPriceSol(curve, decimals);
-            realisable = quoteSell(curve, amount * 10 ** decimals);
+            // Net of the trading fee, which `quoteSell` doesn't apply: the
+            // point of this figure is what lands in the wallet, and the fee
+            // comes out before it does.
+            realisable = quoteSell(curve, amount * 10 ** decimals) * (1 - feeBps / 10_000);
           }
           const naive = spot * amount;
 
