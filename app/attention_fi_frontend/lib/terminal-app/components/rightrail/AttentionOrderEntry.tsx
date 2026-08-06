@@ -16,6 +16,8 @@ import {
 import { handleToMint } from "@/lib/solana/registry";
 import { buyTokens, sellTokens } from "@/lib/solana/trade";
 import { useProgram, useReadonlyProgram } from "@/lib/solana/use-program";
+import { useSolBalance } from "@/lib/solana/use-sol-balance";
+import { useTokenBalance } from "@/lib/solana/use-token-balance";
 import { cn } from "@/lib/terminal-app/lib/cn";
 import { fmtPrice, fmtQty } from "@/lib/terminal-app/lib/format";
 import { useSettings } from "@/lib/terminal-app/stores/settings";
@@ -43,6 +45,24 @@ function getGlobalOnce(program: Parameters<typeof fetchGlobal>[0]) {
  * program's buy/sell instructions. Quotes are estimates from current
  * reserves; the transaction carries slippage-protected minimums.
  */
+/** Quick-size fractions of the available balance. */
+const SIZE_FRACTIONS = [0.25, 0.5, 0.75, 1] as const;
+
+/** Left unspent when sizing a buy off the SOL balance, for fees and rent. */
+const GAS_RESERVE_SOL = 0.01;
+
+/**
+ * Format a computed size for the amount input.
+ *
+ * Trimmed rather than rounded to a fixed precision: rounding up could ask to
+ * spend more than the wallet holds, and a trailing-zero string in a number
+ * input reads as sloppy. 9 places covers lamport precision without notation.
+ */
+function fmtAmount(n: number): string {
+  if (n <= 0) return "0";
+  return Number(n.toFixed(9)).toString();
+}
+
 export function AttentionOrderEntry() {
   const symbol = useSettings((s) => s.symbol);
   const { connected, address } = useWallet();
@@ -58,6 +78,8 @@ export function AttentionOrderEntry() {
   const [walletModal, setWalletModal] = useState(false);
 
   const mint = handleToMint(symbol);
+  const tokenBalance = useTokenBalance(mint?.toBase58() ?? "");
+  const solBalance = useSolBalance();
 
   // Switching market invalidates both the quote and any transaction result
   // still on screen. Cleared during render so there is no frame in which the
@@ -99,6 +121,19 @@ export function AttentionOrderEntry() {
       </div>
     );
   }
+
+  // What a percentage button is a percentage *of*. Buying spends SOL, selling
+  // spends tokens, so the two sides size against different balances.
+  //
+  // The buy side holds back GAS_RESERVE_SOL. "MAX" that spends the literal
+  // whole balance leaves nothing for the transaction fee, so the trade it
+  // offers is the one trade guaranteed to fail.
+  const sizeBase =
+    side === "buy"
+      ? solBalance === null
+        ? null
+        : Math.max(0, solBalance - GAS_RESERVE_SOL)
+      : tokenBalance;
 
   const amountNum = parseFloat(amount) || 0;
   const spot = curve ? spotPriceSol(curve, decimals) : 0;
@@ -174,9 +209,21 @@ export function AttentionOrderEntry() {
       </div>
 
       <label className="flex flex-col gap-1">
-        <span className="text-2xs text-low">
-          {side === "buy" ? "Spend (SOL)" : "Sell (tokens)"}
-        </span>
+        <div className="flex items-baseline justify-between">
+          <span className="text-2xs text-low">
+            {side === "buy" ? "Spend (SOL)" : "Sell (tokens)"}
+          </span>
+          {sizeBase !== null && (
+            <button
+              type="button"
+              onClick={() => setAmount(fmtAmount(sizeBase))}
+              className="num text-2xs text-low transition-colors duration-150 hover:text-hi"
+              title={side === "buy" ? "Spend your whole balance less gas" : "Sell everything"}
+            >
+              {side === "buy" ? "Avail" : "Held"} {fmtQty(sizeBase)}
+            </button>
+          )}
+        </div>
         <input
           type="number"
           min="0"
@@ -185,6 +232,20 @@ export function AttentionOrderEntry() {
           className="num h-7 w-full rounded border border-edge bg-tinput px-2 text-right text-xs text-hi transition-colors duration-150 focus:border-focus focus:outline-none"
           onChange={(e) => setAmount(e.target.value)}
         />
+        {sizeBase !== null && sizeBase > 0 && (
+          <div className="mt-0.5 flex items-center gap-1">
+            {SIZE_FRACTIONS.map((f) => (
+              <button
+                key={f}
+                type="button"
+                onClick={() => setAmount(fmtAmount(sizeBase * f))}
+                className="num flex-1 rounded border border-edge py-0.5 text-2xs text-mid transition-colors duration-150 hover:border-focus hover:text-hi"
+              >
+                {f === 1 ? "MAX" : `${f * 100}%`}
+              </button>
+            ))}
+          </div>
+        )}
       </label>
 
       <div className="flex items-center justify-between">
