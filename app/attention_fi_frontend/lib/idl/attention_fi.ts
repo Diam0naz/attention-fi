@@ -737,6 +737,103 @@ export type AttentionFi = {
       ]
     },
     {
+      "name": "buyCollection",
+      "docs": [
+        "Buy a listed collection at its current descending price."
+      ],
+      "discriminator": [
+        235,
+        40,
+        193,
+        248,
+        131,
+        68,
+        255,
+        72
+      ],
+      "accounts": [
+        {
+          "name": "buyer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "global",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  108,
+                  111,
+                  98,
+                  97,
+                  108
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "treasury",
+          "writable": true
+        },
+        {
+          "name": "creator",
+          "writable": true
+        },
+        {
+          "name": "auction",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  108,
+                  97,
+                  117,
+                  99,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "collection"
+              }
+            ]
+          }
+        },
+        {
+          "name": "collection",
+          "writable": true,
+          "relations": [
+            "auction"
+          ]
+        },
+        {
+          "name": "mplCoreProgram",
+          "address": "CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d"
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "maxPrice",
+          "type": "u64"
+        }
+      ]
+    },
+    {
       "name": "buyConviction",
       "docs": [
         "Buy on a conviction curve; re-locks the holder's position."
@@ -3122,6 +3219,111 @@ export type AttentionFi = {
       "args": []
     },
     {
+      "name": "listCollectionAuction",
+      "docs": [
+        "List a whole mpl-core collection as a descending auction.",
+        "",
+        "Sells the collection's update authority — the only thing a collection",
+        "has to give — which carries every member with it."
+      ],
+      "discriminator": [
+        122,
+        243,
+        247,
+        200,
+        107,
+        233,
+        114,
+        102
+      ],
+      "accounts": [
+        {
+          "name": "creator",
+          "docs": [
+            "Current update authority of the collection; must sign to hand it over."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "global",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  108,
+                  111,
+                  98,
+                  97,
+                  108
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "auction",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  108,
+                  97,
+                  117,
+                  99,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "collection"
+              }
+            ]
+          }
+        },
+        {
+          "name": "collection",
+          "docs": [
+            "change unless `creator` is the current update authority, which is the",
+            "same guarantee a constraint here would give without decoding Core's",
+            "layout."
+          ],
+          "writable": true
+        },
+        {
+          "name": "mplCoreProgram",
+          "address": "CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d"
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "startPrice",
+          "type": "u64"
+        },
+        {
+          "name": "floorPrice",
+          "type": "u64"
+        },
+        {
+          "name": "duration",
+          "type": "i64"
+        }
+      ]
+    },
+    {
       "name": "listNftAuction",
       "docs": [
         "List an NFT the caller already owns as a descending 1-of-1 auction.",
@@ -3556,6 +3758,76 @@ export type AttentionFi = {
           "type": "string"
         }
       ]
+    },
+    {
+      "name": "reclaimCollectionAuction",
+      "docs": [
+        "Return an unsold collection's update authority to its lister."
+      ],
+      "discriminator": [
+        252,
+        50,
+        68,
+        57,
+        167,
+        222,
+        131,
+        192
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "creator",
+          "writable": true
+        },
+        {
+          "name": "auction",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  108,
+                  97,
+                  117,
+                  99,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "collection"
+              }
+            ]
+          }
+        },
+        {
+          "name": "collection",
+          "writable": true,
+          "relations": [
+            "auction"
+          ]
+        },
+        {
+          "name": "mplCoreProgram",
+          "address": "CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d"
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
     },
     {
       "name": "reclaimNftAuction",
@@ -5306,6 +5578,19 @@ export type AttentionFi = {
       ]
     },
     {
+      "name": "collectionAuction",
+      "discriminator": [
+        237,
+        166,
+        208,
+        136,
+        232,
+        239,
+        243,
+        135
+      ]
+    },
+    {
       "name": "convictionCurve",
       "discriminator": [
         200,
@@ -5513,6 +5798,32 @@ export type AttentionFi = {
         44,
         52,
         28
+      ]
+    },
+    {
+      "name": "collectionAuctionEvent",
+      "discriminator": [
+        115,
+        201,
+        255,
+        152,
+        155,
+        134,
+        103,
+        226
+      ]
+    },
+    {
+      "name": "collectionListedEvent",
+      "discriminator": [
+        146,
+        194,
+        60,
+        81,
+        80,
+        27,
+        174,
+        59
       ]
     },
     {
@@ -5914,6 +6225,164 @@ export type AttentionFi = {
           {
             "name": "bump",
             "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "collectionAuction",
+      "docs": [
+        "A whole mpl-core collection listed as a descending auction.",
+        "",
+        "Deliberately not reusing `NftAuction`. A collection has no owner — only an",
+        "update authority — so it cannot be escrowed with a transfer the way an",
+        "asset is. This PDA takes the update authority instead, which means the",
+        "escrow, the sale and the reclaim are all authority reassignments rather",
+        "than transfers, and the two lifecycles never share an instruction."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "collection",
+            "docs": [
+              "The Core collection being sold."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "creator",
+            "docs": [
+              "Seller, who gets the update authority back on a reclaim."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "startPrice",
+            "docs": [
+              "Ceiling price in lamports."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "floorPrice",
+            "docs": [
+              "Floor price in lamports."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "startTime",
+            "type": "i64"
+          },
+          {
+            "name": "duration",
+            "type": "i64"
+          },
+          {
+            "name": "complete",
+            "type": "bool"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "collectionAuctionEvent",
+      "docs": [
+        "Emitted when a collection listing ends — sold, or returned unsold."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "collection",
+            "type": "pubkey"
+          },
+          {
+            "name": "creator",
+            "type": "pubkey"
+          },
+          {
+            "name": "counterparty",
+            "docs": [
+              "The buyer on a sale; equal to `creator` on a reclaim."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "outcome",
+            "docs": [
+              "One of the `NFT_*` discriminants, shared with `NftAuctionEvent`."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "price",
+            "docs": [
+              "Descending price actually paid, in lamports. Zero on a reclaim."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "fee",
+            "docs": [
+              "Protocol fee charged on top of `price`. Zero on a reclaim."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "collectionListedEvent",
+      "docs": [
+        "Emitted when a collection is listed for sale.",
+        "",
+        "Separate from `NftListedEvent` rather than reusing it with the collection",
+        "in the `asset` field: a feed that can't tell the two apart renders a whole",
+        "collection as though it were a single piece."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "collection",
+            "type": "pubkey"
+          },
+          {
+            "name": "creator",
+            "type": "pubkey"
+          },
+          {
+            "name": "size",
+            "docs": [
+              "Members at listing time — what the buyer is being offered."
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "startPrice",
+            "type": "u64"
+          },
+          {
+            "name": "floorPrice",
+            "type": "u64"
+          },
+          {
+            "name": "duration",
+            "type": "i64"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
           }
         ]
       }

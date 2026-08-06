@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 use mpl_core::instructions::CreateV2CpiBuilder;
-use mpl_core::types::DataState;
+use mpl_core::types::{Attributes, DataState, Plugin, PluginAuthorityPair};
 
 use crate::constants::{GLOBAL_SEED, NFTAUCTION_SEED};
 use crate::error::AttentionError;
@@ -50,6 +50,21 @@ pub fn start_nft_auction_handler(
     require!(floor_price > 0, AttentionError::InvalidAuctionParams);
     require!(duration > 0, AttentionError::InvalidAuctionParams);
 
+    // An empty Attributes plugin, so `buy_nft` has somewhere to record the
+    // clearing price. Added here rather than at sale time because AddPluginV1
+    // is authority-managed: the auction PDA is this asset's update authority
+    // now, and after the sale it will not be.
+    //
+    // `authority: None` leaves the plugin under the update authority, which is
+    // that same PDA — derived from the asset, so it is stable across the
+    // listing's whole life.
+    let plugins = vec![PluginAuthorityPair {
+        plugin: Plugin::Attributes(Attributes {
+            attribute_list: vec![],
+        }),
+        authority: None,
+    }];
+
     // Mint the NFT owned by the auction PDA (escrow); it signs the transfer on sale.
     CreateV2CpiBuilder::new(&ctx.accounts.mpl_core_program.to_account_info())
         .asset(&ctx.accounts.asset.to_account_info())
@@ -60,6 +75,7 @@ pub fn start_nft_auction_handler(
         .data_state(DataState::AccountState)
         .name(name)
         .uri(uri)
+        .plugins(plugins)
         .invoke()?;
 
     let now = Clock::get()?.unix_timestamp;

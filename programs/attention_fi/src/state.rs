@@ -347,6 +347,30 @@ pub struct NftAuction {
     pub bump: u8,
 }
 
+/// A whole mpl-core collection listed as a descending auction.
+///
+/// Deliberately not reusing `NftAuction`. A collection has no owner — only an
+/// update authority — so it cannot be escrowed with a transfer the way an
+/// asset is. This PDA takes the update authority instead, which means the
+/// escrow, the sale and the reclaim are all authority reassignments rather
+/// than transfers, and the two lifecycles never share an instruction.
+#[account]
+#[derive(InitSpace)]
+pub struct CollectionAuction {
+    /// The Core collection being sold.
+    pub collection: Pubkey,
+    /// Seller, who gets the update authority back on a reclaim.
+    pub creator: Pubkey,
+    /// Ceiling price in lamports.
+    pub start_price: u64,
+    /// Floor price in lamports.
+    pub floor_price: u64,
+    pub start_time: i64,
+    pub duration: i64,
+    pub complete: bool,
+    pub bump: u8,
+}
+
 /// Native constant-product AMM pool created when a bonding curve graduates.
 /// Holds the migrated real SOL + remaining tokens; trades `x*y=k`. One PDA per mint.
 #[account]

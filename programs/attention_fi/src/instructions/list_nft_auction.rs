@@ -1,9 +1,11 @@
 use anchor_lang::prelude::*;
-use mpl_core::instructions::TransferV1CpiBuilder;
+use mpl_core::instructions::{AddPluginV1CpiBuilder, TransferV1CpiBuilder};
+use mpl_core::types::{Attributes, Plugin, PluginAuthority};
 
 use crate::constants::{GLOBAL_SEED, NFTAUCTION_SEED};
 use crate::error::AttentionError;
 use crate::events::NftListedEvent;
+use crate::nft::has_attributes_plugin;
 use crate::state::{Global, NftAuction};
 
 /// List an NFT the caller already owns as a descending 1-of-1 auction.
@@ -89,6 +91,36 @@ pub fn list_nft_auction_handler(
         transfer.collection(Some(collection));
     }
     transfer.invoke()?;
+
+    // Delegate the Attributes plugin to the auction PDA so `buy_nft` can
+    // record the clearing price on the asset itself.
+    //
+    // This has to happen here, not at sale time: Attributes is an
+    // authority-managed plugin, and the seller — who holds update authority
+    // over an asset they minted — is only a signer during this instruction.
+    // The delegation is to the PDA derived from this asset, so it stays valid
+    // for the listing's whole life and for any later relisting.
+    //
+    // An asset can be listed, sold and listed again, and AddPluginV1 fails
+    // outright on a plugin that already exists. On that second pass the plugin
+    // is already delegated to this same PDA, so there is nothing to do.
+    if !has_attributes_plugin(&ctx.accounts.asset.try_borrow_data()?) {
+        let mut add = AddPluginV1CpiBuilder::new(&core_program);
+        add.asset(&asset_info)
+            .payer(&creator_info)
+            .authority(Some(&creator_info))
+            .system_program(&system_info)
+            .plugin(Plugin::Attributes(Attributes {
+                attribute_list: vec![],
+            }))
+            .init_authority(PluginAuthority::Address {
+                address: auction_info.key(),
+            });
+        if let Some(collection) = &collection_info {
+            add.collection(Some(collection));
+        }
+        add.invoke()?;
+    }
 
     let now = Clock::get()?.unix_timestamp;
     let auction = &mut ctx.accounts.auction;

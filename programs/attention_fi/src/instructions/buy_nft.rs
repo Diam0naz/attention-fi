@@ -1,11 +1,13 @@
 use anchor_lang::prelude::*;
 use anchor_lang::system_program;
-use mpl_core::instructions::TransferV1CpiBuilder;
+use mpl_core::instructions::{TransferV1CpiBuilder, UpdatePluginV1CpiBuilder};
+use mpl_core::types::Plugin;
 
 use crate::auction::current_price;
 use crate::constants::{GLOBAL_SEED, NFTAUCTION_SEED};
 use crate::error::AttentionError;
 use crate::events::{NftAuctionEvent, NFT_SOLD};
+use crate::nft::last_sale_attributes;
 use crate::state::{Global, NftAuction};
 
 #[derive(Accounts)]
@@ -92,9 +94,30 @@ pub fn buy_nft_handler(ctx: Context<BuyNft>, max_price: u64) -> Result<()> {
         )?;
     }
 
-    // Transfer the escrowed NFT to the buyer; auction PDA (owner) signs.
     let asset_key = ctx.accounts.asset.key();
     let signer_seeds: &[&[&[u8]]] = &[&[NFTAUCTION_SEED, asset_key.as_ref(), &[auction.bump]]];
+
+    // Record what it sold for, on the asset itself.
+    //
+    // Written before the transfer, not after: the auction PDA's claim on this
+    // asset — as owner, and as the plugin's authority — is at its strongest
+    // while the asset is still escrowed. Doing it afterwards would depend on a
+    // delegation surviving a change of owner.
+    //
+    // The plugin is guaranteed to exist by the time anything can be bought:
+    // start_nft_auction mints with it, and list_nft_auction adds it while the
+    // seller is signing. This is what makes the price readable by a wallet or
+    // a marketplace that has never heard of AttentionFi, rather than living
+    // only in an event that needs an indexer to find.
+    UpdatePluginV1CpiBuilder::new(&ctx.accounts.mpl_core_program.to_account_info())
+        .asset(&ctx.accounts.asset.to_account_info())
+        .payer(&ctx.accounts.buyer.to_account_info())
+        .authority(Some(&ctx.accounts.auction.to_account_info()))
+        .system_program(&ctx.accounts.system_program.to_account_info())
+        .plugin(Plugin::Attributes(last_sale_attributes(price, now)))
+        .invoke_signed(signer_seeds)?;
+
+    // Transfer the escrowed NFT to the buyer; auction PDA (owner) signs.
     TransferV1CpiBuilder::new(&ctx.accounts.mpl_core_program.to_account_info())
         .asset(&ctx.accounts.asset.to_account_info())
         .payer(&ctx.accounts.buyer.to_account_info())

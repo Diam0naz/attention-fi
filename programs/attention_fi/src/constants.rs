@@ -19,6 +19,10 @@ pub const PERKGRANT_SEED: &[u8] = b"perkgrant";
 pub const GENESIS_SEED: &[u8] = b"genesis";
 pub const GENPOOL_SEED: &[u8] = b"genpool";
 pub const NFTAUCTION_SEED: &[u8] = b"nftauction";
+/// Escrow for a whole collection on sale. Separate from `NFTAUCTION_SEED`
+/// because a collection is a different Core account type that changes hands a
+/// different way — see `list_collection_auction`.
+pub const COLLECTIONAUCTION_SEED: &[u8] = b"colauction";
 
 /// One SOL in lamports, so tiers below can be written in the unit their doc
 /// comments describe them in.

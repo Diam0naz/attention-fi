@@ -284,6 +284,34 @@ pub mod attention_fi {
         reclaim_nft_auction::reclaim_nft_auction_handler(ctx)
     }
 
+    /// List a whole mpl-core collection as a descending auction.
+    ///
+    /// Sells the collection's update authority — the only thing a collection
+    /// has to give — which carries every member with it.
+    pub fn list_collection_auction(
+        ctx: Context<ListCollectionAuction>,
+        start_price: u64,
+        floor_price: u64,
+        duration: i64,
+    ) -> Result<()> {
+        list_collection_auction::list_collection_auction_handler(
+            ctx,
+            start_price,
+            floor_price,
+            duration,
+        )
+    }
+
+    /// Buy a listed collection at its current descending price.
+    pub fn buy_collection(ctx: Context<BuyCollection>, max_price: u64) -> Result<()> {
+        buy_collection::buy_collection_handler(ctx, max_price)
+    }
+
+    /// Return an unsold collection's update authority to its lister.
+    pub fn reclaim_collection_auction(ctx: Context<ReclaimCollectionAuction>) -> Result<()> {
+        reclaim_collection_auction::reclaim_collection_auction_handler(ctx)
+    }
+
     /// Route a token's fees to its genesis NFT holders (split pro-rata by share).
     pub fn deposit_genesis_fee(ctx: Context<DepositGenesisFee>, amount: u64) -> Result<()> {
         deposit_genesis_fee::deposit_genesis_fee_handler(ctx, amount)

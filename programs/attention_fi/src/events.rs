@@ -102,6 +102,39 @@ pub struct NftAuctionEvent {
     pub timestamp: i64,
 }
 
+/// Emitted when a collection is listed for sale.
+///
+/// Separate from `NftListedEvent` rather than reusing it with the collection
+/// in the `asset` field: a feed that can't tell the two apart renders a whole
+/// collection as though it were a single piece.
+#[event]
+pub struct CollectionListedEvent {
+    pub collection: Pubkey,
+    pub creator: Pubkey,
+    /// Members at listing time — what the buyer is being offered.
+    pub size: u32,
+    pub start_price: u64,
+    pub floor_price: u64,
+    pub duration: i64,
+    pub timestamp: i64,
+}
+
+/// Emitted when a collection listing ends — sold, or returned unsold.
+#[event]
+pub struct CollectionAuctionEvent {
+    pub collection: Pubkey,
+    pub creator: Pubkey,
+    /// The buyer on a sale; equal to `creator` on a reclaim.
+    pub counterparty: Pubkey,
+    /// One of the `NFT_*` discriminants, shared with `NftAuctionEvent`.
+    pub outcome: u8,
+    /// Descending price actually paid, in lamports. Zero on a reclaim.
+    pub price: u64,
+    /// Protocol fee charged on top of `price`. Zero on a reclaim.
+    pub fee: u64,
+    pub timestamp: i64,
+}
+
 /// Emitted when a 1-of-1 is listed, whether freshly minted or already owned.
 #[event]
 pub struct NftListedEvent {
