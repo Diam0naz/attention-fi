@@ -821,6 +821,10 @@ describe("attention_fi perk & genesis NFTs", () => {
         global: globalPda,
         recipient,
         subjectMint,
+        curve: PublicKey.findProgramAddressSync(
+          [Buffer.from("curve"), subjectMint.toBuffer()],
+          program.programId
+        )[0],
         genesis: genesisPda,
         pool: poolPda,
         asset: asset.publicKey,
@@ -865,6 +869,10 @@ describe("attention_fi perk & genesis NFTs", () => {
           global: globalPda,
           recipient,
           subjectMint,
+          curve: PublicKey.findProgramAddressSync(
+            [Buffer.from("curve"), subjectMint.toBuffer()],
+            program.programId
+          )[0],
           genesis: genesisPda,
           pool: poolPda,
           asset: asset.publicKey,

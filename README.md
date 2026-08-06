@@ -132,19 +132,40 @@ cargo fmt
 ### Integration tests (localnet)
 
 `anchor test` targets a surfpool simnet; where that is unavailable, run against a
-manual validator. The suite preloads the Metaplex Core program and crafted SAS
-attestation accounts:
+manual validator:
 
 ```bash
-# 1) start a validator with MPL Core + attestation fixtures preloaded
-# 2) deploy: solana program deploy target/deploy/attention_fi.so \
-#            --program-id target/deploy/attention_fi-keypair.json
-# 3) run the suite
+solana-test-validator --reset --quiet \
+  --bpf-program 8fQW2JbfNytdjJ7LR8dvKWMUtpeQPRqxAa3JZvBLsVVc target/deploy/attention_fi.so &
+
 yarn install
 ANCHOR_PROVIDER_URL=http://127.0.0.1:8899 \
 ANCHOR_WALLET=~/.config/solana/id.json \
 yarn run ts-mocha -p ./tsconfig.json -t 1000000 "tests/**/*.ts"
 ```
+
+That gets **15 of 22** cases passing. The remaining 7 need two things the
+validator above doesn't have, and neither is currently reproducible from a
+clean checkout:
+
+- **Metaplex Core**, which every NFT case CPIs into. Without it those fail with
+  `Unsupported program id`. Clone it onto the validator with
+  `--clone CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d --url devnet`.
+- **Crafted SAS attestation accounts**, preloaded with `--account <addr> <file>`.
+  `verify_handle` only reads an attestation, so the suite fakes them rather than
+  driving the SAS program — see `tests/fixtures/gen_sas_fixtures.py`.
+
+The blocker is that `tests/fixtures/sas.json` hardcodes pubkeys, but the
+keypairs those came from (`subject`, `subject2`, `bad`) and the account files
+the generator writes (`att_valid.json`, `att_invalid.json`) were never
+committed. Regenerating them produces different addresses than `sas.json`
+expects, so the fixtures have to be regenerated *and* `sas.json` rewritten
+together.
+
+This is why CI runs `anchor build` and `cargo test` rather than the integration
+suite: the pure-logic tests (curve, AMM, revenue, perk discounts) are
+reproducible anywhere, and the SBF build catches target-specific failures the
+host-target clippy job cannot.
 
 ### Front end
 

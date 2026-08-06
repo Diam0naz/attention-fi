@@ -102,11 +102,23 @@ jobs:
           NEXT_PUBLIC_RPC_ENDPOINT: https://api.devnet.solana.com
           NEXT_PUBLIC_PROGRAM_ID: 8fQW2JbfNytdjJ7LR8dvKWMUtpeQPRqxAa3JZvBLsVVc
 
-  anchor-test:
-    name: program — anchor test
+  # Builds the program for its real target and runs the pure-logic tests.
+  #
+  # Deliberately NOT `anchor test`. That suite needs a validator carrying
+  # mpl-core and preloaded SAS attestation accounts, and the fixtures for the
+  # latter aren't in the repo — tests/fixtures/sas.json hardcodes pubkeys, but
+  # the keypairs that produced them and the account files they generate were
+  # never committed. 15 of 22 cases pass locally; the other 7 fail on missing
+  # external programs, not on anything this repo controls. Running it here
+  # would fail every time for a reason no change could fix.
+  #
+  # What's left still earns its keep: `anchor build` compiles for SBF, which
+  # catches stack-frame and target-specific failures the host-target clippy
+  # job cannot see, and `cargo test` covers the curve, AMM, revenue and perk
+  # arithmetic.
+  program-build:
+    name: program — SBF build & unit tests
     runs-on: ubuntu-latest
-    # Installing the Solana and Anchor toolchains dominates this job; the tests
-    # themselves are quick once a validator is up.
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -132,6 +144,16 @@ jobs:
           key: anchor-${{ runner.os }}-${{ env.SOLANA_VERSION }}-${{ env.ANCHOR_VERSION }}-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: anchor-${{ runner.os }}-${{ env.SOLANA_VERSION }}-${{ env.ANCHOR_VERSION }}-
 
+      # anchor-cli depends on hidapi for Ledger support, which links against
+      # libudev — not present on the GitHub runner, so the build panics in
+      # hidapi's build.rs long before anything project-specific is compiled.
+      # Nothing else in this repo needs it; it comes in purely through the CLI.
+      - name: install build deps
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends libudev-dev pkg-config
+
       - name: install solana
         run: |
           set -euo pipefail
@@ -148,16 +170,15 @@ jobs:
               --tag "v${ANCHOR_VERSION}" anchor-cli --locked
           fi
 
+      # anchor build reads the provider wallet even when not deploying.
       - name: keypair
         run: |
           set -euo pipefail
           solana-keygen new --no-bip39-passphrase --silent --force \
             -o "$HOME/.config/solana/id.json"
 
-      - name: install js deps
-        run: yarn install --frozen-lockfile
+      - name: anchor build
+        run: anchor build
 
-      # `anchor test` builds, starts a local validator, deploys, and runs the
-      # ts-mocha suite against it.
-      - name: anchor test
-        run: anchor test
+      - name: cargo test
+        run: cargo test -p attention_fi --lib
