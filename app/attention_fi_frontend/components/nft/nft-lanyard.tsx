@@ -52,14 +52,17 @@ export function NftLanyard({ data, onClose }: { data: NftCardData | null; onClos
     return () => window.removeEventListener("keydown", onKey);
   }, [data, onClose]);
 
-  // Read before the early return — hooks can't be called conditionally. Only
-  // custom collectibles carry artwork; everything else keeps its designed
-  // palette, so there's nothing to sample.
-  const artwork = data && data.kind === "custom" ? data.image : undefined;
-  const derived = useDominantColor(artwork);
+  // Read before the early return — hooks can't be called conditionally.
+  //
+  // Sampled from whatever the card face actually renders, rather than from a
+  // guess about which kinds carry artwork. That guess used to be "custom
+  // collectibles only", which stopped being true once the signature skin let a
+  // verification or genesis card *be* an image: the strap kept its designed
+  // green while the card in front of it was a red nebula.
+  const v = data ? getNftVisual(data) : null;
+  const derived = useDominantColor(v?.image);
 
-  if (!data) return null;
-  const v = getNftVisual(data);
+  if (!data || !v) return null;
   // Strap, back face and header all track the artwork so the whole viewer
   // reads as one object rather than a tinted front on a fixed-colour shell.
   const accent = derived ?? v.accent;
