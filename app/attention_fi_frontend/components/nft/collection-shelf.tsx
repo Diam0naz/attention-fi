@@ -3,14 +3,17 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { PublicKey, Transaction } from "@solana/web3.js";
-import { ChevronDown, Loader2, PackageOpen, Plus, Trash2 } from "lucide-react";
+import { BN } from "@anchor-lang/core";
+import { ChevronDown, Loader2, PackageOpen, Plus, Tag, Trash2, Undo2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { NftCardFace, type NftCardData } from "@/components/nft/nft-card";
 import { artworkUrl } from "@/lib/nft-artwork";
 import { Notice } from "@/components/ui/notice";
+import { ListingFields, listingTerms, type ListingMode } from "@/components/nft/listing-form";
 import { useProgram, useReadonlyProgram } from "@/lib/solana/use-program";
 import {
   fetchCollectionAssets,
+  type CollectionAuctionData,
   type CollectionData,
   type OwnedAsset,
 } from "@/lib/solana/nft-data";
@@ -55,12 +58,15 @@ export function CollectionShelf({
   /** Every collection this wallet controls — an asset sitting in one of these
    *  can be moved out, because the wallet can authorise on its behalf. */
   ownedCollections,
+  listing,
   onChanged,
 }: {
   collection: CollectionData;
   owner: string;
   candidates: OwnedAsset[];
   ownedCollections: string[];
+  /** This collection's live listing, when it has one. */
+  listing?: CollectionAuctionData | null;
   onChanged: () => void;
 }) {
   const readProgram = useReadonlyProgram();
@@ -73,6 +79,11 @@ export function CollectionShelf({
   const [err, setErr] = useState<string | null>(null);
   const [nonce, setNonce] = useState(0);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [listOpen, setListOpen] = useState(false);
+  const [mode, setMode] = useState<ListingMode>("perpetual");
+  const [price, setPrice] = useState("1");
+  const [floor, setFloor] = useState("0.1");
+  const [hours, setHours] = useState("24");
 
   useEffect(() => {
     let cancelled = false;
@@ -188,6 +199,64 @@ export function CollectionShelf({
     }
   }
 
+  /**
+   * List the whole collection.
+   *
+   * Hands the collection's update authority to the escrow PDA, which is what a
+   * buyer is actually buying — it carries every member, since each asset names
+   * the collection as its own authority. While listed the wallet can no longer
+   * mint into it or change it, because those are precisely the powers on sale.
+   */
+  async function listCollection() {
+    if (!program) return;
+    const terms = listingTerms(mode, price, floor, hours);
+    if (!terms) return setErr("Check the price and duration.");
+    setBusy(true);
+    setErr(null);
+    try {
+      const toLamports = (n: number) => new BN(Math.round(n * 1e9).toString());
+      await program.methods
+        .listCollectionAuction(
+          toLamports(terms.startPrice),
+          toLamports(terms.floorPrice),
+          new BN(terms.duration.toString()),
+        )
+        .accountsPartial({
+          creator: new PublicKey(owner),
+          collection: new PublicKey(collection.address),
+        })
+        .rpc();
+      setListOpen(false);
+      onChanged();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Could not list collection");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /** Take a live listing down and get the update authority back. */
+  async function delistCollection() {
+    if (!program) return;
+    setBusy(true);
+    setErr(null);
+    try {
+      await program.methods
+        .reclaimCollectionAuction()
+        .accountsPartial({
+          payer: new PublicKey(owner),
+          creator: new PublicKey(owner),
+          collection: new PublicKey(collection.address),
+        })
+        .rpc();
+      onChanged();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Could not delist collection");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   /** Delete the (necessarily empty) collection and reclaim its rent. */
   async function deleteCollection() {
     if (!program) return;
@@ -210,6 +279,8 @@ export function CollectionShelf({
     }
   }
 
+  // A listing only constrains this collection while it can still be bought.
+  const listed = Boolean(listing && !listing.complete);
   const loading = members === null;
   const cover = (members ?? []).slice(0, 3);
   // Core refuses to burn a collection that still holds assets, so the button
@@ -309,9 +380,30 @@ export function CollectionShelf({
           </div>
 
           <div className="mt-2.5 flex flex-wrap gap-1.5">
+            {listed ? (
+              <button
+                onClick={() => void delistCollection()}
+                disabled={busy}
+                title="Take the listing down and get the collection back"
+                className="inline-flex items-center gap-1 rounded-sm border border-noise/40 px-2.5 py-1.5 font-mono text-[10px] font-bold text-noise disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Undo2 className="h-3 w-3" />}
+                DELIST
+              </button>
+            ) : (
+              <button
+                onClick={() => setListOpen((o) => !o)}
+                disabled={busy || loading}
+                className="inline-flex items-center gap-1 rounded-sm border border-white/15 px-2.5 py-1.5 font-mono text-[10px] font-bold text-[#F5F4F0] disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <Tag className="h-3 w-3" />
+                {listOpen ? "CANCEL" : "SELL SET"}
+              </button>
+            )}
+
             <button
               onClick={() => setPicking((p) => !p)}
-              disabled={movable.length === 0 || busy || loading}
+              disabled={movable.length === 0 || busy || loading || listed}
               className="inline-flex items-center gap-1 rounded-sm border border-signal/40 bg-signal/10 px-2.5 py-1.5 font-mono text-[10px] font-bold text-signal disabled:cursor-not-allowed disabled:opacity-40"
             >
               <Plus className="h-3 w-3" />
@@ -321,7 +413,7 @@ export function CollectionShelf({
             {members !== null && members.length > 0 && (
               <button
                 onClick={() => void emptyCollection()}
-                disabled={busy}
+                disabled={busy || listed}
                 title="Return every asset to your wallet as a standalone NFT"
                 className="inline-flex items-center gap-1 rounded-sm border border-white/15 px-2.5 py-1.5 font-mono text-[10px] font-bold text-[#F5F4F0] disabled:cursor-not-allowed disabled:opacity-40"
               >
@@ -335,7 +427,7 @@ export function CollectionShelf({
             {isEmpty && (
               <button
                 onClick={() => setConfirmDelete((c) => !c)}
-                disabled={busy}
+                disabled={busy || listed}
                 className="inline-flex items-center gap-1 rounded-sm border border-noise/40 px-2.5 py-1.5 font-mono text-[10px] font-bold text-noise disabled:cursor-not-allowed disabled:opacity-40"
               >
                 <Trash2 className="h-3 w-3" />
@@ -345,6 +437,53 @@ export function CollectionShelf({
           </div>
         </div>
       </div>
+
+      {listed && listing && (
+        <div className="mt-3 border-t border-white/[0.06] pt-3">
+          <Notice tone="caution" title="This collection is on sale">
+            The whole set is listed for{" "}
+            <span className="font-mono text-signal">
+              {(Number(listing.startPrice) / 1e9).toFixed(3)} SOL
+            </span>
+            {listing.duration === 0 ? " with no deadline" : ""}. Its update authority sits in
+            escrow until it sells or you delist, so adding, emptying and deleting are unavailable
+            — those are the powers a buyer would be paying for. Members can&apos;t be listed
+            separately either, or someone could buy the set and watch pieces leave it.
+          </Notice>
+        </div>
+      )}
+
+      {listOpen && !listed && (
+        <div className="mt-4 space-y-4 border-t border-white/[0.06] pt-3.5">
+          <Notice tone="caution" title="Selling a set sells control of it">
+            A collection has no owner in Metaplex Core — it has an update authority, and that is
+            what changes hands. The buyer gets authority over all {collection.size}{" "}
+            {collection.size === 1 ? "piece" : "pieces"} at once without a single asset moving.
+            Until it sells you can&apos;t mint into it, and you get everything back if you delist.
+          </Notice>
+
+          <ListingFields
+            mode={mode}
+            onModeChange={setMode}
+            price={price}
+            onPriceChange={setPrice}
+            floor={floor}
+            onFloorChange={setFloor}
+            hours={hours}
+            onHoursChange={setHours}
+            subject="collection"
+          />
+
+          <button
+            onClick={() => void listCollection()}
+            disabled={busy || !listingTerms(mode, price, floor, hours)}
+            className="inline-flex w-full items-center justify-center gap-1.5 rounded-sm bg-signal px-4 py-2.5 font-mono text-[11px] font-bold text-[#0A0A0A] disabled:opacity-40"
+          >
+            {busy && <Loader2 className="h-3 w-3 animate-spin" />}
+            {busy ? "LISTING…" : `LIST ${collection.name.toUpperCase()}`}
+          </button>
+        </div>
+      )}
 
       {open && members !== null && members.length > 0 && (
         <div className="mt-4 grid grid-cols-3 gap-2.5 border-t border-white/[0.06] pt-3.5 sm:grid-cols-5">

@@ -31,10 +31,14 @@ import { notificationsKey } from "@/components/notifications/use-notifications";
 import {
   auctionEnded,
   currentAuctionPrice,
+  collectionPrice,
+  fetchCollectionAuctions,
   fetchCollections,
   fetchListableNfts,
   fetchNftAuctions,
   fetchPerkGrant,
+  listingEnded,
+  type CollectionAuctionData,
   type CollectionData,
   type PerkGrantData,
   type NftPortfolio,
@@ -160,6 +164,9 @@ export function NftManage({ section }: { section: Section }) {
   // are different claims, and only one of them should say "none".
   const [collectionsLoaded, setCollectionsLoaded] = useState(false);
   const [collectionsNonce, setCollectionsNonce] = useState(0);
+  // Listings for the wallet's own collections, so a shelf can show that it's
+  // on sale and offer to take it down.
+  const [collectionAuctions, setCollectionAuctions] = useState<CollectionAuctionData[]>([]);
   const [newCollectionName, setNewCollectionName] = useState("");
   const newCollectionRef = useRef<HTMLInputElement | null>(null);
   const [creatingCollection, setCreatingCollection] = useState(false);
@@ -244,6 +251,21 @@ export function NftManage({ section }: { section: Section }) {
   // before a genesis card can name its subject. Bumping a nonce on arrival is
   // what makes the already-rendered cards pick it up.
   const [registryNonce, setRegistryNonce] = useState(0);
+  useEffect(() => {
+    if (section !== "collections" && section !== "auctions") return;
+    let cancelled = false;
+    fetchCollectionAuctions(readProgram)
+      .then((list) => {
+        if (!cancelled) setCollectionAuctions(list);
+      })
+      .catch(() => {
+        if (!cancelled) setCollectionAuctions([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [section, readProgram, collectionsNonce]);
+
   useEffect(() => {
     if (section !== "genesis") return;
     let cancelled = false;
@@ -461,6 +483,76 @@ export function NftManage({ section }: { section: Section }) {
       });
     } finally {
       setBurning(false);
+    }
+  }
+
+  /**
+   * Buy a listed collection.
+   *
+   * The buyer receives the collection's update authority rather than ownership
+   * of an account, which is what carries every member across at once. Priced
+   * with the same 2% cushion buyNow uses: on a declining listing the price can
+   * tick down between quoting and landing, and `max_price` is a ceiling rather
+   * than the amount charged.
+   */
+  async function buyCollection(c: CollectionAuctionData) {
+    if (!signProgram || !address) return setWalletOpen(true);
+    setTx({ state: "pending", title: "Buying collection…", detail: c.name });
+    try {
+      const price = collectionPrice(c, Date.now());
+      const maxPrice = (price * 102n) / 100n;
+      const sig = await signProgram.methods
+        .buyCollection(new BN(maxPrice.toString()))
+        .accountsPartial({
+          buyer: new PublicKey(address),
+          creator: new PublicKey(c.creator),
+          collection: new PublicKey(c.collection),
+        })
+        .rpc();
+      setTx({
+        state: "confirmed",
+        title: "Collection bought",
+        detail: `${c.name} · ${c.size} ${c.size === 1 ? "piece" : "pieces"}`,
+        signature: short(sig),
+        explorerUrl: explorerTx(sig),
+      });
+      setCollectionsNonce((n) => n + 1);
+    } catch (e) {
+      setTx({
+        state: "failed",
+        title: "Purchase failed",
+        detail: e instanceof Error ? e.message : "Transaction failed",
+      });
+    }
+  }
+
+  /** Take down one of your own collection listings from the market view. */
+  async function delistCollectionFromAuctions(c: CollectionAuctionData) {
+    if (!signProgram || !address) return setWalletOpen(true);
+    setTx({ state: "pending", title: "Delisting…", detail: c.name });
+    try {
+      const sig = await signProgram.methods
+        .reclaimCollectionAuction()
+        .accountsPartial({
+          payer: new PublicKey(address),
+          creator: new PublicKey(c.creator),
+          collection: new PublicKey(c.collection),
+        })
+        .rpc();
+      setTx({
+        state: "confirmed",
+        title: "Delisted",
+        detail: `${c.name} is yours again`,
+        signature: short(sig),
+        explorerUrl: explorerTx(sig),
+      });
+      setCollectionsNonce((n) => n + 1);
+    } catch (e) {
+      setTx({
+        state: "failed",
+        title: "Delist failed",
+        detail: e instanceof Error ? e.message : "Transaction failed",
+      });
     }
   }
 
@@ -1148,6 +1240,7 @@ export function NftManage({ section }: { section: Section }) {
                   owner={address}
                   candidates={listableAssets}
                   ownedCollections={collections.map((x) => x.address)}
+                  listing={collectionAuctions.find((a) => a.collection === c.address) ?? null}
                   // Sizes come from the collection account, so a move has to
                   // re-read them or the counts stay one action behind.
                   onChanged={() => setCollectionsNonce((n) => n + 1)}
@@ -1204,6 +1297,9 @@ export function NftManage({ section }: { section: Section }) {
         // Expired-but-unsold listings still hold the asset in escrow. They used
         // to be filtered out with `live`, which hid the fact that the NFT was
         // stuck and gave no way to get it back.
+        const liveCollections = collectionAuctions.filter(
+          (c) => !c.complete && !listingEnded(c, now),
+        );
         const expired = auctions.filter((a) => !a.complete && auctionEnded(a, now));
         const mineExpired = address ? expired.filter((a) => a.creator === address) : [];
         return (
@@ -1263,6 +1359,29 @@ export function NftManage({ section }: { section: Section }) {
                   <AuctionCard key={a.asset} auction={a} now={now} onBuy={setConfirmBuy} />
                 ))}
               </div>
+            )}
+
+            {liveCollections.length > 0 && (
+              <>
+                <h2 className="mt-8 text-[13px] font-bold">Collections for sale</h2>
+                <p className="mt-1 font-mono text-[10px] leading-relaxed text-[#6B6B6B]">
+                  Buying one transfers its update authority, and with it every piece inside — no
+                  asset changes hands individually. Members can&apos;t be listed separately while
+                  the set is up, so the count you see is the count you get.
+                </p>
+                <div className="mt-3 flex flex-col gap-2.5">
+                  {liveCollections.map((c) => (
+                    <CollectionListingRow
+                      key={c.collection}
+                      listing={c}
+                      now={now}
+                      mine={c.creator === address}
+                      onBuy={buyCollection}
+                      onDelist={delistCollectionFromAuctions}
+                    />
+                  ))}
+                </div>
+              </>
             )}
 
 
@@ -1657,6 +1776,73 @@ function Row({ k, v, accent }: { k: string; v: string; accent?: boolean }) {
  * asset instead of warning generically, so ticking it is an acknowledgement
  * about *this* collectible rather than a reflex.
  */
+/**
+ * One collection listing in the market.
+ *
+ * A row rather than a card: the useful facts are the size and the price, and a
+ * collection has no single artwork to lead with — its members each have their
+ * own.
+ */
+function CollectionListingRow({
+  listing,
+  now,
+  mine,
+  onBuy,
+  onDelist,
+}: {
+  listing: CollectionAuctionData;
+  now: number;
+  mine: boolean;
+  onBuy: (c: CollectionAuctionData) => void;
+  onDelist: (c: CollectionAuctionData) => void;
+}) {
+  const price = collectionPrice(listing, now);
+  const declining = listing.startPrice !== listing.floorPrice;
+  const secondsLeft =
+    listing.duration === 0 ? null : listing.startTime + listing.duration - Math.floor(now / 1000);
+
+  return (
+    <div className="flex flex-wrap items-center gap-4 rounded-sm border border-white/[0.08] bg-[#0f1620] p-4">
+      <div className="af-pack-empty flex h-16 w-12 shrink-0 items-center justify-center rounded-md border border-white/12">
+        <Layers className="h-5 w-5 text-[#4b5563]" />
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-[13px] font-bold">{listing.name}</div>
+        <div className="mt-0.5 font-mono text-[10px] text-[#6B6B6B]">
+          {listing.size} {listing.size === 1 ? "piece" : "pieces"} · {short(listing.collection)}
+        </div>
+        <div className="mt-1 font-mono text-[10px] text-[#6B6B6B]">
+          {listing.duration === 0
+            ? "No deadline"
+            : secondsLeft !== null && secondsLeft > 0
+              ? `${countdown(secondsLeft)} left`
+              : "ending"}
+          {declining ? " · price falling" : ""}
+        </div>
+      </div>
+      <div className="text-right">
+        <div className="font-mono text-[10px] text-[#6B6B6B]">PRICE</div>
+        <div className="font-mono text-[18px] font-bold text-signal tabular-nums">{sol(price)}</div>
+      </div>
+      {mine ? (
+        <button
+          onClick={() => onDelist(listing)}
+          className="rounded-sm border border-noise/40 px-4 py-2 font-mono text-[11px] font-bold text-noise"
+        >
+          DELIST
+        </button>
+      ) : (
+        <button
+          onClick={() => onBuy(listing)}
+          className="rounded-sm bg-signal px-5 py-2.5 font-mono text-[11px] font-bold text-[#0A0A0A]"
+        >
+          BUY SET
+        </button>
+      )}
+    </div>
+  );
+}
+
 function BurnConfirm({
   asset,
   acknowledged,

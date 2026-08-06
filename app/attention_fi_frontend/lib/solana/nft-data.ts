@@ -237,6 +237,92 @@ export async function fetchNftAuctions(program: Program<AttentionFi>): Promise<N
   });
 }
 
+/** A collection listed for sale, read from its `CollectionAuction` PDA. */
+export interface CollectionAuctionData {
+  collection: string;
+  creator: string;
+  name: string;
+  /** Members at read time. The listing sells authority over all of them. */
+  size: number;
+  startPrice: bigint;
+  floorPrice: bigint;
+  startTime: number;
+  /** Zero means perpetual — no deadline, no descent. */
+  duration: number;
+  complete: boolean;
+}
+
+/**
+ * Every collection listing, open or closed — filter client-side, the same way
+ * `fetchNftAuctions` does.
+ *
+ * The collection account is read alongside the PDA because the listing itself
+ * knows nothing about what it is selling: a buyer needs the name and, more to
+ * the point, the size, since buying the collection buys authority over every
+ * member.
+ */
+export async function fetchCollectionAuctions(
+  program: Program<AttentionFi>,
+): Promise<CollectionAuctionData[]> {
+  const all = await program.account.collectionAuction.all();
+  if (all.length === 0) return [];
+
+  const meta = await fetchCollectionMeta(
+    program,
+    all.map((a) => a.account.collection.toBase58()),
+  ).catch(() => new Map<string, { name: string; size: number }>());
+
+  return all.map((a) => {
+    const key = a.account.collection.toBase58();
+    const info = meta.get(key);
+    return {
+      collection: key,
+      creator: a.account.creator.toBase58(),
+      name: info?.name ?? short(key),
+      size: info?.size ?? 0,
+      startPrice: BigInt(a.account.startPrice.toString()),
+      floorPrice: BigInt(a.account.floorPrice.toString()),
+      startTime: Number(a.account.startTime.toString()),
+      duration: Number(a.account.duration.toString()),
+      complete: a.account.complete,
+    };
+  });
+}
+
+/**
+ * Current price of a collection listing, mirroring the program's descent.
+ *
+ * A perpetual listing never moves, which is also why this can't reuse
+ * `currentAuctionPrice` unchanged — that clamps duration to a minimum of 1 to
+ * avoid dividing by zero, which would make a perpetual listing appear to have
+ * already fallen to its floor.
+ */
+export function collectionPrice(a: CollectionAuctionData, nowMs: number): bigint {
+  if (a.duration === 0) return a.startPrice;
+  const now = BigInt(Math.floor(nowMs / 1000));
+  const start = BigInt(a.startTime);
+  const elapsed = now > start ? now - start : 0n;
+  const duration = BigInt(a.duration);
+  if (elapsed >= duration) return a.floorPrice;
+  const span = a.startPrice - a.floorPrice;
+  return a.startPrice - (span * elapsed) / duration;
+}
+
+/**
+ * Whether a listing has run out of time.
+ *
+ * A perpetual listing (duration 0) never has. Spelled out here rather than
+ * compared inline because `startTime + 0` is in the past the moment a listing
+ * opens, so the naive comparison reports every perpetual listing as expired.
+ */
+export function listingEnded(
+  a: { startTime: number; duration: number },
+  nowMs: number,
+): boolean {
+  if (a.duration === 0) return false;
+  return Math.floor(nowMs / 1000) >= a.startTime + a.duration;
+}
+
 /**
  * Current price (lamports) at `nowMs`, mirroring the program's linear descent
  * (`auction.rs::current_price`) so the UI ticks in sync with what the chain
