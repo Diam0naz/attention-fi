@@ -184,6 +184,17 @@ export function ListingFields({
         </Notice>
       )}
 
+      {mode === "timed" && (
+        <Notice tone="caution" title="The price holds, but the listing doesn't">
+          The price never moves — only the window closes. When it does, the{" "}
+          {subject} stops being buyable and stays in escrow until you reclaim
+          it, which you can do at any time. Worth choosing when the deadline is
+          the point: a drop that ends, or an offer you don&apos;t want standing
+          indefinitely. If you just want it sold, the fixed price has no
+          deadline to miss.
+        </Notice>
+      )}
+
       {mode === "perpetual" && (
         <Notice tone="info" title="Free to list, free to keep listed">
           There&apos;s no listing fee and no expiry — you&apos;re charged only

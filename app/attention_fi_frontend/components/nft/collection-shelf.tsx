@@ -485,12 +485,16 @@ export function CollectionShelf({
         </div>
       )}
 
+      {/* Two across on a phone, not three. NftCardFace carries p-4 and type
+          sized for roughly a 176px card; inside an already-padded shelf, three
+          columns left each card near 90px wide and its own labels printed over
+          each other — the same squeeze the genesis card had. */}
       {open && members !== null && members.length > 0 && (
-        <div className="mt-4 grid grid-cols-3 gap-2.5 border-t border-white/[0.06] pt-3.5 sm:grid-cols-5">
+        <div className="mt-4 grid grid-cols-2 gap-3 border-t border-white/[0.06] pt-3.5 sm:grid-cols-3 lg:grid-cols-4">
           {members.map((m) => (
             <div key={m.asset}>
               <NftCardFace data={toCard(m, { name: collection.name, size: collection.size })} />
-              <div className="mt-1 truncate text-center font-mono text-[9px] text-[#6B6B6B]">
+              <div className="mt-1.5 truncate text-center font-mono text-[10px] text-[#6B6B6B]">
                 {m.name}
               </div>
             </div>
@@ -565,7 +569,7 @@ export function CollectionShelf({
             </div>
           )}
 
-          <div className="mt-3 grid grid-cols-3 gap-2.5 sm:grid-cols-5">
+          <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
             {movable.map((m) => {
               const isChosen = chosen.has(m.asset);
               return (
