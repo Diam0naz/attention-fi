@@ -5,12 +5,10 @@ import { PublicKey } from "@solana/web3.js";
 import { useWallet } from "@/components/wallet/wallet-provider";
 import { useReadonlyProgram } from "@/lib/solana/use-program";
 import { getConnection } from "@/lib/solana/program";
-import { fetchAllCurves, fetchGlobal, quoteSell, spotPriceSol } from "@/lib/solana/curve";
-import { fetchAllPools, poolSpotSol, swapQuote } from "@/lib/solana/amm";
+import { quoteSell, spotPriceSol } from "@/lib/solana/curve";
+import { poolSpotSol, swapQuote } from "@/lib/solana/amm";
+import { fetchWalletPositions } from "@/lib/solana/positions";
 import { solUsd } from "@/lib/solana/sol-usd";
-
-/** SPL Token program — where the wallet's token accounts live. */
-const TOKEN_PROGRAM_ID = new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
 
 export interface Holding {
   handle: string;
@@ -34,8 +32,14 @@ export interface Holding {
   spotSol: number;
   /** How much less the position fetches than spot implies, as a fraction. */
   slippage: number;
-  /** True once the curve has graduated — pricing then lives in the AMM. */
+  /** True once the AMM pool exists — pricing then lives there, not the curve. */
   graduated: boolean;
+  /**
+   * Complete but not yet migrated: the curve has stopped and the pool doesn't
+   * exist, so this position cannot be sold at any price until someone runs the
+   * migration. A value with no way to realise it needs saying out loud.
+   */
+  stranded: boolean;
 }
 
 export interface HoldingsState {
@@ -58,16 +62,11 @@ const EMPTY: HoldingsState = { holdings: [], totalUsd: 0, claimableUsd: 0, loade
 
 /**
  * What the connected wallet actually holds of AttentionFi tokens, priced off
- * the live curves.
+ * the live venue.
  *
  * Replaces a mock that generated holdings deterministically from the wallet
  * address — stable across reloads and plausible-looking, which is the worst
  * way to be wrong.
- *
- * One RPC call covers every balance: `getParsedTokenAccountsByOwner` over the
- * whole token program returns all of them, so this doesn't scale with the
- * number of tokens on the platform. Curves are read in a single
- * `bondingCurve.all()` for the same reason.
  */
 export function useHoldings(nonce = 0): HoldingsState {
   const { address } = useWallet();
@@ -83,52 +82,18 @@ export function useHoldings(nonce = 0): HoldingsState {
 
     const load = async () => {
       try {
-        const connection = getConnection();
         const owner = new PublicKey(address);
-
-        const [accounts, curves, pools, global, tokensRes] = await Promise.all([
-          connection.getParsedTokenAccountsByOwner(owner, { programId: TOKEN_PROGRAM_ID }),
-          fetchAllCurves(readonly),
-          fetchAllPools(readonly),
-          fetchGlobal(readonly).catch(() => null),
-          fetch("/api/tokens").then((r) => (r.ok ? r.json() : { tokens: [] })),
-        ]);
+        const { positions, decimals, feeBps, claimableLamports } = await fetchWalletPositions(
+          readonly,
+          getConnection(),
+          owner,
+        );
         if (cancelled) return;
 
-        const decimals = global?.tokenDecimals ?? 6;
         const usdRate = solUsd();
-
-        // mint -> whole tokens held, summed across accounts for the same mint.
-        const balances = new Map<string, number>();
-        for (const acc of accounts.value) {
-          const info = acc.account.data.parsed.info;
-          const ui = info.tokenAmount?.uiAmount ?? 0;
-          if (ui > 0) balances.set(info.mint, (balances.get(info.mint) ?? 0) + ui);
-        }
-
-        const meta = new Map<string, { handle: string; symbol: string; name: string }>();
-        for (const t of (tokensRes as { tokens?: { handle: string; mint: string; symbol?: string; name?: string }[] }).tokens ?? []) {
-          if (!t?.mint) continue;
-          meta.set(t.mint, {
-            handle: t.handle,
-            symbol: t.symbol || t.handle.slice(0, 4).toUpperCase(),
-            name: t.name || t.handle,
-          });
-        }
-
-        const byMint = new Map(curves.map((c) => [c.mint, c]));
-        const poolByMint = new Map(pools.map((p) => [p.mint, p]));
-        const feeBps = global?.feeBps ?? 100;
         const holdings: Holding[] = [];
-        for (const [mint, amount] of balances) {
-          const curve = byMint.get(mint);
-          // No curve means it isn't an AttentionFi token — a wallet holds all
-          // sorts of things, and listing them here would be inventing coverage
-          // this app doesn't have.
-          if (!curve) continue;
-          const info = meta.get(mint);
-          const pool = poolByMint.get(mint);
-          const base = BigInt(Math.floor(amount * 10 ** decimals));
+        for (const p of positions) {
+          const base = BigInt(Math.floor(p.amount * 10 ** decimals));
 
           // Which venue prices this depends on whether it graduated. After
           // graduation the curve's *real* reserves are zero — every lamport
@@ -138,42 +103,41 @@ export function useHoldings(nonce = 0): HoldingsState {
           // at, which is precisely the mistake that stranded one already.
           let spot: number;
           let realisable: number;
-          if (pool) {
-            spot = poolSpotSol(pool, decimals);
+          if (p.pool) {
+            spot = poolSpotSol(p.pool, decimals);
             realisable =
-              Number(swapQuote(pool.tokenReserves, pool.solReserves, base, feeBps)) / 1e9;
+              Number(swapQuote(p.pool.tokenReserves, p.pool.solReserves, base, feeBps)) / 1e9;
           } else {
-            spot = spotPriceSol(curve, decimals);
+            spot = spotPriceSol(p.curve, decimals);
             // Net of the trading fee, which `quoteSell` doesn't apply: the
             // point of this figure is what lands in the wallet, and the fee
             // comes out before it does.
-            realisable = quoteSell(curve, amount * 10 ** decimals) * (1 - feeBps / 10_000);
+            realisable = quoteSell(p.curve, p.amount * 10 ** decimals) * (1 - feeBps / 10_000);
           }
-          const naive = spot * amount;
+          // A stranded position can't be sold at all, so its realisable value
+          // is zero in the strictest sense. It isn't reported that way: the
+          // migration is one permissionless transaction away, and writing off
+          // a holding that anyone can unlock in a click would be the larger
+          // lie. The flag carries the caveat instead.
+          const naive = spot * p.amount;
 
           holdings.push({
-            handle: info?.handle ?? mint.slice(0, 6),
-            symbol: info?.symbol ?? mint.slice(0, 4).toUpperCase(),
-            name: info?.name ?? mint,
-            mint,
-            amount,
+            handle: p.meta?.handle ?? p.mint.slice(0, 6),
+            symbol: p.meta?.symbol ?? p.mint.slice(0, 4).toUpperCase(),
+            name: p.meta?.name ?? p.mint,
+            mint: p.mint,
+            amount: p.amount,
             valueSol: realisable,
             valueUsd: realisable * usdRate,
             spotSol: spot,
             slippage: naive > 0 ? Math.max(0, (naive - realisable) / naive) : 0,
-            // A pool is the definitive signal: `complete` is set at the moment
-            // the threshold is crossed, but the token isn't actually trading
-            // anywhere until the pool exists.
-            graduated: Boolean(pool),
+            graduated: p.venue === "pool",
+            stranded: p.venue === "stranded",
           });
         }
 
         holdings.sort((a, b) => b.valueUsd - a.valueUsd);
         const totalUsd = holdings.reduce((sum, h) => sum + h.valueUsd, 0);
-
-        const claimableLamports = curves
-          .filter((c) => c.creator === address)
-          .reduce((sum, c) => sum + c.creatorFees, 0n);
         const claimableUsd = (Number(claimableLamports) / 1e9) * usdRate;
 
         if (!cancelled) {

@@ -5,6 +5,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { PublicKey } from "@solana/web3.js";
 import { useWallet } from "@/components/wallet/wallet-provider";
 import { useReadonlyProgram } from "@/lib/solana/use-program";
+import { getConnection } from "@/lib/solana/program";
+import { fetchWalletPositions, type WalletPosition } from "@/lib/solana/positions";
 import {
   fetchNftOutcomes,
   fetchPerkGrant,
@@ -74,6 +76,57 @@ async function fetchSaleFacts(): Promise<Map<string, SaleFact>> {
     // No indexer configured / offline — fall back to the PDA-derived text.
   }
   return out;
+}
+
+/**
+ * Tell a holder when a token they own changes venue.
+ *
+ * Graduation is the one event that happens *to* a holder rather than because
+ * of them, and it changes what they can do: the bonding curve stops accepting
+ * trades the moment the threshold is crossed. Nothing in the app said so, so
+ * the first anyone learned of it was a sell that wouldn't go through.
+ *
+ * Two states, and the difference is the whole point:
+ *
+ *   stranded — complete, no pool. The position cannot be sold at any price.
+ *              Actionable, because the migration is permissionless: the holder
+ *              reading this can fix it themselves in one transaction. This is
+ *              the notification that would have surfaced 95 SOL sitting in a
+ *              curve nobody could trade against.
+ *   pool     — migrated. Trading has resumed somewhere new, at a price the
+ *              curve no longer sets.
+ *
+ * Read off held positions rather than the indexer: the indexer is optional
+ * (several deployments run without one), and a graduation notice that silently
+ * depends on it would be missing exactly where it matters.
+ */
+function graduationNotice(p: WalletPosition, seen: Set<string>): AppNotification | null {
+  if (p.venue === "curve") return null;
+  const label = p.meta ? `$${p.meta.symbol}` : short(p.mint);
+
+  if (p.venue === "stranded") {
+    const id = `stranded:${p.mint}`;
+    return {
+      id,
+      type: "graduation",
+      text: `${label} hit its graduation threshold, so its bonding curve has stopped trading — and its AMM pool hasn't been created yet, so your position can't be sold until it is. Anyone can run the migration, including you.`,
+      time: "action needed",
+      read: seen.has(id),
+      href: p.meta ? `/token/${p.meta.handle}` : undefined,
+      action: "Run migration",
+    };
+  }
+
+  const id = `graduated:${p.mint}`;
+  return {
+    id,
+    type: "graduation",
+    text: `${label} graduated — it now trades on its own AMM pool instead of the bonding curve. Your position moved with it.`,
+    time: "graduated",
+    read: seen.has(id),
+    href: p.meta ? `/token/${p.meta.handle}` : undefined,
+    action: "View market",
+  };
 }
 
 function readSeen(owner: string): Set<string> {
@@ -166,13 +219,16 @@ export function useNotifications(): Notifications {
       // Independent sources: the PDAs say what happened, the events say for how
       // much, and the grant is a separate entitlement. Losing one must not cost
       // the others, so each settles on its own.
-      const [outcomes, facts, grant, signatureUnlocked] = await Promise.all([
+      const [outcomes, facts, grant, signatureUnlocked, positions] = await Promise.all([
         fetchNftOutcomes(program, owner).catch(() => [] as NftOutcome[]),
         fetchSaleFacts(),
         fetchPerkGrant(program, owner).catch(() => null),
         fetchSignatureUnlocked(address!),
+        fetchWalletPositions(program, getConnection(), owner)
+          .then((r) => r.positions)
+          .catch(() => [] as WalletPosition[]),
       ]);
-      return { outcomes, facts, grant, signatureUnlocked };
+      return { outcomes, facts, grant, signatureUnlocked, positions };
     },
     enabled: Boolean(address),
     // A failed poll keeps the bell as it was rather than emptying it, which
@@ -190,6 +246,7 @@ export function useNotifications(): Notifications {
   const saleFacts = query.data?.facts ?? new Map<string, SaleFact>();
   const grant = query.data?.grant ?? null;
   const signatureUnlocked = query.data?.signatureUnlocked ?? false;
+  const positions = query.data?.positions ?? [];
   const loading = query.isPending;
 
   const refresh = useCallback(async () => {
@@ -197,6 +254,15 @@ export function useNotifications(): Notifications {
   }, [queryClient, address]);
 
   const items = outcomes.map((o) => toNotification(o, effectiveSeen, saleFacts.get(o.asset)));
+
+  // Venue changes on held tokens, newest concern first. Stranded outranks
+  // graduated because only one of the two asks the reader to do something —
+  // and until they do, they can't sell.
+  const venueNotices = positions
+    .map((p) => graduationNotice(p, effectiveSeen))
+    .filter((n): n is AppNotification => n !== null)
+    .sort((a, b) => Number(b.id.startsWith("stranded:")) - Number(a.id.startsWith("stranded:")));
+  items.unshift(...venueNotices);
 
   if (signatureUnlocked) {
     // Stable id, so dismissing it keeps it dismissed rather than resurfacing

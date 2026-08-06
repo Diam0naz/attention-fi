@@ -240,6 +240,21 @@ export function ProfileView() {
                       {h.amount.toLocaleString(undefined, { maximumFractionDigits: 0 })} $
                       {h.symbol}
                     </span>
+                    {/* A value you can't currently realise is a different thing
+                        from a value, and the row would otherwise look ordinary. */}
+                    {h.stranded && (
+                      <span
+                        className="shrink-0 rounded-sm border border-signal/40 px-1.5 py-0.5 font-mono text-[8px] font-bold uppercase tracking-[0.08em] text-signal"
+                        title="Graduated but not yet migrated — can't be sold until someone runs the migration. Anyone can."
+                      >
+                        Locked
+                      </span>
+                    )}
+                    {h.graduated && (
+                      <span className="shrink-0 font-mono text-[8px] uppercase tracking-[0.08em] text-[#6B6B6B]">
+                        AMM
+                      </span>
+                    )}
                   </span>
                   {/* What the position costs to exit, not a price change. The
                       mock reported a 24h delta this app has no history for. */}
@@ -247,7 +262,7 @@ export function ProfileView() {
                     className="text-right font-mono text-[12px] text-[#6B6B6B]"
                     title="How much less than spot this position fetches if sold in one go"
                   >
-                    {h.slippage >= 0.001 ? `-${(h.slippage * 100).toFixed(1)}%` : "—"}
+                    {h.stranded ? "—" : h.slippage >= 0.001 ? `-${(h.slippage * 100).toFixed(1)}%` : "—"}
                   </span>
                   <span className="text-right font-mono text-[13px]">{usd(h.valueUsd)}</span>
                 </Link>
