@@ -8,6 +8,7 @@
 import { getAssetSkinWithUri } from "@/lib/skin-db";
 import { CUSTOM_SKIN_ID } from "@/lib/nft-skins";
 import { esc, isSkinClass, paletteFor, readNftFacts } from "@/lib/nft-metadata";
+import { tokenByMint } from "@/lib/token-db";
 
 export const revalidate = 60;
 
@@ -36,7 +37,17 @@ export async function GET(
   const headline = isPerk
     ? `${((facts.discountBps ?? 0) / 100).toFixed(0)}% OFF`
     : `${((facts.shareBps ?? 0) / 100).toFixed(2)}%`;
-  const kicker = isPerk ? `LEVEL ${facts.level}` : "FEE SHARE";
+  // A genesis NFT is a claim on one specific token's fees, so the artwork says
+  // which. Resolved server-side because this render is what a wallet shows,
+  // where the client-side token registry doesn't exist. Falls back to "FEE
+  // SHARE" when the mint isn't in the registry — a shortened address would be
+  // noise at this size.
+  let subject: string | null = null;
+  if (!isPerk && facts.subjectMint) {
+    const token = await tokenByMint(facts.subjectMint).catch(() => null);
+    if (token) subject = token.symbol ? `$${token.symbol}` : `@${token.handle}`;
+  }
+  const kicker = isPerk ? `LEVEL ${facts.level}` : (subject ? `${subject} FEES` : "FEE SHARE");
   const label = isPerk ? "PERK" : "GENESIS";
 
   // Perk levels get pips so the tier is readable at a glance, the same way the

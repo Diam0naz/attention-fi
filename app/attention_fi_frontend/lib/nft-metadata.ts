@@ -34,6 +34,9 @@ export interface NftFacts {
   discountBps?: number;
   /** Fee share in basis points. Genesis only. */
   shareBps?: number;
+  /** The token whose fee stream this NFT shares. Genesis only. A share figure
+   *  without it doesn't say what it's a share *of*. */
+  subjectMint?: string;
 }
 
 /** Read the on-chain record behind an asset, or null when there isn't one. */
@@ -61,7 +64,13 @@ export async function readNftFacts(cls: SkinClass, asset: string): Promise<NftFa
       };
     }
     const a = await program.account.genesisNft.fetch(pda);
-    return { cls, asset, owner: a.owner.toBase58(), shareBps: a.shareBps };
+    return {
+      cls,
+      asset,
+      owner: a.owner.toBase58(),
+      shareBps: a.shareBps,
+      subjectMint: a.subjectMint.toBase58(),
+    };
   } catch {
     return null;
   }

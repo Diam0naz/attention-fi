@@ -119,6 +119,35 @@ export function launchedMeta(handle: string): LaunchedTokenMeta | null {
 }
 
 /**
+ * The token a mint belongs to — the reverse of {@link handleToMint}.
+ *
+ * Genesis NFTs are a claim on a *specific* token's fee stream and store only
+ * `subject_mint` on-chain, so a card that can't turn that back into a handle
+ * can only say "0.3% of something". Same precedence as handleToMint: this
+ * browser's launches, then the server registry, then statics.
+ *
+ * Synchronous like its neighbours, so it reflects whatever `syncRegistry()`
+ * has already cached.
+ */
+export function mintToToken(
+  mint: string,
+): { handle: string; name?: string; symbol?: string } | null {
+  const sources = [launchedRegistry(), remoteRegistry()];
+  for (const source of sources) {
+    for (const [handle, entry] of Object.entries(source)) {
+      if (mintOf(entry) !== mint) continue;
+      if (typeof entry === "string") return { handle };
+      const { name, symbol } = entry;
+      return { handle, ...(name ? { name } : {}), ...(symbol ? { symbol } : {}) };
+    }
+  }
+  for (const [handle, addr] of Object.entries(staticRegistry())) {
+    if (addr === mint) return { handle };
+  }
+  return null;
+}
+
+/**
  * Every known handle — statics + env + the server registry + this browser's
  * own launches — for symbol listings, search and the watchlist.
  *

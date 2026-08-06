@@ -12,6 +12,7 @@
 import { NextResponse } from "next/server";
 import { getAssetSkinWithUri } from "@/lib/skin-db";
 import { isSkinClass, paletteFor, readNftFacts } from "@/lib/nft-metadata";
+import { tokenByMint } from "@/lib/token-db";
 import { CUSTOM_SKIN, CUSTOM_SKIN_ID } from "@/lib/nft-skins";
 
 /** Signature carries artwork rather than a palette, so paletteFor can't name it. */
@@ -50,16 +51,22 @@ export async function GET(
   const image = isCustom ? sel.customUri! : `${origin}/api/nft/${cls}/${asset}/image`;
 
   const isPerk = cls === "perk";
+  // Which token's fees, resolved server-side. A genesis NFT's whole meaning is
+  // "a share of *this* token", and the metadata previously said only "its
+  // token's fee stream" — true, and useless to anyone deciding what it's worth.
+  const token =
+    !isPerk && facts.subjectMint ? await tokenByMint(facts.subjectMint).catch(() => null) : null;
+  const subject = token ? (token.symbol ? `$${token.symbol}` : `@${token.handle}`) : null;
   const name = isPerk
     ? `AttentionFi Perk · Level ${facts.level}`
-    : `AttentionFi Genesis · ${((facts.shareBps ?? 0) / 100).toFixed(2)}%`;
+    : `AttentionFi Genesis · ${((facts.shareBps ?? 0) / 100).toFixed(2)}%${subject ? ` of ${subject}` : ""}`;
 
   return NextResponse.json(
     {
       name,
       description: isPerk
         ? `A soulbound AttentionFi perk granting ${((facts.discountBps ?? 0) / 100).toFixed(0)}% off every trade. Bound to ${facts.owner}.`
-        : `A transferable AttentionFi genesis NFT earning ${((facts.shareBps ?? 0) / 100).toFixed(2)}% of its token's fee stream.`,
+        : `A transferable AttentionFi genesis NFT earning ${((facts.shareBps ?? 0) / 100).toFixed(2)}% of ${subject ?? "its token"}'s fee stream.`,
       image,
       external_url: `${origin}/nft/${isPerk ? "perk" : "genesis"}`,
       attributes: isPerk
@@ -71,6 +78,12 @@ export async function GET(
           ]
         : [
             { trait_type: "Fee share", value: `${((facts.shareBps ?? 0) / 100).toFixed(2)}%` },
+            // The mint is always emitted, the ticker only when resolvable: the
+            // address is the fact, the ticker is the convenience.
+            ...(subject ? [{ trait_type: "Subject", value: subject }] : []),
+            ...(facts.subjectMint
+              ? [{ trait_type: "Subject mint", value: facts.subjectMint }]
+              : []),
             { trait_type: "Transferable", value: "Yes" },
             { trait_type: "Skin", value: skinName },
           ],

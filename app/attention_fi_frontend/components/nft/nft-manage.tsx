@@ -22,6 +22,7 @@ import { AssetSkinPicker } from "@/components/nft/asset-skin-picker";
 import { CollectionShelf } from "@/components/nft/collection-shelf";
 import { RefreshButton } from "@/components/ui/refresh-button";
 import { artworkUrl } from "@/lib/nft-artwork";
+import { mintToToken, syncRegistry } from "@/lib/solana/registry";
 import { Notice } from "@/components/ui/notice";
 import { ConfirmGate } from "@/components/ui/confirm-gate";
 import { useNftPortfolio } from "@/components/nft/use-nft-portfolio";
@@ -238,6 +239,21 @@ export function NftManage({ section }: { section: Section }) {
       cancelled = true;
     };
   }, [section, address, readProgram, collectiblesNonce]);
+
+  // mintToToken reads a module-level cache, so the registry has to be pulled
+  // before a genesis card can name its subject. Bumping a nonce on arrival is
+  // what makes the already-rendered cards pick it up.
+  const [registryNonce, setRegistryNonce] = useState(0);
+  useEffect(() => {
+    if (section !== "genesis") return;
+    let cancelled = false;
+    void syncRegistry().then(() => {
+      if (!cancelled) setRegistryNonce((n) => n + 1);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [section]);
 
   useEffect(() => {
     if (section !== "perk" || !address) return;
@@ -911,12 +927,18 @@ export function NftManage({ section }: { section: Section }) {
         ) : genesisNfts.length ? (
           <div className="flex flex-col gap-3">
             {genesisNfts.map((g) => {
+              // registryNonce is read so this recomputes once the registry
+              // lands; without it the first paint's "unknown subject" sticks.
+              void registryNonce;
+              const token = mintToToken(g.subjectMint);
+              const subject = token ? (token.symbol ? `$${token.symbol}` : `@${token.handle}`) : null;
               const card: NftCardData = {
                 kind: "genesis",
                 shareBps: g.shareBps,
                 id: g.id,
                 skinId: genesisSkins[g.asset]?.id ?? null,
                 skinUri: genesisSkins[g.asset]?.uri ?? null,
+                ...(subject ? { subject } : {}),
                 ...(artworkUrl(g.uri) ? { image: artworkUrl(g.uri)! } : {}),
               };
               return (
@@ -931,7 +953,19 @@ export function NftManage({ section }: { section: Section }) {
                 </button>
                 <div className="min-w-0 flex-1">
                   <div className="truncate font-mono text-[13px] font-bold">{g.id}</div>
-                  <div className="mt-0.5 font-mono text-[11px] text-[#6B6B6B]">{(g.shareBps / 100).toFixed(1)}% revenue share</div>
+                  <div className="mt-0.5 font-mono text-[11px] text-[#6B6B6B]">
+                    {(g.shareBps / 100).toFixed(1)}% of{" "}
+                    {token ? (
+                      <Link href={`/token/${token.handle}`} className="text-signal hover:underline">
+                        {subject}
+                      </Link>
+                    ) : (
+                      // The mint is the honest fallback: the NFT is a claim on
+                      // this specific token whether or not we can name it.
+                      <span title={g.subjectMint}>{short(g.subjectMint)}</span>
+                    )}{" "}
+                    fees
+                  </div>
                   <div className="mt-2 font-mono text-[10px] text-[#6B6B6B]">CLAIMABLE</div>
                   <div className="font-mono text-[18px] font-bold text-signal">{sol(g.claimableLamports)} SOL</div>
                 </div>

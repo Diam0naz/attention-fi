@@ -120,6 +120,21 @@ export async function tokenByHandle(handle: string): Promise<LaunchedToken | nul
   return rows[0] ? toToken(rows[0]) : null;
 }
 
+/**
+ * Resolve a mint back to its token, or null when unknown.
+ *
+ * The reverse of tokenByHandle. Genesis NFTs store only `subject_mint`
+ * on-chain, so rendering "0.3% of $SQN" on the asset's artwork — the version a
+ * wallet shows, where no client-side registry exists — needs this lookup.
+ */
+export async function tokenByMint(mint: string): Promise<LaunchedToken | null> {
+  await ensureSchema();
+  const rows = (await sql`
+    select handle, mint, creator, name, symbol, image, mechanism
+    from launched_tokens where mint = ${mint} limit 1`) as Record<string, unknown>[];
+  return rows[0] ? toToken(rows[0]) : null;
+}
+
 /** All launched tokens (for the global feed/index). Capped. */
 export async function allTokens(): Promise<LaunchedToken[]> {
   await ensureSchema();

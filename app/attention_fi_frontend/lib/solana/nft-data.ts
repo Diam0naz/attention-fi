@@ -374,6 +374,10 @@ export interface NftPortfolio {
     shareBps: number;
     asset: string;
     claimableLamports: bigint;
+    /** The token whose fee stream this NFT shares. Already on-chain in both the
+     *  GenesisNft PDA and the asset's Attributes — a genesis NFT is a claim on
+     *  a *specific* token's fees, so a card that omits it is unreadable. */
+    subjectMint: string;
     /** Subject artwork from the Core asset; undefined when the issuer set none. */
     uri?: string;
   }[];
@@ -457,6 +461,7 @@ export async function fetchNftPortfolio(
         id: short(g.account.asset.toBase58()),
         shareBps: g.account.shareBps,
         asset: g.account.asset.toBase58(),
+        subjectMint: g.account.subjectMint.toBase58(),
         uri: genesisUri.get(g.account.asset.toBase58()),
         claimableLamports: genesisClaimable(
           g.account.shareBps,

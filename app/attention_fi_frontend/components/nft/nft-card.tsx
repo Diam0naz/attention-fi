@@ -38,6 +38,9 @@ export type NftCardData =
       image?: string;
       skinId?: string | null;
       skinUri?: string | null;
+      /** The token whose fees this NFT shares, as a display label ("$SQN").
+       *  Without it the card states a percentage of nothing in particular. */
+      subject?: string;
     }
   | { kind: "custom"; name: string; image?: string; id?: string };
 
@@ -120,9 +123,12 @@ export function getNftVisual(data: NftCardData): NftVisual {
         ? `linear-gradient(120deg,${sk.from},${sk.accent}33,${sk.to})`
         : "linear-gradient(120deg,#05302a,#1fe0b8,#0a4038)",
       accent: sk ? sk.accent : "#3fe9c4",
-      tier: "Fee-share",
+      // The subject is the more useful thing to lead with: "Fee-share" only
+      // repeats what the label and tag already say, whereas which token's fees
+      // these are is the fact the card exists to carry.
+      tier: data.subject ?? "Fee-share",
       stat: `${(data.shareBps / 100).toFixed(1)}%`,
-      statLabel: "REVENUE SHARE",
+      statLabel: data.subject ? `OF ${data.subject} FEES` : "REVENUE SHARE",
       icon: <Gift className="h-6 w-6" />,
       id: data.id,
       blurb: "A transferable fee-share NFT earning a pro-rata cut of the subject's fee stream, forever. Trade it or hold to accrue.",
