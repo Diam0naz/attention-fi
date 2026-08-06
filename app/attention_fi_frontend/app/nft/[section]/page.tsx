@@ -1,7 +1,14 @@
 import { notFound } from "next/navigation";
 import { NftManage, type Section } from "@/components/nft/nft-manage";
 
-const SECTIONS = ["verification", "perk", "genesis", "auctions", "collections"] as const;
+const SECTIONS = [
+  "verification",
+  "perk",
+  "genesis",
+  "auctions",
+  "collectibles",
+  "collections",
+] as const;
 
 export default async function NftSectionPage({
   params,

@@ -486,22 +486,31 @@ async function applySkins(cards: NftCardData[], owner: string): Promise<void> {
     if (!res.ok) return;
     const body = (await res.json()) as {
       verification?: string | null;
+      verificationUri?: string | null;
       perkAsset?: string | null;
       assets?: Record<string, { skin: string | null; customUri: string | null }>;
     };
     const assets = body.assets ?? {};
 
+    // The URI travels with the id in every branch below. The signature skin
+    // has no palette to look up, so an id on its own leaves the card rendering
+    // the default — indistinguishable from not having applied the skin at all.
     if (verification?.kind === "verification") {
       verification.skinId = body.verification ?? null;
+      verification.skinUri = body.verificationUri ?? null;
     }
     if (perk?.kind === "perk" && body.perkAsset) {
       perk.skinId = assets[body.perkAsset]?.skin ?? null;
+      perk.skinUri = assets[body.perkAsset]?.customUri ?? null;
     }
     // Genesis cards carry a shortened asset id, so match on the same shortening
     // rather than duplicating the format in the API contract.
     for (const [address, sel] of Object.entries(assets)) {
       const card = genesis.find((c) => c.kind === "genesis" && c.id === short(address));
-      if (card?.kind === "genesis") card.skinId = sel.skin ?? null;
+      if (card?.kind === "genesis") {
+        card.skinId = sel.skin ?? null;
+        card.skinUri = sel.customUri ?? null;
+      }
     }
   } catch {
     // Offline / not configured — keep the designed defaults.

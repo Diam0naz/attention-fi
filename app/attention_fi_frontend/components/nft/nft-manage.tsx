@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Keypair, PublicKey, Transaction } from "@solana/web3.js";
 import { BN } from "@anchor-lang/core";
-import { ArrowLeft, BadgeCheck, Gavel, Gift, Layers, Loader2, Lock, Plus, TrendingUp, X } from "lucide-react";
+import { ArrowLeft, BadgeCheck, Boxes, Gavel, Gift, Layers, Loader2, Lock, Plus, Trash2, TrendingUp, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useWallet } from "@/components/wallet/wallet-provider";
 import { WalletConnectModal } from "@/components/wallet/wallet-connect-modal";
@@ -21,6 +21,8 @@ import { SkinPicker } from "@/components/nft/skin-picker";
 import { AssetSkinPicker } from "@/components/nft/asset-skin-picker";
 import { CollectionShelf } from "@/components/nft/collection-shelf";
 import { RefreshButton } from "@/components/ui/refresh-button";
+import { Notice } from "@/components/ui/notice";
+import { ConfirmGate } from "@/components/ui/confirm-gate";
 import { useNftPortfolio } from "@/components/nft/use-nft-portfolio";
 import { useQueryClient } from "@tanstack/react-query";
 import { notificationsKey } from "@/components/notifications/use-notifications";
@@ -38,6 +40,15 @@ import {
   type OwnedAsset,
 } from "@/lib/solana/nft-data";
 
+/**
+ * A worn skin as the cards need it: the id selects a palette, the URI carries
+ * the signature skin's artwork. They travel together because the signature
+ * skin has no palette entry — `skinById` degrades it to the default, so an id
+ * on its own renders a card that looks like the skin never applied.
+ */
+type WornSkin = { id: string | null; uri: string | null };
+const NO_SKIN: WornSkin = { id: null, uri: null };
+
 const LAMPORTS_PER_SOL = 1_000_000_000;
 const short = (a: string) => `${a.slice(0, 4)}…${a.slice(-4)}`;
 const sol = (lamports: bigint): string => (Number(lamports) / LAMPORTS_PER_SOL).toFixed(3);
@@ -54,7 +65,13 @@ function countdown(secondsLeft: number): string {
   return m > 0 ? `${m}m ${sec}s` : `${sec}s`;
 }
 
-export type Section = "verification" | "perk" | "genesis" | "auctions" | "collections";
+export type Section =
+  | "verification"
+  | "perk"
+  | "genesis"
+  | "auctions"
+  | "collectibles"
+  | "collections";
 
 const MAX_LEVEL = 5;
 
@@ -66,6 +83,7 @@ const META: Record<Section, { title: string; icon: React.ReactNode }> = {
   perk: { title: "Perk NFTs", icon: <TrendingUp className="h-4 w-4" /> },
   genesis: { title: "Genesis NFTs", icon: <Gift className="h-4 w-4" /> },
   auctions: { title: "1-of-1 Auctions", icon: <Gavel className="h-4 w-4" /> },
+  collectibles: { title: "Collectibles", icon: <Boxes className="h-4 w-4" /> },
   collections: { title: "Collections", icon: <Layers className="h-4 w-4" /> },
 };
 
@@ -105,14 +123,28 @@ export function NftManage({ section }: { section: Section }) {
     assets: [],
   });
   const [listOpen, setListOpen] = useState(false);
+  // Same "null until read" discipline the collections list uses: an empty
+  // wallet and an unread one are different claims. Stored as the key that was
+  // read rather than a boolean, so "loaded" is derived during render — a
+  // wallet switch or a refresh invalidates it without an effect resetting it,
+  // which would commit a frame of the previous wallet's assets first.
+  const [collectiblesKey, setCollectiblesKey] = useState<string | null>(null);
+  const [collectiblesNonce, setCollectiblesNonce] = useState(0);
+  const collectiblesLoaded = collectiblesKey === `${address}:${collectiblesNonce}`;
+  // The asset a burn has been requested for, held until the gate is ticked.
+  const [burnTarget, setBurnTarget] = useState<OwnedAsset | null>(null);
+  const [burnAck, setBurnAck] = useState(false);
+  const [burning, setBurning] = useState(false);
   // Mirrors the picker so the badge restyles as soon as a change lands, and
-  // shows a loading state while one is in flight.
-  const [badgeSkin, setBadgeSkin] = useState<string | null>(null);
+  // shows a loading state while one is in flight. The URI rides along because
+  // the signature skin is artwork rather than a palette — with only the id the
+  // card falls back to the default and looks like nothing was applied.
+  const [badgeSkin, setBadgeSkin] = useState<WornSkin>(NO_SKIN);
   // Mirrors the perk picker so the card restyles the moment a skin lands.
-  const [perkSkin, setPerkSkin] = useState<string | null>(null);
+  const [perkSkin, setPerkSkin] = useState<WornSkin>(NO_SKIN);
   // Keyed by asset: a wallet can hold several genesis NFTs, each skinned
   // independently.
-  const [genesisSkins, setGenesisSkins] = useState<Record<string, string | null>>({});
+  const [genesisSkins, setGenesisSkins] = useState<Record<string, WornSkin>>({});
   // A granted-but-unclaimed perk. The grant is an entitlement; claiming is what
   // mints the NFT, and the recipient pays for it.
   const [perkGrant, setPerkGrant] = useState<PerkGrantData | null>(null);
@@ -184,19 +216,27 @@ export function NftManage({ section }: { section: Section }) {
   // Needed by both tabs — the auction lister picks from it, and it's the pool
   // a collection draws candidates from.
   useEffect(() => {
-    if ((section !== "auctions" && section !== "collections") || !address) return;
+    if (
+      (section !== "auctions" && section !== "collections" && section !== "collectibles") ||
+      !address
+    )
+      return;
     let cancelled = false;
+    const key = `${address}:${collectiblesNonce}`;
     fetchListableNfts(readProgram, new PublicKey(address))
       .then((assets) => {
         if (!cancelled) setListable({ owner: address, assets });
       })
       .catch(() => {
         if (!cancelled) setListable({ owner: address, assets: [] });
+      })
+      .finally(() => {
+        if (!cancelled) setCollectiblesKey(key);
       });
     return () => {
       cancelled = true;
     };
-  }, [section, address, readProgram]);
+  }, [section, address, readProgram, collectiblesNonce]);
 
   useEffect(() => {
     if (section !== "perk" || !address) return;
@@ -355,6 +395,58 @@ export function NftManage({ section }: { section: Section }) {
    * Permissionless on-chain (the asset can only go back to `auction.creator`),
    * so this is offered on any expired listing, not just the caller's own.
    */
+  /**
+   * Destroy a collectible for good, returning its rent.
+   *
+   * Only ever offered on the `fetchListableNfts` pool — plain `mint_nft`
+   * assets. Perk and verification NFTs carry a permanent freeze delegate and
+   * Core refuses to burn them; genesis NFTs are a live claim on a fee stream
+   * and have their own section. None of the three reach this list, so there is
+   * no button here that can strand value or fail on principle.
+   *
+   * The collection has to travel with the asset when it has one: Core
+   * decrements the parent's size as part of the burn and rejects the CPI
+   * without it.
+   */
+  async function burnAsset(a: OwnedAsset) {
+    if (!signProgram || !address) return setWalletOpen(true);
+    setBurning(true);
+    setTx({ state: "pending", title: "Burning asset…", detail: a.name });
+    try {
+      const sig = await signProgram.methods
+        .burnNft()
+        .accountsPartial({
+          owner: new PublicKey(address),
+          asset: new PublicKey(a.asset),
+          collection: a.collection ? new PublicKey(a.collection) : null,
+        })
+        .rpc();
+      setTx({
+        state: "confirmed",
+        title: "Burned",
+        detail: `${a.name} destroyed · rent returned`,
+        signature: short(sig),
+        explorerUrl: explorerTx(sig),
+      });
+      // Drop it locally rather than refetching: the account is gone, and a
+      // re-read races the RPC's view of the slot that removed it.
+      setListable((prev) => ({
+        ...prev,
+        assets: prev.assets.filter((x) => x.asset !== a.asset),
+      }));
+      setBurnTarget(null);
+      setBurnAck(false);
+    } catch (e) {
+      setTx({
+        state: "failed",
+        title: "Burn failed",
+        detail: e instanceof Error ? e.message : "Transaction failed",
+      });
+    } finally {
+      setBurning(false);
+    }
+  }
+
   async function reclaim(a: NftAuctionData) {
     if (!signProgram || !address) return setWalletOpen(true);
     setTx({ state: "pending", title: "Reclaiming asset…", detail: a.name });
@@ -582,9 +674,19 @@ export function NftManage({ section }: { section: Section }) {
           <div className="grid gap-5 sm:grid-cols-[200px_1fr]">
             <div className="relative mx-auto w-44 sm:mx-0 sm:w-full">
               <NftCard
-                data={{ kind: "verification", handle: handle || "you", skinId: badgeSkin }}
+                data={{
+                  kind: "verification",
+                  handle: handle || "you",
+                  skinId: badgeSkin.id,
+                  skinUri: badgeSkin.uri,
+                }}
                 onClick={() =>
-                  setSelected({ kind: "verification", handle: handle || "you", skinId: badgeSkin })
+                  setSelected({
+                    kind: "verification",
+                    handle: handle || "you",
+                    skinId: badgeSkin.id,
+                    skinUri: badgeSkin.uri,
+                  })
                 }
               />
               {/* The new look isn't instant — it spans a wallet prompt, a
@@ -616,7 +718,7 @@ export function NftManage({ section }: { section: Section }) {
               {address && (
                 <SkinPicker
                   subject={address}
-                  onSkinChange={setBadgeSkin}
+                  onSkinChange={(id, uri) => setBadgeSkin({ id, uri })}
                   onBusyChange={setSkinBusy}
                 />
               )}
@@ -672,8 +774,22 @@ export function NftManage({ section }: { section: Section }) {
           <div className="grid gap-5 sm:grid-cols-[200px_1fr]">
             <div className="mx-auto w-44 sm:mx-0 sm:w-full">
               <NftCard
-                data={{ kind: "perk", level, discountBps, skinId: perkSkin }}
-                onClick={() => setSelected({ kind: "perk", level, discountBps, skinId: perkSkin })}
+                data={{
+                  kind: "perk",
+                  level,
+                  discountBps,
+                  skinId: perkSkin.id,
+                  skinUri: perkSkin.uri,
+                }}
+                onClick={() =>
+                  setSelected({
+                    kind: "perk",
+                    level,
+                    discountBps,
+                    skinId: perkSkin.id,
+                    skinUri: perkSkin.uri,
+                  })
+                }
               />
             </div>
             <div className="rounded-sm border border-white/[0.08] bg-[#0f1620] p-5">
@@ -731,7 +847,7 @@ export function NftManage({ section }: { section: Section }) {
                   cls="perk"
                   asset={portfolio.perk.asset}
                   owner={address}
-                  onSkinChange={setPerkSkin}
+                  onSkinChange={(id, uri) => setPerkSkin({ id, uri })}
                 />
               )}
             </div>
@@ -798,7 +914,8 @@ export function NftManage({ section }: { section: Section }) {
                 kind: "genesis",
                 shareBps: g.shareBps,
                 id: g.id,
-                skinId: genesisSkins[g.asset] ?? null,
+                skinId: genesisSkins[g.asset]?.id ?? null,
+                skinUri: genesisSkins[g.asset]?.uri ?? null,
                 ...(g.uri ? { image: g.uri } : {}),
               };
               return (
@@ -830,8 +947,8 @@ export function NftManage({ section }: { section: Section }) {
                   cls="genesis"
                   asset={g.asset}
                   owner={address}
-                  onSkinChange={(id) =>
-                    setGenesisSkins((prev) => ({ ...prev, [g.asset]: id }))
+                  onSkinChange={(id, uri) =>
+                    setGenesisSkins((prev) => ({ ...prev, [g.asset]: { id, uri } }))
                   }
                 />
               )}
@@ -853,6 +970,105 @@ export function NftManage({ section }: { section: Section }) {
             </div>
           </div>
         ))}
+
+      {/* COLLECTIBLES — the wallet's loose assets, and the only place to burn one. */}
+      {section === "collectibles" && (
+        <div>
+          <div className="flex items-center justify-between">
+            <h2 className="text-[13px] font-bold">Your collectibles</h2>
+            <RefreshButton onRefresh={() => setCollectiblesNonce((n) => n + 1)} />
+          </div>
+          <p className="mt-1 font-mono text-[10px] leading-relaxed text-[#6B6B6B]">
+            Every plain collectible this wallet holds — minted here, bought at auction, or
+            reclaimed after one ended without a buyer. Perk, verification and genesis NFTs have
+            their own sections and never appear here.
+          </p>
+
+          {!collectiblesLoaded ? (
+            <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
+              {[0, 1, 2].map((i) => (
+                <div
+                  key={i}
+                  className="rounded-sm border border-white/[0.08] bg-[#0f1620] p-3"
+                >
+                  <div className="af-skeleton aspect-square w-full rounded-md" />
+                  <div className="af-skeleton mt-2.5 h-3 w-2/3 rounded-sm" />
+                  <div className="af-skeleton mt-1.5 h-2.5 w-1/3 rounded-sm" />
+                </div>
+              ))}
+            </div>
+          ) : listableAssets.length > 0 ? (
+            <>
+              <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
+                {listableAssets.map((a) => (
+                  <div
+                    key={a.asset}
+                    className="af-pack-card group rounded-sm border border-white/[0.08] bg-[#0f1620] p-3"
+                  >
+                    <div className="aspect-square w-full overflow-hidden rounded-md bg-black/40">
+                      {a.uri ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={a.uri}
+                          alt={a.name}
+                          className="h-full w-full object-cover"
+                          loading="lazy"
+                        />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center">
+                          <Boxes className="h-6 w-6 text-[#3a4553]" />
+                        </div>
+                      )}
+                    </div>
+                    <div className="mt-2.5 truncate text-[12px] font-bold">{a.name}</div>
+                    <div className="mt-0.5 font-mono text-[10px] text-[#6B6B6B]">
+                      {a.collection ? `in ${short(a.collection)}` : "no collection"}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setBurnTarget(a);
+                        setBurnAck(false);
+                      }}
+                      className="mt-2.5 inline-flex w-full items-center justify-center gap-1.5 rounded-sm border border-noise/30 px-2 py-1.5 font-mono text-[10px] font-bold text-noise transition-colors hover:bg-noise/10"
+                    >
+                      <Trash2 className="h-3 w-3" />
+                      Burn
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              <Notice tone="caution" title="Burning is not the same as delisting" className="mt-4">
+                An asset that didn&apos;t sell at auction comes back to you with{" "}
+                <Link href="/nft/auctions" className="text-signal">
+                  Reclaim
+                </Link>{" "}
+                and stays yours — burning is only for ones you actively want gone. It destroys the
+                asset on-chain and returns its rent; nothing here can bring it back.
+              </Notice>
+            </>
+          ) : (
+            <div className="mt-4 rounded-sm border border-white/[0.08] bg-[#0f1620] p-6 text-center">
+              <Boxes className="mx-auto h-6 w-6 text-[#3a4553]" />
+              <div className="mt-3 text-[14px] font-bold">No loose collectibles</div>
+              <p className="mx-auto mt-1 max-w-sm text-[12px] leading-relaxed text-[#6B6B6B]">
+                Assets currently escrowed in a live auction aren&apos;t counted — they belong to the
+                auction until it settles or you reclaim them.
+              </p>
+              <div className="mt-4 flex justify-center">
+                <Link
+                  href="/nft/create"
+                  className="inline-flex items-center gap-1 rounded-sm bg-signal px-4 py-2 font-mono text-[11px] font-bold text-[#0A0A0A]"
+                >
+                  <Plus className="h-3 w-3" />
+                  Mint one
+                </Link>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* AUCTIONS */}
 
@@ -1067,6 +1283,19 @@ export function NftManage({ section }: { section: Section }) {
             setConfirmBuy(null);
             void buyNow(a);
           }}
+        />
+      )}
+      {burnTarget && (
+        <BurnConfirm
+          asset={burnTarget}
+          acknowledged={burnAck}
+          onAcknowledge={setBurnAck}
+          busy={burning}
+          onCancel={() => {
+            setBurnTarget(null);
+            setBurnAck(false);
+          }}
+          onConfirm={() => void burnAsset(burnTarget)}
         />
       )}
       {listOpen && (
@@ -1384,6 +1613,111 @@ function Row({ k, v, accent }: { k: string; v: string; accent?: boolean }) {
  * purchase spends real SOL and previously fired on a single click with no
  * chance to read either number.
  */
+/**
+ * Confirmation for a burn.
+ *
+ * Gated rather than a plain confirm because the asset is gone afterwards and
+ * no instruction in this program can recreate it. The gate names the specific
+ * asset instead of warning generically, so ticking it is an acknowledgement
+ * about *this* collectible rather than a reflex.
+ */
+function BurnConfirm({
+  asset,
+  acknowledged,
+  onAcknowledge,
+  busy,
+  onCancel,
+  onConfirm,
+}: {
+  asset: OwnedAsset;
+  acknowledged: boolean;
+  onAcknowledge: (next: boolean) => void;
+  busy: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  useScrollLock(true);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
+      onClick={busy ? undefined : onCancel}
+    >
+      <div
+        className="w-full max-w-sm rounded-sm border border-white/[0.1] bg-[#0f1620] p-5"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between">
+          <div className="min-w-0">
+            <div className="text-[14px] font-bold">Burn collectible</div>
+            <div className="mt-0.5 truncate font-mono text-[11px] text-[#6B6B6B]">{asset.name}</div>
+          </div>
+          <button
+            onClick={onCancel}
+            disabled={busy}
+            aria-label="Close"
+            className="text-[#6B6B6B] hover:text-[#F5F4F0] disabled:opacity-40"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="mt-4 flex items-center gap-3 rounded-sm border border-white/[0.08] bg-[#0A0A0A] p-3">
+          <div className="h-14 w-14 shrink-0 overflow-hidden rounded-md bg-black/40">
+            {asset.uri ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={asset.uri} alt={asset.name} className="h-full w-full object-cover" />
+            ) : (
+              <div className="flex h-full w-full items-center justify-center">
+                <Boxes className="h-5 w-5 text-[#3a4553]" />
+              </div>
+            )}
+          </div>
+          <div className="min-w-0 font-mono text-[10px] leading-relaxed text-[#6B6B6B]">
+            <div className="truncate">{short(asset.asset)}</div>
+            {asset.collection && (
+              <div className="truncate">leaves {short(asset.collection)}</div>
+            )}
+          </div>
+        </div>
+
+        <ConfirmGate
+          className="mt-4"
+          title="This cannot be undone"
+          consequence={
+            <>
+              The asset is destroyed on-chain and its rent returns to you. It cannot be re-minted at
+              the same address, and anything pointing at it — a marketplace listing, a link you have
+              shared — will break.
+            </>
+          }
+          acknowledgement={`I want to permanently destroy ${asset.name}`}
+          checked={acknowledged}
+          onChange={onAcknowledge}
+        />
+
+        <div className="mt-4 flex gap-2">
+          <button
+            onClick={onCancel}
+            disabled={busy}
+            className="flex-1 rounded-sm border border-white/15 px-4 py-2 font-mono text-[11px] font-bold disabled:opacity-40"
+          >
+            Keep it
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={!acknowledged || busy}
+            className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-sm bg-noise px-4 py-2 font-mono text-[11px] font-bold text-[#0A0A0A] disabled:opacity-40"
+          >
+            {busy && <Loader2 className="h-3 w-3 animate-spin" />}
+            {busy ? "Burning…" : "Burn"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function BuyConfirm({
   auction,
   now,

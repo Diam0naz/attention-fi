@@ -103,8 +103,10 @@ export function SkinPicker({
   onBusyChange,
 }: {
   subject: string;
-  /** Fired when the worn skin changes, so the card can restyle immediately. */
-  onSkinChange?: (skin: string) => void;
+  /** Fired when the worn skin changes, so the card can restyle immediately.
+   *  Carries the URI as well — the signature skin is artwork rather than a
+   *  palette, and an id on its own renders as the unstyled default. */
+  onSkinChange?: (skin: string, uri: string | null) => void;
   /** Fired while a change is in flight, so the card can show a loading state. */
   onBusyChange?: (busy: boolean) => void;
 }) {
@@ -131,7 +133,7 @@ export function SkinPicker({
           setCustomUri(json.customUri ?? null);
           // Report on load too, not just on change: a wallet already wearing a
           // skin would otherwise see its card rendered in the default palette.
-          onSkinChange?.(current);
+          onSkinChange?.(current, json.customUri ?? null);
         }
       } catch {
         if (!cancelled) setSkin(DEFAULT_SKIN_ID);
@@ -158,10 +160,10 @@ export function SkinPicker({
     onBusyChange?.(false);
   }
 
-  function land(id: string) {
+  function land(id: string, uri: string | null = null) {
     setSkin(id);
     setOwned((prev) => (prev.includes(id) ? prev : [...prev, id]));
-    onSkinChange?.(id);
+    onSkinChange?.(id, uri ?? customUri);
     clearPending();
   }
 
@@ -216,7 +218,7 @@ export function SkinPicker({
     const json = await readJson(res);
     if (!res.ok || !json.ok) throw new Error(json.error ?? "Could not apply skin");
     if (uri) setCustomUri(uri);
-    land(id);
+    land(id, uri);
   }
 
   /** Buy a skin for the first time. */

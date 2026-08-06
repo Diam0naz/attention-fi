@@ -80,7 +80,9 @@ export function AssetSkinPicker({
   cls: "perk" | "genesis";
   asset: string;
   owner: string;
-  onSkinChange?: (skin: string) => void;
+  /** Reports the URI too: the signature skin has no palette, so an id alone
+   *  leaves the card rendering the default. */
+  onSkinChange?: (skin: string, uri: string | null) => void;
 }) {
   const { getSigner } = useWallet();
   const program = useProgram();
@@ -104,7 +106,7 @@ export function AssetSkinPicker({
           setSkin(current);
           setCustomUri(json.customUri ?? null);
           setOwned(json.owned ?? [DEFAULT_SKIN_ID]);
-          onSkinChange?.(current);
+          onSkinChange?.(current, json.customUri ?? null);
         }
       } catch {
         // Leave the default; the card simply renders unstyled.
@@ -188,8 +190,9 @@ export function AssetSkinPicker({
       const json = await readJson(res);
       if (!res.ok || !json.ok) throw new Error(json.error ?? "Could not apply skin");
       setSkin(id);
+      const nextUri = uri ?? customUri;
       if (uri) setCustomUri(uri);
-      onSkinChange?.(id);
+      onSkinChange?.(id, nextUri);
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Could not apply skin");
     } finally {

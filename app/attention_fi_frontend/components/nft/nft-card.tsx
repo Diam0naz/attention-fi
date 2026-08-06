@@ -3,14 +3,48 @@
 import { BadgeCheck, TrendingUp, Gift, Image as ImageIcon } from "lucide-react";
 import { TiltCard } from "@/components/reactbits/tilt-card";
 import { useDominantColor } from "@/lib/use-dominant-color";
-import { skinById } from "@/lib/nft-skins";
+import { CUSTOM_SKIN_ID, skinById } from "@/lib/nft-skins";
 
 export type NftCardData =
-  /** `skinId` restyles the badge; omitted or unknown falls back to the default. */
-  | { kind: "verification"; handle: string; id?: string; skinId?: string | null }
-  | { kind: "perk"; level: number; discountBps: number; id?: string; skinId?: string | null }
-  | { kind: "genesis"; shareBps: number; id: string; image?: string; skinId?: string | null }
+  /**
+   * `skinId` restyles the badge; omitted or unknown falls back to the default.
+   *
+   * `skinUri` only matters for the signature skin, which is the one selection
+   * that isn't a palette — it's the holder's own artwork, so it has no entry in
+   * `SKINS` and `skinById` deliberately degrades it to the default. Without the
+   * URI alongside it a signature card renders as an unstyled default, which
+   * reads as "the skin didn't apply".
+   */
+  | {
+      kind: "verification";
+      handle: string;
+      id?: string;
+      skinId?: string | null;
+      skinUri?: string | null;
+    }
+  | {
+      kind: "perk";
+      level: number;
+      discountBps: number;
+      id?: string;
+      skinId?: string | null;
+      skinUri?: string | null;
+    }
+  | {
+      kind: "genesis";
+      shareBps: number;
+      id: string;
+      image?: string;
+      skinId?: string | null;
+      skinUri?: string | null;
+    }
   | { kind: "custom"; name: string; image?: string; id?: string };
+
+/** The signature skin's artwork, when that's the one being worn. */
+function skinArtwork(data: NftCardData): string | undefined {
+  if (data.kind === "custom") return undefined;
+  return data.skinId === CUSTOM_SKIN_ID && data.skinUri ? data.skinUri : undefined;
+}
 
 // Perk levels map to named tiers with their own palette (bronze → gold).
 // 3-stop gradients with a vivid mid band that sweeps via .af-nft-grad.
@@ -54,6 +88,7 @@ export function getNftVisual(data: NftCardData): NftVisual {
       icon: <BadgeCheck className="h-6 w-6" />,
       id: data.id ?? "SBT-0001",
       blurb: "A non-transferable SAS credential binding your X handle to this wallet. Gates creator-fee claims; can never be sold or moved.",
+      image: skinArtwork(data),
     };
   }
   if (data.kind === "perk") {
@@ -72,6 +107,7 @@ export function getNftVisual(data: NftCardData): NftVisual {
       icon: <TrendingUp className="h-6 w-6" />,
       id: data.id ?? `PERK-${String(data.level).padStart(4, "0")}`,
       blurb: "An upgradeable trading perk. Each level rewrites its on-chain Attributes for +1% fee discount, capped at 5%.",
+      image: skinArtwork(data),
     };
   }
   if (data.kind === "genesis") {
@@ -91,7 +127,9 @@ export function getNftVisual(data: NftCardData): NftVisual {
       blurb: "A transferable fee-share NFT earning a pro-rata cut of the subject's fee stream, forever. Trade it or hold to accrue.",
       // Optional subject artwork. Left unset, the card keeps the fee-share
       // gradient above — the default is a designed state, not a placeholder.
-      image: data.image,
+      // A worn signature skin is the holder's explicit choice, so it wins over
+      // the subject art the token shipped with.
+      image: skinArtwork(data) ?? data.image,
     };
   }
   return {
