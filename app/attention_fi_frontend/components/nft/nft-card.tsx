@@ -4,6 +4,7 @@ import { BadgeCheck, TrendingUp, Gift, Image as ImageIcon } from "lucide-react";
 import { TiltCard } from "@/components/reactbits/tilt-card";
 import { useDominantColor } from "@/lib/use-dominant-color";
 import { CUSTOM_SKIN_ID, skinById } from "@/lib/nft-skins";
+import { cn } from "@/lib/utils";
 
 export type NftCardData =
   /**
@@ -155,6 +156,13 @@ export function NftCardFace({ data }: { data: NftCardData }) {
   // this stays null often and the card must look right either way.
   const derived = useDominantColor(v.image);
   const accent = derived ?? v.accent;
+  // Full-bleed artwork changes what the foreground can safely be. The accent is
+  // derived *from* the image, so accent-coloured text is guaranteed to sit on a
+  // background of its own hue — a red nebula gets red labels. Over artwork the
+  // text goes white and the scrims do the work; the accent keeps the border and
+  // the tag outline, where it reads as identity rather than as content.
+  const art = Boolean(v.image);
+  const fg = art ? "#F5F4F0" : accent;
   return (
     <div
       className="af-nft-grad relative aspect-[3/4] w-full overflow-hidden rounded-xl border p-4 shadow-xl transition-colors duration-500"
@@ -179,14 +187,24 @@ export function NftCardFace({ data }: { data: NftCardData }) {
         className="af-nft-sheen pointer-events-none absolute inset-y-0 left-0 w-1/3"
         style={{ background: "linear-gradient(90deg,transparent,rgba(255,255,255,0.35),transparent)" }}
       />
+      {/* Top scrim, artwork only. The designed gradients are dark at the top by
+          construction; an arbitrary image is not, and the header sits on it. */}
+      {art && (
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-1/4 bg-gradient-to-b from-black/70 to-transparent" />
+      )}
       {/* bottom scrim keeps the footer text readable over the vivid gradient */}
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-2/5 bg-gradient-to-t from-black/55 to-transparent" />
+      <div
+        className={cn(
+          "pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t to-transparent",
+          art ? "h-1/2 from-black/85 via-black/45" : "h-2/5 from-black/55",
+        )}
+      />
       <div className="relative flex items-center justify-between">
-        <span className="inline-flex items-center gap-1.5 font-mono text-[10px] font-bold uppercase tracking-wide" style={{ color: accent }}>
+        <span className="inline-flex items-center gap-1.5 font-mono text-[10px] font-bold uppercase tracking-wide" style={{ color: fg }}>
           {v.icon}
           {v.label}
         </span>
-        <span className="rounded-full border px-2 py-0.5 font-mono text-[7px] tracking-[0.1em]" style={{ borderColor: `${accent}55`, color: accent }}>
+        <span className="rounded-full border px-2 py-0.5 font-mono text-[7px] tracking-[0.1em]" style={{ borderColor: `${accent}55`, color: fg }}>
           {v.tag}
         </span>
       </div>
@@ -203,11 +221,20 @@ export function NftCardFace({ data }: { data: NftCardData }) {
         </div>
       )}
       <div className="absolute inset-x-4 bottom-4">
-        <div className="font-mono text-[8px] uppercase tracking-[0.1em] text-white/45">{v.statLabel}</div>
-        <div className="truncate font-mono text-[15px] font-bold" style={{ color: accent }}>
+        <div
+          className={cn(
+            "font-mono text-[8px] uppercase tracking-[0.1em]",
+            art ? "text-white/70" : "text-white/45",
+          )}
+        >
+          {v.statLabel}
+        </div>
+        <div className="truncate font-mono text-[15px] font-bold" style={{ color: fg }}>
           {v.stat}
         </div>
-        <div className="mt-1 font-mono text-[8px] text-white/30">{v.id} · AttentionFi</div>
+        <div className={cn("mt-1 font-mono text-[8px]", art ? "text-white/55" : "text-white/30")}>
+          {v.id} · AttentionFi
+        </div>
       </div>
     </div>
   );
