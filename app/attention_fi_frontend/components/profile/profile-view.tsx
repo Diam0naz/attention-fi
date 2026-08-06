@@ -15,7 +15,7 @@ import { useTokenBalance } from "@/lib/solana/use-token-balance";
 import { USDC_MINT } from "@/lib/solana/config";
 import { myCreatedTokens, type CreatedToken } from "@/lib/solana/registry";
 import { useTokenIndex } from "@/lib/token-index";
-import { getPortfolio } from "@/lib/mock-data";
+import { useHoldings } from "@/lib/solana/use-holdings";
 import { useNftPortfolio } from "@/components/nft/use-nft-portfolio";
 import { RefreshButton } from "@/components/ui/refresh-button";
 import { syncRegistry } from "@/lib/solana/registry";
@@ -37,7 +37,10 @@ export function ProfileView() {
   const solBalance = useSolBalance();
   const usdcBalance = useTokenBalance(USDC_MINT);
   const ownedOnchain = useOwnedNfts();
-  const portfolio = useMemo(() => (address ? getPortfolio(address) : null), [address]);
+  // Real balances priced off the live curves. The mock this replaced derived
+  // holdings from the wallet address, so every wallet saw a stable, plausible
+  // portfolio it did not own.
+  const { holdings, totalUsd, claimableUsd, loaded: holdingsLoaded } = useHoldings();
   // Read from the Verification PDA. This line previously reported a mock
   // handle, i.e. told a wallet it was verified as someone it isn't.
   const nftPortfolio = useNftPortfolio();
@@ -111,7 +114,7 @@ export function ProfileView() {
 
   // No longer gated on the NFT read: verification is one line of this page, and
   // a slow or failed credential lookup shouldn't hide the whole profile.
-  if (!connected || !portfolio) {
+  if (!connected) {
     return (
       <div className="flex min-h-screen flex-col">
         <TopBar />
@@ -188,41 +191,68 @@ export function ProfileView() {
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3 sm:ml-auto">
-            <Stat label="PORTFOLIO" value={usd(portfolio.totalValueUsd)} />
-            <Stat label="CLAIMABLE FEES" value={usd(portfolio.claimableUsd)} accent />
+            <Stat label="PORTFOLIO" value={holdingsLoaded ? usd(totalUsd) : "…"} />
+            <Stat
+              label="CLAIMABLE FEES"
+              value={holdingsLoaded ? usd(claimableUsd) : "…"}
+              accent
+            />
             <Stat label="SOL BALANCE" value={solBalance != null ? solBalance.toFixed(3) : "…"} />
             <Stat label="USDC" value={usdcBalance != null ? `$${usdcBalance.toFixed(2)}` : "…"} />
           </div>
         </div>
 
         {/* holdings */}
-        <Section title="Holdings" count={portfolio.holdings.length}>
+        <Section title="Holdings" count={holdings.length}>
           <div className="overflow-hidden rounded-sm border border-white/[0.06]">
             <div className="grid grid-cols-[1fr_auto_88px] gap-3 bg-white/[0.03] px-4 py-2 font-mono text-[9px] uppercase tracking-[0.08em] text-[#6B6B6B]">
               <span>Token</span>
-              <span className="text-right">24h</span>
+              <span className="text-right">Exit cost</span>
               <span className="text-right">Value</span>
             </div>
-            {portfolio.holdings.map((h) => (
-              <Link
-                key={h.handle}
-                href={`/token/${h.handle}`}
-                className="grid grid-cols-[1fr_auto_88px] items-center gap-3 border-t border-white/[0.05] px-4 py-2.5 transition-colors hover:bg-white/[0.02]"
-              >
-                <span className="flex min-w-0 items-center gap-2">
-                  <span className="h-6 w-6 shrink-0 rounded-full bg-[repeating-linear-gradient(45deg,#1c2733,#1c2733_3px,#222f3d_3px,#222f3d_6px)]" />
-                  <span className="truncate text-[13px] font-semibold">@{h.handle}</span>
-                  <span className="font-mono text-[10px] text-[#6B6B6B]">
-                    {h.amount.toLocaleString()} ${h.symbol}
+            {!holdingsLoaded ? (
+              <div className="border-t border-white/[0.05] px-4 py-6 text-center font-mono text-[11px] text-[#6B6B6B]">
+                Reading balances…
+              </div>
+            ) : holdings.length === 0 ? (
+              <div className="border-t border-white/[0.05] px-4 py-6 text-center">
+                <p className="font-mono text-[11px] text-[#6B6B6B]">
+                  No AttentionFi tokens in this wallet yet.
+                </p>
+                <Link
+                  href="/discover"
+                  className="mt-3 inline-block rounded-sm bg-signal px-4 py-2 font-mono text-[11px] font-bold text-[#0A0A0A]"
+                >
+                  Find a token
+                </Link>
+              </div>
+            ) : (
+              holdings.map((h) => (
+                <Link
+                  key={h.mint}
+                  href={`/token/${h.handle}`}
+                  className="grid grid-cols-[1fr_auto_88px] items-center gap-3 border-t border-white/[0.05] px-4 py-2.5 transition-colors hover:bg-white/[0.02]"
+                >
+                  <span className="flex min-w-0 items-center gap-2">
+                    <span className="h-6 w-6 shrink-0 rounded-full bg-[repeating-linear-gradient(45deg,#1c2733,#1c2733_3px,#222f3d_3px,#222f3d_6px)]" />
+                    <span className="truncate text-[13px] font-semibold">@{h.handle}</span>
+                    <span className="font-mono text-[10px] text-[#6B6B6B]">
+                      {h.amount.toLocaleString(undefined, { maximumFractionDigits: 0 })} $
+                      {h.symbol}
+                    </span>
                   </span>
-                </span>
-                <span className={cn("text-right font-mono text-[12px]", h.delta24h >= 0 ? "text-signal" : "text-noise")}>
-                  {h.delta24h >= 0 ? "+" : ""}
-                  {h.delta24h.toFixed(1)}%
-                </span>
-                <span className="text-right font-mono text-[13px]">{usd(h.valueUsd)}</span>
-              </Link>
-            ))}
+                  {/* What the position costs to exit, not a price change. The
+                      mock reported a 24h delta this app has no history for. */}
+                  <span
+                    className="text-right font-mono text-[12px] text-[#6B6B6B]"
+                    title="How much less than spot this position fetches if sold in one go"
+                  >
+                    {h.slippage >= 0.001 ? `-${(h.slippage * 100).toFixed(1)}%` : "—"}
+                  </span>
+                  <span className="text-right font-mono text-[13px]">{usd(h.valueUsd)}</span>
+                </Link>
+              ))
+            )}
           </div>
         </Section>
 
