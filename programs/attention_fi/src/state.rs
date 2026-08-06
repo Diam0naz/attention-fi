@@ -371,6 +371,29 @@ pub struct CollectionAuction {
     pub bump: u8,
 }
 
+/// Paid placement for one listing.
+///
+/// Kept in its own PDA rather than as fields on `NftAuction` and
+/// `CollectionAuction`. Adding fields to either would lengthen an account that
+/// already exists on-chain, and every listing created before the change would
+/// fail to deserialize against the longer struct. A separate account also lets
+/// one instruction promote both kinds, since it keys off the subject rather
+/// than the listing type.
+#[account]
+#[derive(InitSpace)]
+pub struct Promotion {
+    /// The asset or collection whose listing is promoted.
+    pub subject: Pubkey,
+    /// Most recent payer. Informational — anyone may top up a listing.
+    pub payer: Pubkey,
+    /// Unix seconds through which this listing ranks as promoted.
+    pub promoted_until: i64,
+    /// Lifetime lamports spent here, for breaking ties between listings whose
+    /// promotion is otherwise equal.
+    pub total_paid: u64,
+    pub bump: u8,
+}
+
 /// Native constant-product AMM pool created when a bonding curve graduates.
 /// Holds the migrated real SOL + remaining tokens; trades `x*y=k`. One PDA per mint.
 #[account]

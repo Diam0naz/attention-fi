@@ -23,6 +23,8 @@ pub const NFTAUCTION_SEED: &[u8] = b"nftauction";
 /// because a collection is a different Core account type that changes hands a
 /// different way — see `list_collection_auction`.
 pub const COLLECTIONAUCTION_SEED: &[u8] = b"colauction";
+/// Paid placement for a listing, keyed by the asset or collection promoted.
+pub const PROMO_SEED: &[u8] = b"promo";
 
 /// One SOL in lamports, so tiers below can be written in the unit their doc
 /// comments describe them in.
@@ -94,3 +96,17 @@ pub const SEED_NEW_ENTRANT: u64 = 500_000_000; // ~0.5 SOL
 pub const SEED_EMERGING: u64 = 5_330_000_000; // ~5.33 SOL
 pub const SEED_TOP_100: u64 = 26_700_000_000; // ~26.7 SOL
 pub const SEED_TOP_10: u64 = 100_000_000_000; // ~100 SOL
+
+/// Cost of one day of promoted placement, in lamports.
+///
+/// Priced to be an easy yes for someone who wants a listing seen and a poor
+/// deal for anyone trying to bury the feed under their own inventory. It is
+/// charged per day bought, never per day held: an unpromoted listing costs
+/// nothing and stays up forever, so nobody loses an NFT for failing to top up.
+pub const PROMO_LAMPORTS_PER_DAY: u64 = LAMPORTS_PER_SOL / 100;
+
+/// Longest promotion that can be bought in a single call.
+///
+/// Not a cap on total promotion — calls stack — but a bound on how much can be
+/// spent by one fat-fingered number.
+pub const MAX_PROMO_DAYS: u16 = 90;

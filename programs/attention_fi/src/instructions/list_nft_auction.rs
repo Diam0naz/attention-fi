@@ -2,11 +2,12 @@ use anchor_lang::prelude::*;
 use mpl_core::instructions::{AddPluginV1CpiBuilder, TransferV1CpiBuilder};
 use mpl_core::types::{Attributes, Plugin, PluginAuthority};
 
-use crate::constants::{GLOBAL_SEED, NFTAUCTION_SEED};
+use crate::auction::{is_perpetual, validate_listing};
+use crate::constants::{COLLECTIONAUCTION_SEED, GLOBAL_SEED, NFTAUCTION_SEED};
 use crate::error::AttentionError;
 use crate::events::NftListedEvent;
 use crate::nft::has_attributes_plugin;
-use crate::state::{Global, NftAuction};
+use crate::state::{CollectionAuction, Global, NftAuction};
 
 /// List an NFT the caller already owns as a descending 1-of-1 auction.
 ///
@@ -46,6 +47,19 @@ pub struct ListNftAuction<'info> {
     #[account(mut)]
     pub collection: Option<UncheckedAccount<'info>>,
 
+    /// The collection's own listing, when it has one.
+    ///
+    /// Present so this instruction can refuse to sell a piece out from under
+    /// someone buying the whole set — see the handler. Optional because most
+    /// collections are not for sale, and a caller who omits it is caught by the
+    /// seeds constraint rather than trusted: the PDA is derived from the
+    /// collection, so a wrong or substituted account can't satisfy it.
+    #[account(
+        seeds = [COLLECTIONAUCTION_SEED, collection_auction.collection.as_ref()],
+        bump = collection_auction.bump,
+    )]
+    pub collection_auction: Option<Account<'info, CollectionAuction>>,
+
     /// CHECK: Metaplex Core program, validated by address.
     #[account(address = mpl_core::ID)]
     pub mpl_core_program: UncheckedAccount<'info>,
@@ -59,12 +73,29 @@ pub fn list_nft_auction_handler(
     floor_price: u64,
     duration: i64,
 ) -> Result<()> {
-    require!(
-        start_price >= floor_price,
-        AttentionError::InvalidAuctionParams
-    );
-    require!(floor_price > 0, AttentionError::InvalidAuctionParams);
-    require!(duration > 0, AttentionError::InvalidAuctionParams);
+    validate_listing(start_price, floor_price, duration)?;
+
+    // Refuse to list a piece whose collection is itself on the block.
+    //
+    // Buying a collection buys authority over every member, and members stay
+    // members while they sit in an NFT escrow — so without this a collection
+    // could be advertised at some size, sold, and the buyer then watch pieces
+    // they thought they'd bought transfer to whoever bought them separately.
+    // `collection_size` counts escrowed members too, so the advertised number
+    // would have been honest and the outcome still wrong.
+    //
+    // Only live listings block. A collection whose listing sold or was
+    // withdrawn has no claim on its members.
+    if let (Some(collection), Some(listing)) =
+        (&ctx.accounts.collection, &ctx.accounts.collection_auction)
+    {
+        if listing.collection == collection.key() && !listing.complete {
+            let now = Clock::get()?.unix_timestamp;
+            let live =
+                is_perpetual(listing.duration) || now < listing.start_time + listing.duration;
+            require!(!live, AttentionError::CollectionListed);
+        }
+    }
 
     // Move the asset into escrow. The owner signs directly here (unlike
     // buy_nft/reclaim, where the auction PDA signs to move it back out).

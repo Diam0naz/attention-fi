@@ -3,7 +3,7 @@ use anchor_lang::system_program;
 use mpl_core::instructions::{TransferV1CpiBuilder, UpdatePluginV1CpiBuilder};
 use mpl_core::types::Plugin;
 
-use crate::auction::current_price;
+use crate::auction::{current_price, is_perpetual};
 use crate::constants::{GLOBAL_SEED, NFTAUCTION_SEED};
 use crate::error::AttentionError;
 use crate::events::{NftAuctionEvent, NFT_SOLD};
@@ -50,10 +50,13 @@ pub fn buy_nft_handler(ctx: Context<BuyNft>, max_price: u64) -> Result<()> {
 
     let auction = &ctx.accounts.auction;
     let now = Clock::get()?.unix_timestamp;
-    require!(
-        now < auction.start_time + auction.duration,
-        AttentionError::AuctionEnded
-    );
+    // A perpetual listing has no deadline to be past; a timed one does.
+    if !is_perpetual(auction.duration) {
+        require!(
+            now < auction.start_time + auction.duration,
+            AttentionError::AuctionEnded
+        );
+    }
 
     let price = current_price(
         auction.start_price,

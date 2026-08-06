@@ -2,8 +2,8 @@ use anchor_lang::prelude::*;
 use mpl_core::instructions::CreateV2CpiBuilder;
 use mpl_core::types::{Attributes, DataState, Plugin, PluginAuthorityPair};
 
+use crate::auction::validate_listing;
 use crate::constants::{GLOBAL_SEED, NFTAUCTION_SEED};
-use crate::error::AttentionError;
 use crate::events::NftListedEvent;
 use crate::state::{Global, NftAuction};
 
@@ -43,12 +43,7 @@ pub fn start_nft_auction_handler(
     name: String,
     uri: String,
 ) -> Result<()> {
-    require!(
-        start_price >= floor_price,
-        AttentionError::InvalidAuctionParams
-    );
-    require!(floor_price > 0, AttentionError::InvalidAuctionParams);
-    require!(duration > 0, AttentionError::InvalidAuctionParams);
+    validate_listing(start_price, floor_price, duration)?;
 
     // An empty Attributes plugin, so `buy_nft` has somewhere to record the
     // clearing price. Added here rather than at sale time because AddPluginV1

@@ -312,6 +312,14 @@ pub mod attention_fi {
         reclaim_collection_auction::reclaim_collection_auction_handler(ctx)
     }
 
+    /// Buy promoted placement for a live listing, asset or collection.
+    ///
+    /// The alternative to charging rent for listing space: listing stays free
+    /// and perpetual, and money only ever buys extra visibility.
+    pub fn promote_listing(ctx: Context<PromoteListing>, days: u16) -> Result<()> {
+        promote_listing::promote_listing_handler(ctx, days)
+    }
+
     /// Route a token's fees to its genesis NFT holders (split pro-rata by share).
     pub fn deposit_genesis_fee(ctx: Context<DepositGenesisFee>, amount: u64) -> Result<()> {
         deposit_genesis_fee::deposit_genesis_fee_handler(ctx, amount)

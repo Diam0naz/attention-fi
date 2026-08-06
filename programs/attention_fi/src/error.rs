@@ -20,6 +20,8 @@ pub enum AttentionError {
     AuctionNotEnded,
     #[msg("Auction allocation is sold out")]
     SoldOut,
+    #[msg("That collection is listed for sale — withdraw it before listing a member separately")]
+    CollectionListed,
     #[msg("Current price exceeds the bidder's maximum")]
     PriceAboveMax,
     #[msg("Position holds fewer tokens than requested")]

@@ -6,7 +6,7 @@ use mpl_core::instructions::{
 };
 use mpl_core::types::{Plugin, PluginAuthority};
 
-use crate::auction::current_price;
+use crate::auction::{current_price, is_perpetual};
 use crate::constants::{COLLECTIONAUCTION_SEED, GLOBAL_SEED};
 use crate::error::AttentionError;
 use crate::events::{CollectionAuctionEvent, NFT_SOLD};
@@ -64,10 +64,13 @@ pub fn buy_collection_handler(ctx: Context<BuyCollection>, max_price: u64) -> Re
 
     let auction = &ctx.accounts.auction;
     let now = Clock::get()?.unix_timestamp;
-    require!(
-        now < auction.start_time + auction.duration,
-        AttentionError::AuctionEnded
-    );
+    // A perpetual listing has no deadline to be past; a timed one does.
+    if !is_perpetual(auction.duration) {
+        require!(
+            now < auction.start_time + auction.duration,
+            AttentionError::AuctionEnded
+        );
+    }
 
     let price = current_price(
         auction.start_price,

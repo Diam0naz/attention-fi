@@ -21,8 +21,56 @@ pub struct AuctionQuote {
     pub fee: u64,
 }
 
+/// Validate the price/duration triple every listing path shares.
+///
+/// Three shapes are legal and they're worth naming, because the difference is
+/// the whole product decision:
+///
+/// - **fixed, timed** — `start == floor`, `duration > 0`. Sits at one price,
+///   then expires.
+/// - **fixed, perpetual** — `start == floor`, `duration == 0`. Sits at one
+///   price until sold or withdrawn. The sane default for a 1-of-1.
+/// - **declining, timed** — `start > floor`, `duration > 0`. The Dutch
+///   auction, now an explicit choice rather than the only option.
+///
+/// The fourth combination — declining and perpetual — is rejected. A descent
+/// is defined by where it ends and when; without a deadline there is no
+/// schedule, and the price would simply sit at the ceiling forever while
+/// claiming to fall.
+pub fn validate_listing(start_price: u64, floor_price: u64, duration: i64) -> Result<()> {
+    require!(
+        start_price >= floor_price,
+        AttentionError::InvalidAuctionParams
+    );
+    require!(floor_price > 0, AttentionError::InvalidAuctionParams);
+    require!(duration >= 0, AttentionError::InvalidAuctionParams);
+    if is_perpetual(duration) {
+        require!(
+            start_price == floor_price,
+            AttentionError::InvalidAuctionParams
+        );
+    }
+    Ok(())
+}
+
+/// Whether a listing runs forever.
+///
+/// `duration == 0` is the perpetual listing: no deadline, no descent, no
+/// countdown pressuring the seller into a price they didn't want. It is spelled
+/// as a named predicate rather than a bare `== 0` because the same zero means
+/// something dangerous in a time comparison — `now >= start_time + 0` is true
+/// the instant a listing opens, so every deadline check has to ask this first.
+pub fn is_perpetual(duration: i64) -> bool {
+    duration == 0
+}
+
 /// Current price (lamports per whole token) at time `now` on a linear descent
 /// from `start_price` down to `floor_price` over `duration` seconds.
+///
+/// A perpetual listing never descends: it sits at `start_price` until someone
+/// buys it or the seller takes it down. Callers are expected to have rejected a
+/// perpetual listing with `start_price != floor_price` at creation, since a
+/// descent with no end has no schedule to follow.
 pub fn current_price(
     start_price: u64,
     floor_price: u64,
@@ -34,6 +82,9 @@ pub fn current_price(
         start_price >= floor_price,
         AttentionError::InvalidAuctionParams
     );
+    if is_perpetual(duration) {
+        return Ok(start_price);
+    }
     require!(duration > 0, AttentionError::InvalidAuctionParams);
 
     let elapsed = now.saturating_sub(start_time);
@@ -152,8 +203,66 @@ mod tests {
             "start < floor"
         );
         assert!(
-            current_price(START, FLOOR, T0, 0, T0).is_err(),
-            "zero duration"
+            current_price(START, FLOOR, T0, -1, T0).is_err(),
+            "negative duration"
         );
+    }
+
+    // Zero duration used to be an error. It now means "perpetual", so the tests
+    // below pin the new contract rather than the old rejection.
+
+    #[test]
+    fn perpetual_listing_holds_its_price_forever() {
+        for elapsed in [0, 1, DUR, 86_400 * 365 * 10] {
+            assert_eq!(
+                current_price(START, START, T0, 0, T0 + elapsed).unwrap(),
+                START,
+                "a perpetual listing must not drift"
+            );
+        }
+    }
+
+    #[test]
+    fn fixed_timed_listing_never_moves_within_its_window() {
+        for elapsed in [0, DUR / 3, DUR, DUR * 2] {
+            assert_eq!(
+                current_price(START, START, T0, DUR, T0 + elapsed).unwrap(),
+                START
+            );
+        }
+    }
+
+    #[test]
+    fn validate_accepts_the_three_legal_shapes() {
+        validate_listing(START, START, 0).expect("fixed perpetual");
+        validate_listing(START, START, DUR).expect("fixed timed");
+        validate_listing(START, FLOOR, DUR).expect("declining timed");
+    }
+
+    #[test]
+    fn validate_rejects_a_declining_perpetual_listing() {
+        // A descent is defined by where it ends and when. Without a deadline
+        // there's no schedule, so the price would sit at the ceiling forever
+        // while claiming to fall.
+        assert!(validate_listing(START, FLOOR, 0).is_err());
+    }
+
+    #[test]
+    fn validate_rejects_free_and_inverted_listings() {
+        assert!(validate_listing(START, 0, DUR).is_err(), "zero floor");
+        assert!(
+            validate_listing(FLOOR, START, DUR).is_err(),
+            "start < floor"
+        );
+        assert!(validate_listing(START, FLOOR, -1).is_err(), "negative");
+    }
+
+    #[test]
+    fn perpetual_is_only_zero() {
+        // The predicate guards every deadline comparison in the program, so it
+        // must not quietly treat a negative duration as perpetual.
+        assert!(is_perpetual(0));
+        assert!(!is_perpetual(1));
+        assert!(!is_perpetual(-1));
     }
 }

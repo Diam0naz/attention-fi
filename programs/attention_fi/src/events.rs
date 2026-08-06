@@ -102,6 +102,18 @@ pub struct NftAuctionEvent {
     pub timestamp: i64,
 }
 
+/// Emitted when a listing buys promoted placement.
+#[event]
+pub struct ListingPromotedEvent {
+    pub subject: Pubkey,
+    pub payer: Pubkey,
+    pub days: u16,
+    pub lamports: u64,
+    /// Where the promotion now runs to, after stacking onto any remainder.
+    pub promoted_until: i64,
+    pub timestamp: i64,
+}
+
 /// Emitted when a collection is listed for sale.
 ///
 /// Separate from `NftListedEvent` rather than reusing it with the collection

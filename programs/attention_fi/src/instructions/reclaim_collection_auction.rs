@@ -1,6 +1,7 @@
 use anchor_lang::prelude::*;
 use mpl_core::instructions::UpdateCollectionV1CpiBuilder;
 
+use crate::auction::is_perpetual;
 use crate::constants::COLLECTIONAUCTION_SEED;
 use crate::error::AttentionError;
 use crate::events::{CollectionAuctionEvent, NFT_RECLAIMED};
@@ -15,8 +16,15 @@ use crate::state::CollectionAuction;
 /// seller unable to mint into it or change it, permanently, having sold
 /// nothing.
 ///
-/// Permissionless, like the NFT reclaim: authority can only ever go back to
-/// `auction.creator`, so who pays the fee to trigger it doesn't matter.
+/// Permissionless after expiry, like the NFT reclaim: authority can only ever
+/// go back to `auction.creator`, so who pays the fee to trigger it doesn't
+/// matter.
+///
+/// The lister may also pull a live listing early — this is the delist path,
+/// and it matters more here than for a single asset. Listing a collection
+/// hands over the right to mint into it and change it, so a seller who
+/// listed for a month and changed their mind was locked out of their own
+/// collection for a month.
 #[derive(Accounts)]
 pub struct ReclaimCollectionAuction<'info> {
     #[account(mut)]
@@ -51,12 +59,24 @@ pub fn reclaim_collection_auction_handler(ctx: Context<ReclaimCollectionAuction>
 
     let auction = &ctx.accounts.auction;
     let now = Clock::get()?.unix_timestamp;
-    // Inverted mirror of buy_collection's window, so buying and reclaiming can
-    // never both be open.
-    require!(
-        now >= auction.start_time + auction.duration,
-        AttentionError::AuctionNotEnded
-    );
+    // Inverted mirror of buy_collection's window, so a keeper can never race a
+    // buyer. The lister is exempt: pulling their own listing is a delist, and
+    // it only forgoes a sale that hadn't happened.
+    if ctx.accounts.payer.key() != auction.creator {
+        // A perpetual listing never expires, so this path never opens for
+        // anyone but the lister. Without the is_perpetual guard the arithmetic
+        // says otherwise and says it immediately: duration is zero, so
+        // `now >= start_time` is true from the moment of listing, and any
+        // passer-by could yank a live listing out from under its owner.
+        require!(
+            !is_perpetual(auction.duration),
+            AttentionError::AuctionNotEnded
+        );
+        require!(
+            now >= auction.start_time + auction.duration,
+            AttentionError::AuctionNotEnded
+        );
+    }
 
     let collection_key = ctx.accounts.collection.key();
     let signer_seeds: &[&[&[u8]]] = &[&[

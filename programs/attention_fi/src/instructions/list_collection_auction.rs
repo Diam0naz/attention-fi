@@ -1,6 +1,7 @@
 use anchor_lang::prelude::*;
 use mpl_core::instructions::UpdateCollectionV1CpiBuilder;
 
+use crate::auction::validate_listing;
 use crate::constants::{COLLECTIONAUCTION_SEED, GLOBAL_SEED};
 use crate::error::AttentionError;
 use crate::events::CollectionListedEvent;
@@ -62,12 +63,7 @@ pub fn list_collection_auction_handler(
     floor_price: u64,
     duration: i64,
 ) -> Result<()> {
-    require!(
-        start_price >= floor_price,
-        AttentionError::InvalidAuctionParams
-    );
-    require!(floor_price > 0, AttentionError::InvalidAuctionParams);
-    require!(duration > 0, AttentionError::InvalidAuctionParams);
+    validate_listing(start_price, floor_price, duration)?;
 
     // Read the size before handing over authority — afterwards this instruction
     // no longer speaks for the collection, and the number is what the listing

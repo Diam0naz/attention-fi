@@ -3412,6 +3412,43 @@ export type AttentionFi = {
           "optional": true
         },
         {
+          "name": "collectionAuction",
+          "docs": [
+            "The collection's own listing, when it has one.",
+            "",
+            "Present so this instruction can refuse to sell a piece out from under",
+            "someone buying the whole set — see the handler. Optional because most",
+            "collections are not for sale, and a caller who omits it is caught by the",
+            "seeds constraint rather than trusted: the PDA is derived from the",
+            "collection, so a wrong or substituted account can't satisfy it."
+          ],
+          "optional": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  108,
+                  97,
+                  117,
+                  99,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "collection_auction.collection",
+                "account": "collectionAuction"
+              }
+            ]
+          }
+        },
+        {
           "name": "mplCoreProgram",
           "address": "CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d"
         },
@@ -3756,6 +3793,153 @@ export type AttentionFi = {
         {
           "name": "uri",
           "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "promoteListing",
+      "docs": [
+        "Buy promoted placement for a live listing, asset or collection.",
+        "",
+        "The alternative to charging rent for listing space: listing stays free",
+        "and perpetual, and money only ever buys extra visibility."
+      ],
+      "discriminator": [
+        116,
+        65,
+        195,
+        243,
+        67,
+        189,
+        116,
+        160
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "global",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  108,
+                  111,
+                  98,
+                  97,
+                  108
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "treasury",
+          "writable": true
+        },
+        {
+          "name": "subject",
+          "docs": [
+            "gets settled by the auction account supplied below, whose `has_one`",
+            "binds it to this key — so this is never trusted on its own."
+          ]
+        },
+        {
+          "name": "nftAuction",
+          "docs": [
+            "The listing, when the subject is a single asset."
+          ],
+          "optional": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  110,
+                  102,
+                  116,
+                  97,
+                  117,
+                  99,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "subject"
+              }
+            ]
+          }
+        },
+        {
+          "name": "collectionAuction",
+          "docs": [
+            "The listing, when the subject is a whole collection."
+          ],
+          "optional": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  108,
+                  97,
+                  117,
+                  99,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "subject"
+              }
+            ]
+          }
+        },
+        {
+          "name": "promotion",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  109,
+                  111
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "subject"
+              }
+            ]
+          }
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "days",
+          "type": "u16"
         }
       ]
     },
@@ -5734,6 +5918,19 @@ export type AttentionFi = {
       ]
     },
     {
+      "name": "promotion",
+      "discriminator": [
+        32,
+        59,
+        115,
+        212,
+        100,
+        17,
+        137,
+        59
+      ]
+    },
+    {
       "name": "revenueShare",
       "discriminator": [
         55,
@@ -5866,6 +6063,19 @@ export type AttentionFi = {
       ]
     },
     {
+      "name": "listingPromotedEvent",
+      "discriminator": [
+        24,
+        12,
+        92,
+        196,
+        217,
+        208,
+        251,
+        100
+      ]
+    },
+    {
       "name": "nftAuctionEvent",
       "discriminator": [
         123,
@@ -5966,81 +6176,86 @@ export type AttentionFi = {
     },
     {
       "code": 6009,
+      "name": "collectionListed",
+      "msg": "That collection is listed for sale — withdraw it before listing a member separately"
+    },
+    {
+      "code": 6010,
       "name": "priceAboveMax",
       "msg": "Current price exceeds the bidder's maximum"
     },
     {
-      "code": 6010,
+      "code": 6011,
       "name": "insufficientPosition",
       "msg": "Position holds fewer tokens than requested"
     },
     {
-      "code": 6011,
+      "code": 6012,
       "name": "noStakers",
       "msg": "No shares staked to receive the deposit"
     },
     {
-      "code": 6012,
+      "code": 6013,
       "name": "insufficientShares",
       "msg": "Not enough shares remain for sale"
     },
     {
-      "code": 6013,
+      "code": 6014,
       "name": "unauthorized",
       "msg": "Caller is not authorized"
     },
     {
-      "code": 6014,
+      "code": 6015,
       "name": "invalidHandle",
       "msg": "Handle is empty or too long"
     },
     {
-      "code": 6015,
+      "code": 6016,
       "name": "maxLevelReached",
       "msg": "Perk is already at max level"
     },
     {
-      "code": 6016,
+      "code": 6017,
       "name": "invalidAttestation",
       "msg": "Attestation account is invalid or malformed"
     },
     {
-      "code": 6017,
+      "code": 6018,
       "name": "attestationExpired",
       "msg": "Attestation has expired"
     },
     {
-      "code": 6018,
+      "code": 6019,
       "name": "invalidTreasury",
       "msg": "Treasury must be a System-owned account"
     },
     {
-      "code": 6019,
+      "code": 6020,
       "name": "invalidFeed",
       "msg": "Invalid or unparseable Switchboard feed"
     },
     {
-      "code": 6020,
+      "code": 6021,
       "name": "staleFeed",
       "msg": "Switchboard feed is stale or has too few samples"
     },
     {
-      "code": 6021,
+      "code": 6022,
       "name": "noCreatorFees",
       "msg": "No creator fees available to claim"
     },
     {
-      "code": 6022,
+      "code": 6023,
       "name": "notReadyToGraduate",
       "msg": "Curve has not reached the graduation threshold"
     },
     {
-      "code": 6023,
+      "code": 6024,
       "name": "insufficientActivity",
       "msg": "Not enough trading volume or deposits to reach the next perk level"
     },
     {
-      "code": 6024,
+      "code": 6025,
       "name": "invalidPerkLevel",
       "msg": "Perk level must be between 1 and MAX_PERK_LEVEL"
     }
@@ -6879,6 +7094,44 @@ export type AttentionFi = {
       }
     },
     {
+      "name": "listingPromotedEvent",
+      "docs": [
+        "Emitted when a listing buys promoted placement."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "subject",
+            "type": "pubkey"
+          },
+          {
+            "name": "payer",
+            "type": "pubkey"
+          },
+          {
+            "name": "days",
+            "type": "u16"
+          },
+          {
+            "name": "lamports",
+            "type": "u64"
+          },
+          {
+            "name": "promotedUntil",
+            "docs": [
+              "Where the promotion now runs to, after stacking onto any remainder."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
       "name": "mindshareState",
       "docs": [
         "On-chain snapshot of a token's mindshare, sourced from the Switchboard feed.",
@@ -7208,6 +7461,57 @@ export type AttentionFi = {
           {
             "name": "timestamp",
             "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "promotion",
+      "docs": [
+        "Paid placement for one listing.",
+        "",
+        "Kept in its own PDA rather than as fields on `NftAuction` and",
+        "`CollectionAuction`. Adding fields to either would lengthen an account that",
+        "already exists on-chain, and every listing created before the change would",
+        "fail to deserialize against the longer struct. A separate account also lets",
+        "one instruction promote both kinds, since it keys off the subject rather",
+        "than the listing type."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "subject",
+            "docs": [
+              "The asset or collection whose listing is promoted."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "payer",
+            "docs": [
+              "Most recent payer. Informational — anyone may top up a listing."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "promotedUntil",
+            "docs": [
+              "Unix seconds through which this listing ranks as promoted."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "totalPaid",
+            "docs": [
+              "Lifetime lamports spent here, for breaking ties between listings whose",
+              "promotion is otherwise equal."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
           }
         ]
       }
