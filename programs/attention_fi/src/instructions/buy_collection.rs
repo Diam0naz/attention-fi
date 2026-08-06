@@ -1,11 +1,16 @@
 use anchor_lang::prelude::*;
 use anchor_lang::system_program;
-use mpl_core::instructions::UpdateCollectionV1CpiBuilder;
+use mpl_core::instructions::{
+    AddCollectionPluginV1CpiBuilder, UpdateCollectionPluginV1CpiBuilder,
+    UpdateCollectionV1CpiBuilder,
+};
+use mpl_core::types::{Plugin, PluginAuthority};
 
 use crate::auction::current_price;
 use crate::constants::{COLLECTIONAUCTION_SEED, GLOBAL_SEED};
 use crate::error::AttentionError;
 use crate::events::{CollectionAuctionEvent, NFT_SOLD};
+use crate::nft::{collection_has_attributes, last_sale_attributes};
 use crate::state::{CollectionAuction, Global};
 
 /// Buy a listed collection at its current descending price.
@@ -16,9 +21,9 @@ use crate::state::{CollectionAuction, Global};
 /// hands over every member at once, since each asset names the collection as
 /// its own authority.
 ///
-/// No last-sale attribute is written here, unlike `buy_nft`. Attributes live
-/// on assets, and writing to each member would be unbounded work in one
-/// transaction — the sale price stays in the event for a collection.
+/// The sale price is recorded on the collection's own Attributes plugin — one
+/// write, not one per member, because a collection carries its own plugin
+/// registry. Members keep whatever `last_sale` they earned individually.
 #[derive(Accounts)]
 pub struct BuyCollection<'info> {
     #[account(mut)]
@@ -103,14 +108,55 @@ pub fn buy_collection_handler(ctx: Context<BuyCollection>, max_price: u64) -> Re
         )?;
     }
 
-    // Hand the collection to the buyer; the escrow PDA signs as the current
-    // update authority.
     let collection_key = ctx.accounts.collection.key();
     let signer_seeds: &[&[&[u8]]] = &[&[
         COLLECTIONAUCTION_SEED,
         collection_key.as_ref(),
         &[auction.bump],
     ]];
+
+    // Record what the collection sold for, on the collection itself.
+    //
+    // A collection carries its own plugin registry, so this is one write
+    // rather than one per member — the reason a collection can have a last
+    // sale price at all without the cost growing with its size. Members are
+    // untouched, which is also correct: a member's own `last_sale` should mean
+    // what that piece fetched on its own.
+    //
+    // Add or update depending on what's there. Unlike the asset path there's
+    // no need to arrange authority in advance, because the escrow PDA is the
+    // collection's update authority for exactly as long as this instruction
+    // runs — it hasn't handed it to the buyer yet.
+    let core_program = ctx.accounts.mpl_core_program.to_account_info();
+    let collection_info = ctx.accounts.collection.to_account_info();
+    let buyer_info = ctx.accounts.buyer.to_account_info();
+    let auction_info = ctx.accounts.auction.to_account_info();
+    let system_info = ctx.accounts.system_program.to_account_info();
+    let sale = Plugin::Attributes(last_sale_attributes(price, now));
+
+    if collection_has_attributes(&collection_info) {
+        UpdateCollectionPluginV1CpiBuilder::new(&core_program)
+            .collection(&collection_info)
+            .payer(&buyer_info)
+            .authority(Some(&auction_info))
+            .system_program(&system_info)
+            .plugin(sale)
+            .invoke_signed(signer_seeds)?;
+    } else {
+        AddCollectionPluginV1CpiBuilder::new(&core_program)
+            .collection(&collection_info)
+            .payer(&buyer_info)
+            .authority(Some(&auction_info))
+            .system_program(&system_info)
+            .plugin(sale)
+            // Left with the update authority, which is about to become the
+            // buyer — so a future sale by them can rewrite it.
+            .init_authority(PluginAuthority::UpdateAuthority)
+            .invoke_signed(signer_seeds)?;
+    }
+
+    // Hand the collection to the buyer; the escrow PDA signs as the current
+    // update authority.
     UpdateCollectionV1CpiBuilder::new(&ctx.accounts.mpl_core_program.to_account_info())
         .collection(&ctx.accounts.collection.to_account_info())
         .payer(&ctx.accounts.buyer.to_account_info())

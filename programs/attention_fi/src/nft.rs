@@ -1,8 +1,9 @@
 //! Shared helpers for the Metaplex Core NFT layer.
 
 use crate::constants::{DISCOUNT_PER_LEVEL_BPS, LAMPORTS_PER_SOL, MAX_PERK_LEVEL};
-use mpl_core::fetch_plugins;
+use anchor_lang::prelude::AccountInfo;
 use mpl_core::types::{Attribute, Attributes, PluginType};
+use mpl_core::{fetch_collection_plugin, fetch_plugins};
 
 /// 100% in basis points.
 const BPS_DENOMINATOR: u16 = 10_000;
@@ -111,6 +112,17 @@ pub fn collection_size(account_data: &[u8]) -> Option<u32> {
     offset = offset.checked_add(4)?; // num_minted
     let size_bytes = account_data.get(offset..offset + 4)?;
     Some(u32::from_le_bytes(size_bytes.try_into().ok()?))
+}
+
+/// Whether a Core *collection* already carries an Attributes plugin.
+///
+/// Deliberately not [`has_attributes_plugin`]: that reads the registry via
+/// mpl-core's `fetch_plugins`, which parses the account as a `BaseAssetV1`.
+/// A collection's header is a different size, so pointing the asset version at
+/// a collection reads the registry from the wrong offset and answers
+/// confidently with nonsense.
+pub fn collection_has_attributes(account: &AccountInfo) -> bool {
+    fetch_collection_plugin::<Attributes>(account, PluginType::Attributes).is_ok()
 }
 
 /// Whether `account_data` already carries an Attributes plugin.
