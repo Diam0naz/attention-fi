@@ -35,11 +35,16 @@ const short = (a: string) => `${a.slice(0, 4)}…${a.slice(-4)}`;
  *  limit with room for the blockhash and signatures. */
 const BATCH = 8;
 
-function toCard(a: OwnedAsset): NftCardData {
+function toCard(a: OwnedAsset, collection?: { name: string; size: number }): NftCardData {
   // artworkUrl, not a.uri: an asset minted without its own picture points at
   // the metadata document, which renders as nothing in an <img>.
   const image = artworkUrl(a.uri);
-  return { kind: "custom", name: a.name, ...(image ? { image } : {}) };
+  return {
+    kind: "custom",
+    name: a.name,
+    ...(image ? { image } : {}),
+    ...(collection ? { collection } : {}),
+  };
 }
 
 export function CollectionShelf({
@@ -272,7 +277,7 @@ export function CollectionShelf({
                   className="af-pack-card absolute inset-0 origin-bottom rounded-xl"
                   style={{ transform: t, zIndex: cover.length - i }}
                 >
-                  <NftCardFace data={toCard(m)} />
+                  <NftCardFace data={toCard(m, { name: collection.name, size: collection.size })} />
                 </div>
               );
             })
@@ -345,7 +350,7 @@ export function CollectionShelf({
         <div className="mt-4 grid grid-cols-3 gap-2.5 border-t border-white/[0.06] pt-3.5 sm:grid-cols-5">
           {members.map((m) => (
             <div key={m.asset}>
-              <NftCardFace data={toCard(m)} />
+              <NftCardFace data={toCard(m, { name: collection.name, size: collection.size })} />
               <div className="mt-1 truncate text-center font-mono text-[9px] text-[#6B6B6B]">
                 {m.name}
               </div>
@@ -440,7 +445,7 @@ export function CollectionShelf({
                     isChosen ? "bg-signal/15 ring-1 ring-signal" : "hover:bg-white/[0.04]",
                   )}
                 >
-                  <NftCardFace data={toCard(m)} />
+                  <NftCardFace data={toCard(m, { name: collection.name, size: collection.size })} />
                   <div className="mt-1 truncate font-mono text-[9px] text-[#6B6B6B]">
                     {m.name}
                   </div>

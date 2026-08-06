@@ -1399,7 +1399,8 @@ function AuctionCard({
   const cardData: NftCardData = {
     kind: "custom",
     name: auction.name,
-    image: auction.uri,
+    image: artworkUrl(auction.uri),
+    ...(auction.collectionMeta ? { collection: auction.collectionMeta } : {}),
   };
   const secondsLeft = auction.startTime + auction.duration - Math.floor(now / 1000);
   return (

@@ -42,7 +42,15 @@ export type NftCardData =
        *  Without it the card states a percentage of nothing in particular. */
       subject?: string;
     }
-  | { kind: "custom"; name: string; image?: string; id?: string };
+  | {
+      kind: "custom";
+      name: string;
+      image?: string;
+      id?: string;
+      /** Set when the asset belongs to an mpl-core collection. Changes what the
+       *  card can honestly claim — see getNftVisual. */
+      collection?: { name: string; size: number };
+    };
 
 /** The signature skin's artwork, when that's the one being worn. */
 function skinArtwork(data: NftCardData): string | undefined {
@@ -139,17 +147,25 @@ export function getNftVisual(data: NftCardData): NftVisual {
       image: skinArtwork(data) ?? data.image,
     };
   }
+  // "1 of 1" under EDITION is a claim about scarcity: this token is unique.
+  // A collection member is *still* unique — what membership changes is that it
+  // belongs to a set. So the count becomes "1 of 8" and the label stops saying
+  // EDITION, because "1 of 8" under EDITION would claim an eight-print run,
+  // which is a different and false thing.
+  const inCollection = data.collection;
   return {
     label: "NFT",
-    tag: "COLLECTIBLE",
+    tag: inCollection ? "IN COLLECTION" : "COLLECTIBLE",
     grad: "linear-gradient(120deg,#1a1230,#5b3fd6,#241a45)",
     accent: "#b07cff",
     tier: data.name || "Untitled",
-    stat: "1 of 1",
-    statLabel: "EDITION",
+    stat: inCollection ? `1 of ${inCollection.size}` : "1 of 1",
+    statLabel: inCollection ? inCollection.name.toUpperCase() : "EDITION",
     icon: <ImageIcon className="h-6 w-6" />,
     id: data.id ?? "NFT-0001",
-    blurb: "A standalone Metaplex Core collectible — freely transferable, with its own artwork.",
+    blurb: inCollection
+      ? `A Metaplex Core collectible, one of ${inCollection.size} in ${inCollection.name}. Unique in itself — the count is how large the set is, not how many were printed.`
+      : "A standalone Metaplex Core collectible — freely transferable, with its own artwork.",
     image: data.image,
   };
 }

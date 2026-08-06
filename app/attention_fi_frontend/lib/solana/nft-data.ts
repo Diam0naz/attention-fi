@@ -3,6 +3,7 @@ import { PublicKey } from "@solana/web3.js";
 import bs58 from "bs58";
 import type { AttentionFi } from "@/lib/idl/attention_fi";
 import type { NftCardData } from "@/components/nft/nft-card";
+import { artworkUrl } from "@/lib/nft-artwork";
 
 const short = (a: string) => `${a.slice(0, 4)}…${a.slice(-4)}`;
 
@@ -185,6 +186,9 @@ export interface NftAuctionData {
   complete: boolean;
   /** Set only when the listed asset actually belongs to an mpl-core collection. */
   collection: string | null;
+  /** Name and size of that collection, when it has one — so a listed member
+   *  can say "1 of 8" rather than claiming to be a 1-of-1. */
+  collectionMeta?: { name: string; size: number };
 }
 
 /**
@@ -208,9 +212,15 @@ export async function fetchNftAuctions(program: Program<AttentionFi>): Promise<N
     decodedByAsset.set(a.account.asset.toBase58(), info ? decodeAsset(info.data) : null);
   });
 
+  const meta = await fetchCollectionMeta(
+    program,
+    [...decodedByAsset.values()].flatMap((d) => (d?.collection ? [d.collection] : [])),
+  ).catch(() => new Map<string, { name: string; size: number }>());
+
   return all.map((a) => {
     const key = a.account.asset.toBase58();
     const decoded = decodedByAsset.get(key) ?? null;
+    const collectionMeta = decoded?.collection ? meta.get(decoded.collection) : undefined;
     return {
     asset: key,
     creator: a.account.creator.toBase58(),
@@ -222,6 +232,7 @@ export async function fetchNftAuctions(program: Program<AttentionFi>): Promise<N
     duration: Number(a.account.duration.toString()),
     complete: a.account.complete,
     collection: decoded?.collection ?? null,
+    ...(collectionMeta ? { collectionMeta } : {}),
     };
   });
 }
@@ -345,6 +356,35 @@ async function fetchProgramNfts(
  * collectible Core assets. Maps to NftCardData for the collection grid.
  * Returns [] when the wallet holds none.
  */
+/**
+ * Name and current size for each of `addresses`, in one round trip.
+ *
+ * A collection member is still a unique token — what membership changes is
+ * that it belongs to a set, and the set's size is only on the collection
+ * account. Read in a batch because a wallet holding a whole deck would
+ * otherwise fetch the same collection once per card.
+ */
+export async function fetchCollectionMeta(
+  program: Program<AttentionFi>,
+  addresses: readonly string[],
+): Promise<Map<string, { name: string; size: number }>> {
+  const out = new Map<string, { name: string; size: number }>();
+  const unique = [...new Set(addresses)];
+  if (unique.length === 0) return out;
+
+  const infos = await program.provider.connection.getMultipleAccountsInfo(
+    unique.map((a) => new PublicKey(a)),
+  );
+  for (const [i, info] of infos.entries()) {
+    const address = unique[i]!;
+    if (!info) continue;
+    const decoded = decodeCollection(info.data);
+    if (!decoded) continue;
+    out.set(address, { name: decoded.name || short(address), size: decoded.size });
+  }
+  return out;
+}
+
 export async function fetchOwnedNfts(program: Program<AttentionFi>, owner: PublicKey): Promise<NftCardData[]> {
   const { cards, tracked } = await fetchProgramNfts(program, owner.toBase58());
   // Skins live off-chain, so the grid rendered every card in its default
@@ -352,9 +392,27 @@ export async function fetchOwnedNfts(program: Program<AttentionFi>, owner: Publi
   // each caller, so every surface showing a collection agrees.
   await applySkins(cards, owner.toBase58());
   const standalone = await fetchStandaloneAssets(program, owner, tracked).catch(() => []);
+  // Membership is worth showing on the card, and the size lives on the
+  // collection account rather than the asset.
+  const meta = await fetchCollectionMeta(
+    program,
+    standalone.flatMap((a) => (a.collection ? [a.collection] : [])),
+  ).catch(() => new Map<string, { name: string; size: number }>());
+
   return [
     ...cards,
-    ...standalone.map((a) => ({ kind: "custom" as const, name: a.name, image: a.uri, id: short(a.asset) })),
+    ...standalone.map((a) => {
+      const collection = a.collection ? meta.get(a.collection) : undefined;
+      return {
+        kind: "custom" as const,
+        name: a.name,
+        // artworkUrl, not the raw uri: an asset minted without its own picture
+        // points at the metadata document, which renders as nothing in an img.
+        image: artworkUrl(a.uri),
+        id: short(a.asset),
+        ...(collection ? { collection } : {}),
+      };
+    }),
   ];
 }
 
