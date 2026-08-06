@@ -41,6 +41,9 @@ export type NftCardData =
       /** The token whose fees this NFT shares, as a display label ("$SQN").
        *  Without it the card states a percentage of nothing in particular. */
       subject?: string;
+      /** The subject's mint, used to identify the token when `subject` can't
+       *  be resolved — see getNftVisual. */
+      subjectMint?: string;
     }
   | {
       kind: "custom";
@@ -81,6 +84,12 @@ export interface NftVisual {
   blurb: string;
   /** Optional full-bleed artwork (standalone collectibles / skins). */
   image?: string;
+  /**
+   * Suppress the uppercasing of `statLabel`. Base58 is case-sensitive, so a
+   * mint address rendered through `uppercase` is a different string — and one
+   * that won't match if anyone copies it.
+   */
+  statLabelAsIs?: boolean;
 }
 
 export function getNftVisual(data: NftCardData): NftVisual {
@@ -124,6 +133,14 @@ export function getNftVisual(data: NftCardData): NftVisual {
   }
   if (data.kind === "genesis") {
     const sk = data.skinId ? skinById(data.skinId) : null;
+    // Which token pays is the fact this card exists to carry, so it degrades
+    // through identity rather than to a generic word. A resolved ticker is
+    // best; failing that the subject's mint still says *which* token, which
+    // "Fee-share" does not — it only repeats the label and the tag.
+    const shortMint = data.subjectMint
+      ? `${data.subjectMint.slice(0, 4)}…${data.subjectMint.slice(-4)}`
+      : null;
+    const named = data.subject ?? shortMint;
     return {
       label: "Genesis",
       tag: "TRANSFERABLE",
@@ -131,12 +148,14 @@ export function getNftVisual(data: NftCardData): NftVisual {
         ? `linear-gradient(120deg,${sk.from},${sk.accent}33,${sk.to})`
         : "linear-gradient(120deg,#05302a,#1fe0b8,#0a4038)",
       accent: sk ? sk.accent : "#3fe9c4",
-      // The subject is the more useful thing to lead with: "Fee-share" only
-      // repeats what the label and tag already say, whereas which token's fees
-      // these are is the fact the card exists to carry.
-      tier: data.subject ?? "Fee-share",
+      tier: named ?? "Fee-share",
       stat: `${(data.shareBps / 100).toFixed(1)}%`,
-      statLabel: data.subject ? `OF ${data.subject} FEES` : "REVENUE SHARE",
+      statLabel: data.subject
+        ? `OF ${data.subject} FEES`
+        : shortMint
+          ? `of ${shortMint} fees`
+          : "REVENUE SHARE",
+      statLabelAsIs: !data.subject && shortMint !== null,
       icon: <Gift className="h-6 w-6" />,
       id: data.id,
       blurb: "A transferable fee-share NFT earning a pro-rata cut of the subject's fee stream, forever. Trade it or hold to accrue.",
@@ -245,7 +264,8 @@ export function NftCardFace({ data }: { data: NftCardData }) {
       <div className="absolute inset-x-4 bottom-4">
         <div
           className={cn(
-            "font-mono text-[8px] uppercase tracking-[0.1em]",
+            "font-mono text-[8px] tracking-[0.1em]",
+            v.statLabelAsIs ? "normal-case" : "uppercase",
             art ? "text-white/70" : "text-white/45",
           )}
         >

@@ -19,6 +19,13 @@ export interface LaunchedTokenMeta {
   name?: string;
   symbol?: string;
   image?: string;
+  /**
+   * Who launched it, and under which mechanism — kept so a registration that
+   * failed to reach the server can be replayed later from this record alone.
+   * Absent on entries written before that mattered.
+   */
+  creator?: string;
+  mechanism?: string;
 }
 
 type RegistryEntry = string | ({ mint: string } & LaunchedTokenMeta);
@@ -73,12 +80,62 @@ export function syncRegistry(force = false): Promise<void> {
         };
       }
       remote = next;
+      void replayUnsynced();
     } catch {
       // Offline or no registry configured — the local view still works.
       remoteLoaded = null;
     }
   })();
   return remoteLoaded;
+}
+
+/**
+ * Re-POST launches this browser recorded but the server doesn't have.
+ *
+ * The write in `registerToken` is fire-and-forget so a slow registry never
+ * blocks a launch confirmation — but nothing retried it, so a single failed
+ * request stranded a token permanently: live on-chain, absent from search, the
+ * watchlist and `mintToToken`. That last one is why a genesis NFT ends up
+ * saying "0.3% of Fee-share" instead of naming the token paying it — the NFT
+ * stores only `subject_mint`, and the name it needs exists nowhere else.
+ *
+ * The launcher's own browser is the only place that still holds the name and
+ * symbol, since launched tokens are bare SPL mints with no on-chain metadata
+ * account. So the recovery has to happen here, from this record, rather than by
+ * reconciling against the chain — the chain knows the mint but never knew the
+ * name.
+ *
+ * Best-effort and idempotent: `/api/tokens` upserts on handle, so replaying an
+ * entry the server already has is a no-op.
+ */
+async function replayUnsynced(): Promise<void> {
+  const local = launchedRegistry();
+  const knownMints = new Set(Object.values(remote).map(mintOf));
+
+  for (const [handle, entry] of Object.entries(local)) {
+    if (typeof entry === "string") continue; // no metadata worth replaying
+    if (knownMints.has(entry.mint)) continue;
+    // Without a creator this predates the field; the server requires one, and
+    // guessing the connected wallet would attribute someone else's launch.
+    if (!entry.creator) continue;
+    try {
+      await fetch("/api/tokens", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          handle: norm(handle),
+          mint: entry.mint,
+          creator: entry.creator,
+          name: entry.name ?? null,
+          symbol: entry.symbol ?? null,
+          image: entry.image ?? null,
+          mechanism: entry.mechanism ?? null,
+        }),
+      });
+    } catch {
+      // Still unreachable — the entry stays local and the next sync tries again.
+    }
+  }
 }
 
 function launchedRegistry(): Record<string, RegistryEntry> {
@@ -176,7 +233,15 @@ export function registerToken(
 ): void {
   if (typeof window === "undefined") return;
   const current = launchedRegistry();
-  current[norm(handle)] = meta ? { mint, ...meta } : mint;
+  // The creator and mechanism ride along so a failed server write can be
+  // replayed later — see replayUnsynced. Without them the local record is a
+  // dead end and the launch never reaches the registry.
+  const record = {
+    mint,
+    ...meta,
+    ...(db ? { creator: db.creator, ...(db.mechanism ? { mechanism: db.mechanism } : {}) } : {}),
+  };
+  current[norm(handle)] = meta || db ? record : mint;
   try {
     window.localStorage.setItem(LS_KEY, JSON.stringify(current));
   } catch {
@@ -186,13 +251,17 @@ export function registerToken(
     const { image: _image, ...rest } = (typeof current[norm(handle)] === "object"
       ? (current[norm(handle)] as { mint: string } & LaunchedTokenMeta)
       : { mint }) as { mint: string } & LaunchedTokenMeta;
-    current[norm(handle)] = rest.name || rest.symbol ? rest : mint;
+    // Collapsing to a bare mint string would throw away the creator, and with
+    // it the ability to replay this registration — so keep the object whenever
+    // it still carries anything the server needs.
+    current[norm(handle)] = rest.name || rest.symbol || rest.creator ? rest : mint;
     window.localStorage.setItem(LS_KEY, JSON.stringify(current));
   }
 
   if (db) {
-    // Fire-and-forget: a failed sync just means this launch stays local until
-    // the next successful write; never block the launch confirmation on it.
+    // Fire-and-forget so a slow registry never delays the launch confirmation.
+    // A failure isn't final: the record above carries the creator, and the next
+    // syncRegistry replays anything the server turns out not to have.
     void fetch("/api/tokens", {
       method: "POST",
       headers: { "Content-Type": "application/json" },

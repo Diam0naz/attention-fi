@@ -57,16 +57,26 @@ export async function GET(
   const token =
     !isPerk && facts.subjectMint ? await tokenByMint(facts.subjectMint).catch(() => null) : null;
   const subject = token ? (token.symbol ? `$${token.symbol}` : `@${token.handle}`) : null;
+  // For prose only, an unregistered subject degrades to its shortened mint —
+  // matching the artwork and the in-app card. The name and description read as
+  // "0.30% of its token" otherwise, which is the vagueness the subject exists
+  // to remove. Deliberately not used for the Subject *trait* below: a truncated
+  // address there would only restate the full "Subject mint" attribute, worse.
+  const subjectLabel =
+    subject ??
+    (facts.subjectMint
+      ? `${facts.subjectMint.slice(0, 4)}…${facts.subjectMint.slice(-4)}`
+      : null);
   const name = isPerk
     ? `AttentionFi Perk · Level ${facts.level}`
-    : `AttentionFi Genesis · ${((facts.shareBps ?? 0) / 100).toFixed(2)}%${subject ? ` of ${subject}` : ""}`;
+    : `AttentionFi Genesis · ${((facts.shareBps ?? 0) / 100).toFixed(2)}%${subjectLabel ? ` of ${subjectLabel}` : ""}`;
 
   return NextResponse.json(
     {
       name,
       description: isPerk
         ? `A soulbound AttentionFi perk granting ${((facts.discountBps ?? 0) / 100).toFixed(0)}% off every trade. Bound to ${facts.owner}.`
-        : `A transferable AttentionFi genesis NFT earning ${((facts.shareBps ?? 0) / 100).toFixed(2)}% of ${subject ?? "its token"}'s fee stream.`,
+        : `A transferable AttentionFi genesis NFT earning ${((facts.shareBps ?? 0) / 100).toFixed(2)}% of ${subjectLabel ?? "its token"}'s fee stream.`,
       image,
       external_url: `${origin}/nft/${isPerk ? "perk" : "genesis"}`,
       attributes: isPerk

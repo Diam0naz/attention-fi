@@ -39,13 +39,18 @@ export async function GET(
     : `${((facts.shareBps ?? 0) / 100).toFixed(2)}%`;
   // A genesis NFT is a claim on one specific token's fees, so the artwork says
   // which. Resolved server-side because this render is what a wallet shows,
-  // where the client-side token registry doesn't exist. Falls back to "FEE
-  // SHARE" when the mint isn't in the registry — a shortened address would be
-  // noise at this size.
+  // where the client-side token registry doesn't exist.
+  //
+  // When the mint isn't in the registry it degrades to the shortened mint
+  // rather than a generic "FEE SHARE". Which token pays is the one fact this
+  // card exists to carry, and an address still answers that; "FEE SHARE" only
+  // repeats the label directly above it. Matches the in-app card, so the same
+  // NFT doesn't identify its token in one place and not the other.
   let subject: string | null = null;
   if (!isPerk && facts.subjectMint) {
     const token = await tokenByMint(facts.subjectMint).catch(() => null);
     if (token) subject = token.symbol ? `$${token.symbol}` : `@${token.handle}`;
+    else subject = `${facts.subjectMint.slice(0, 4)}…${facts.subjectMint.slice(-4)}`;
   }
   const kicker = isPerk ? `LEVEL ${facts.level}` : (subject ? `${subject} FEES` : "FEE SHARE");
   const label = isPerk ? "PERK" : "GENESIS";

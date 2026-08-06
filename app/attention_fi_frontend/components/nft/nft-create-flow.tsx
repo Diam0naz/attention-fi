@@ -15,7 +15,7 @@ import { useProgram, useReadonlyProgram } from "@/lib/solana/use-program";
 import { useQueryClient } from "@tanstack/react-query";
 import { nftPortfolioKey } from "@/components/nft/use-nft-portfolio";
 import { fetchCollections, fetchListableNfts, type CollectionData, type OwnedAsset } from "@/lib/solana/nft-data";
-import { handleToMint, myCreatedTokens } from "@/lib/solana/registry";
+import { handleToMint, launchedMeta, myCreatedTokens } from "@/lib/solana/registry";
 import { solUsd } from "@/lib/solana/sol-usd";
 import { appOrigin, explorerTx } from "@/lib/solana/config";
 import { Notice } from "@/components/ui/notice";
@@ -197,6 +197,15 @@ export function NftCreateFlow() {
   const uriIsPermanent = kind === "auction" || (kind === "nft" && listForSale);
   const artworkGate = useConfirmGate();
 
+  // The ticker reads better than the handle where we have one; the handle is
+  // always available once a token is picked, so this never falls through to
+  // nothing.
+  const genesisSubject = tokenHandle
+    ? launchedMeta(tokenHandle)?.symbol
+      ? `$${launchedMeta(tokenHandle)!.symbol}`
+      : `@${tokenHandle}`
+    : null;
+
   // What the confirm step previews.
   const previewData: NftCardData =
     kind === "nft"
@@ -206,6 +215,10 @@ export function NftCreateFlow() {
           kind: "genesis",
           shareBps: Math.max(1, Math.round(+sharePct * 100)),
           id: "GEN-0001",
+          // The preview names the token the NFT will pay from, because that's
+          // the commitment being made — a card showing a bare percentage lets
+          // someone mint a fee share and only afterwards find out of what.
+          ...(genesisSubject ? { subject: genesisSubject } : {}),
           ...(genesisImage.trim() ? { image: genesisImage.trim() } : {}),
         }
       : {

@@ -1030,6 +1030,9 @@ export function NftManage({ section }: { section: Section }) {
                 id: g.id,
                 skinId: genesisSkins[g.asset]?.id ?? null,
                 skinUri: genesisSkins[g.asset]?.uri ?? null,
+                // Always passed, so an unregistered token still identifies
+                // itself on the card rather than reading as a share of nothing.
+                subjectMint: g.subjectMint,
                 ...(subject ? { subject } : {}),
                 ...(artworkUrl(g.uri) ? { image: artworkUrl(g.uri)! } : {}),
               };
