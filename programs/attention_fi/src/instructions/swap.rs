@@ -18,7 +18,7 @@ pub struct Swap<'info> {
     pub trader: Signer<'info>,
 
     #[account(seeds = [GLOBAL_SEED], bump = global.bump)]
-    pub global: Account<'info, Global>,
+    pub global: Box<Account<'info, Global>>,
 
     #[account(
         mut,
@@ -26,7 +26,7 @@ pub struct Swap<'info> {
         bump = pool.bump,
         has_one = mint,
     )]
-    pub pool: Account<'info, AmmPool>,
+    pub pool: Box<Account<'info, AmmPool>>,
 
     /// CHECK: must equal the treasury recorded in Global.
     #[account(mut, address = global.treasury)]
@@ -42,12 +42,12 @@ pub struct Swap<'info> {
         bump = curve.bump,
         has_one = mint,
     )]
-    pub curve: Account<'info, BondingCurve>,
+    pub curve: Box<Account<'info, BondingCurve>>,
 
-    pub mint: Account<'info, Mint>,
+    pub mint: Box<Account<'info, Mint>>,
 
     #[account(mut, associated_token::mint = mint, associated_token::authority = pool)]
-    pub pool_vault: Account<'info, TokenAccount>,
+    pub pool_vault: Box<Account<'info, TokenAccount>>,
 
     #[account(
         init_if_needed,
@@ -55,7 +55,7 @@ pub struct Swap<'info> {
         associated_token::mint = mint,
         associated_token::authority = trader,
     )]
-    pub trader_token_account: Account<'info, TokenAccount>,
+    pub trader_token_account: Box<Account<'info, TokenAccount>>,
 
     /// Optional perk NFT owned by the trader; grants a trading-fee discount.
     /// Constrained to a perk PDA owned by the trader when supplied — same shape
@@ -66,7 +66,7 @@ pub struct Swap<'info> {
         bump = perk.bump,
         constraint = perk.owner == trader.key() @ AttentionError::Unauthorized,
     )]
-    pub perk: Option<Account<'info, PerkNft>>,
+    pub perk: Option<Box<Account<'info, PerkNft>>>,
 
     /// Optional genesis fee pool for this token. Supplied only when the token
     /// has genesis NFTs; absent means the creator keeps their whole cut.
@@ -79,12 +79,19 @@ pub struct Swap<'info> {
         seeds = [GENPOOL_SEED, mint.key().as_ref()],
         bump = genesis_pool.bump,
     )]
-    pub genesis_pool: Option<Account<'info, GenesisPool>>,
+    pub genesis_pool: Option<Box<Account<'info, GenesisPool>>>,
 
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,
     pub associated_token_program: Program<'info, AssociatedToken>,
 }
+
+// Every Anchor account here is boxed. Swap carries the most accounts of any
+// instruction in the program — pool, curve, treasury, two token accounts and
+// two optional NFTs — and unboxed they put `try_accounts` over the BPF stack
+// limit, which the toolchain reports as "overwrites values in the frame ... may
+// cause undefined behavior". Boxing moves the deserialised bodies to the heap
+// and leaves pointers on the stack.
 
 /// Swap on the graduated AMM pool. `is_buy` = SOL in / tokens out; otherwise
 /// tokens in / SOL out.

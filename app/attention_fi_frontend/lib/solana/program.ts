@@ -105,6 +105,17 @@ export const revStakePda = (mint: PublicKey, owner: PublicKey): PublicKey =>
     PROGRAM_ID,
   )[0];
 
+/**
+ * Fee pool shared by a token's genesis NFT holders.
+ *
+ * Only exists once a token has minted at least one genesis NFT, so callers
+ * must check before passing it — the trading instructions take it as an
+ * optional account, and supplying an address for an account that was never
+ * created fails the whole trade.
+ */
+export const genesisPoolPda = (mint: PublicKey): PublicKey =>
+  PublicKey.findProgramAddressSync([enc.encode("genpool"), mint.toBytes()], PROGRAM_ID)[0];
+
 /** Verification is keyed by the subject wallet, not the handle. */
 export const verificationPda = (subject: PublicKey): PublicKey =>
   PublicKey.findProgramAddressSync([enc.encode("verify"), subject.toBytes()], PROGRAM_ID)[0];

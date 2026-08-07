@@ -105,8 +105,12 @@ export function useHoldings(nonce = 0): HoldingsState {
           let realisable: number;
           if (p.pool) {
             spot = poolSpotSol(p.pool, decimals);
-            realisable =
-              Number(swapQuote(p.pool.tokenReserves, p.pool.solReserves, base, feeBps)) / 1e9;
+            // Gross from the curve, then the fee off the proceeds — the same
+            // order `swap_handler` uses. Skimming the token input instead
+            // would report a figure the pool would never pay.
+            const gross =
+              Number(swapQuote(p.pool.tokenReserves, p.pool.solReserves, base, 0)) / 1e9;
+            realisable = gross * (1 - feeBps / 10_000);
           } else {
             spot = spotPriceSol(p.curve, decimals);
             // Net of the trading fee, which `quoteSell` doesn't apply: the

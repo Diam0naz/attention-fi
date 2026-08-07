@@ -10,7 +10,7 @@ import {
   spotPriceSol,
   type CurveState,
 } from "./curve";
-import { ata, curvePda, globalPda } from "./program";
+import { ata, curvePda, genesisPoolPda, globalPda } from "./program";
 
 /**
  * Where a token actually trades right now.
@@ -28,6 +28,37 @@ export type Venue =
   /** Complete, but not yet migrated — nothing can trade until `graduate` runs. */
   | { kind: "stranded"; curve: CurveState; pool: null }
   | { kind: "pool"; curve: CurveState | null; pool: PoolState };
+
+/**
+ * Whether a token's genesis fee pool exists.
+ *
+ * The trading instructions take it as an optional account: present, a slice of
+ * each creator fee is routed to genesis NFT holders; absent, the creator keeps
+ * their whole cut. It must not be supplied speculatively — passing an address
+ * for an account that was never created fails the entire trade, and most tokens
+ * never mint a genesis NFT.
+ *
+ * Cached per mint because it is a one-way fact. A pool is created with the
+ * token's first genesis NFT and never removed, so a positive answer can never
+ * become negative and is worth remembering; a negative one is re-checked, since
+ * that is the answer that can change.
+ */
+const genesisPoolSeen = new Set<string>();
+
+async function findGenesisPool(
+  program: Program<AttentionFi>,
+  mint: PublicKey,
+): Promise<PublicKey | null> {
+  const pda = genesisPoolPda(mint);
+  if (genesisPoolSeen.has(pda.toBase58())) return pda;
+  try {
+    await program.account.genesisPool.fetch(pda);
+    genesisPoolSeen.add(pda.toBase58());
+    return pda;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Which venue prices and executes trades for this mint.
@@ -64,10 +95,13 @@ export function venueSpot(venue: Venue, decimals: number): number {
  * `amount` is denominated in what's being spent — SOL for a buy, whole tokens
  * for a sell — matching what the order ticket asks for.
  *
- * The fee handling mirrors each venue's own, and the two differ. The curve
- * skims from the SOL *in* on a buy and from the SOL *out* on a sell; the AMM
- * always skims from the input. `quoteBuy`/`quoteSell` in ./curve are gross of
- * fees, so applying the fee here is not a refinement — a gross figure is both
+ * Both venues now handle fees identically: off the SOL going in on a buy, off
+ * the SOL coming out on a sell. That symmetry matters here because it is easy
+ * to write the sell side the way constant-product suggests — skimming the token
+ * input — and get a number the chain will not honour.
+ *
+ * `quoteBuy`/`quoteSell` in ./curve are gross of fees, so applying the fee
+ * here is not a refinement — a gross figure is both
  * the wrong number to display and, once it becomes the slippage floor, a floor
  * the chain can't clear. At a 1% fee and 1% tolerance a gross curve buy sits
  * exactly on the boundary and fails or succeeds on rounding; tighten the
@@ -90,8 +124,13 @@ export function venueQuote(
       const lamports = BigInt(Math.floor(amount * LAMPORTS_PER_SOL));
       return Number(swapQuote(solReserves, tokenReserves, lamports, feeBps)) / 10 ** decimals;
     }
+    // Price the whole token input, then take the fee off the SOL that comes
+    // back — mirroring `swap_handler`. Passing feeBps to swapQuote instead
+    // would skim the *tokens*, which is a different figure and one the
+    // program will not match.
     const base = BigInt(Math.floor(amount * 10 ** decimals));
-    return Number(swapQuote(tokenReserves, solReserves, base, feeBps)) / LAMPORTS_PER_SOL;
+    const gross = Number(swapQuote(tokenReserves, solReserves, base, 0)) / LAMPORTS_PER_SOL;
+    return gross * netOfFee;
   }
 
   // Curve: fee off the input before pricing a buy, off the proceeds after
@@ -178,8 +217,11 @@ export async function tradeOnVenue(
   decimals: number,
   slippageBps = 100,
 ): Promise<string> {
-  const global = await program.account.global.fetch(globalPda());
-  const venue = await resolveVenue(program, mint);
+  const [global, venue, genesisPool] = await Promise.all([
+    program.account.global.fetch(globalPda()),
+    resolveVenue(program, mint),
+    findGenesisPool(program, mint),
+  ]);
   if (!venue) throw new Error("This token isn't live on-chain yet.");
   if (venue.kind === "stranded") {
     throw new Error(
@@ -200,7 +242,16 @@ export async function tradeOnVenue(
       side === "buy"
         ? BigInt(Math.floor(expected * minOutFraction * 10 ** decimals))
         : BigInt(Math.floor(expected * minOutFraction * LAMPORTS_PER_SOL));
-    return swapOnPoolTx(program, trader, mint, amountIn, minOut, side === "buy");
+    return swapOnPoolTx(
+      program,
+      trader,
+      mint,
+      amountIn,
+      minOut,
+      side === "buy",
+      global.treasury,
+      genesisPool,
+    );
   }
 
   const curveKey = curvePda(mint);
@@ -217,6 +268,7 @@ export async function tradeOnVenue(
         vault: ata(curveKey, mint),
         buyerTokenAccount: ata(trader, mint),
         perk: null,
+        genesisPool,
       })
       .rpc();
   }
@@ -233,6 +285,7 @@ export async function tradeOnVenue(
       vault: ata(curveKey, mint),
       sellerTokenAccount: ata(trader, mint),
       perk: null,
+      genesisPool,
     })
     .rpc();
 }
@@ -245,6 +298,8 @@ function swapOnPoolTx(
   amountIn: bigint,
   minAmountOut: bigint,
   isBuy: boolean,
+  treasury: PublicKey,
+  genesisPool: PublicKey | null,
 ): Promise<string> {
   const pool = poolPda(mint);
   return program.methods
@@ -252,12 +307,17 @@ function swapOnPoolTx(
     .accountsPartial({
       trader,
       pool,
+      // The swap fee no longer stays in the pool: half accrues to the creator
+      // on the curve account, half goes to the treasury. Both are required now.
+      treasury,
+      curve: curvePda(mint),
       mint,
       poolVault: ata(pool, mint),
       traderTokenAccount: ata(trader, mint),
       // Optional on-chain; null means "no discount" rather than a failure, so a
       // wallet without a perk still trades.
       perk: null,
+      genesisPool,
     })
     .rpc();
 }

@@ -713,6 +713,39 @@ export type AttentionFi = {
           }
         },
         {
+          "name": "genesisPool",
+          "docs": [
+            "Optional genesis fee pool for this token. Supplied only when the token",
+            "has genesis NFTs; absent means the creator keeps their whole cut.",
+            "",
+            "Optional rather than required because most tokens never mint genesis",
+            "NFTs, and making every trade carry an account that usually does not",
+            "exist would be a tax on the common case."
+          ],
+          "writable": true,
+          "optional": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  101,
+                  110,
+                  112,
+                  111,
+                  111,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ]
+          }
+        },
+        {
           "name": "systemProgram",
           "address": "11111111111111111111111111111111"
         },
@@ -4414,6 +4447,39 @@ export type AttentionFi = {
           }
         },
         {
+          "name": "genesisPool",
+          "docs": [
+            "Optional genesis fee pool for this token. Supplied only when the token",
+            "has genesis NFTs; absent means the creator keeps their whole cut.",
+            "",
+            "Optional rather than required because most tokens never mint genesis",
+            "NFTs, and making every trade carry an account that usually does not",
+            "exist would be a tax on the common case."
+          ],
+          "writable": true,
+          "optional": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  101,
+                  110,
+                  112,
+                  111,
+                  111,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ]
+          }
+        },
+        {
           "name": "tokenProgram",
           "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
         }
@@ -5301,9 +5367,42 @@ export type AttentionFi = {
           }
         },
         {
+          "name": "treasury",
+          "writable": true
+        },
+        {
+          "name": "curve",
+          "docs": [
+            "The token's bonding curve, which outlives graduation as the ledger for",
+            "creator fees. Routing the AMM's creator cut here means `claim_creator_fee`",
+            "keeps working unchanged, and a creator has one balance rather than one",
+            "per venue."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  117,
+                  114,
+                  118,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ]
+          }
+        },
+        {
           "name": "mint",
           "relations": [
-            "pool"
+            "pool",
+            "curve"
           ]
         },
         {
@@ -5510,6 +5609,39 @@ export type AttentionFi = {
                 "kind": "account",
                 "path": "perk.asset",
                 "account": "perkNft"
+              }
+            ]
+          }
+        },
+        {
+          "name": "genesisPool",
+          "docs": [
+            "Optional genesis fee pool for this token. Supplied only when the token",
+            "has genesis NFTs; absent means the creator keeps their whole cut.",
+            "",
+            "Optional rather than required because most tokens never mint genesis",
+            "NFTs, and making every trade carry an account that usually does not",
+            "exist would be a tax on the common case."
+          ],
+          "writable": true,
+          "optional": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  101,
+                  110,
+                  112,
+                  111,
+                  111,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
               }
             ]
           }
