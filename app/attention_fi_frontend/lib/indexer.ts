@@ -12,6 +12,7 @@ import {
   indexerDbConfigured,
   insertChainEvents,
   setCursor,
+  touchCursor,
 } from "@/lib/indexer-db";
 
 /** Skip an opportunistic crawl if one ran within this window. */
@@ -24,6 +25,9 @@ export interface CrawlSummary {
   skipped?: string;
   /** The cursor the crawl started from, so an empty result is explicable. */
   cursorBefore?: string | null;
+  /** Transactions whose logs couldn't be read. Non-zero means RPC trouble,
+   *  not a quiet program. */
+  fetchFailed?: number;
 }
 
 export async function runIndexerCrawl(
@@ -43,10 +47,19 @@ export async function runIndexerCrawl(
   const until = opts.ignoreCursor ? undefined : (stored ?? undefined);
   // No cursor → backfill more history; incremental runs just chase the tip.
   const maxPages = opts.maxPages ?? (until ? 2 : 8);
-  const { rows, newestSig, scanned } = await crawlProgramEvents(program, { until, maxPages });
+  const { rows, newestSig, scanned, fetchFailed } = await crawlProgramEvents(program, {
+    until,
+    maxPages,
+  });
   if (rows.length > 0) await insertChainEvents(rows);
-  if (newestSig) await setCursor(newestSig);
-  return { indexed: rows.length, scanned, newestSig, cursorBefore: stored };
+  // Only advance the cursor when the crawl actually read what it scanned.
+  // Advancing past transactions we couldn't fetch is what buried this: the
+  // history is skipped, and the next run reports "nothing new" forever.
+  if (newestSig && fetchFailed === 0) await setCursor(newestSig);
+  // Either way, record that a crawl just ran, so the opportunistic throttle
+  // doesn't fire on every read while the RPC is unhappy.
+  else await touchCursor();
+  return { indexed: rows.length, scanned, newestSig, cursorBefore: stored, fetchFailed };
 }
 
 /** Throttled, non-throwing crawl — safe to await before serving a read. */

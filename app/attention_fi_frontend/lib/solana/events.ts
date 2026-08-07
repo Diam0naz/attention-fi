@@ -14,6 +14,15 @@ export interface CrawlResult {
   /** Newest signature seen this crawl — store as the cursor for the next one. */
   newestSig: string | null;
   scanned: number;
+  /**
+   * Transactions whose logs couldn't be fetched, after retries.
+   *
+   * Reported rather than swallowed. A crawl that reads 141 signatures, fails
+   * every `getTransaction` behind a rate limit, and returns "0 events" is
+   * indistinguishable from a program nobody has used — which is exactly how an
+   * empty activity feed went unexplained.
+   */
+  fetchFailed: number;
 }
 
 function b58(v: unknown): string | null {
@@ -44,6 +53,12 @@ function toBig(v: unknown): bigint | null {
 }
 
 const flag = (v: unknown): boolean => v === true;
+
+/** Retries per getTransaction, and the first backoff step. */
+const FETCH_RETRIES = 3;
+const RETRY_BASE_MS = 400;
+
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
 /** Read a field by any of its casings (Anchor coders vary snake/camel). */
 function pick(d: Record<string, unknown>, ...keys: string[]): unknown {
@@ -207,24 +222,38 @@ export async function crawlProgramEvents(
 
   const newestSig = sigInfos[0]?.signature ?? null;
   const rows: ChainEventInsert[] = [];
+  let fetchFailed = 0;
 
   for (const info of sigInfos) {
     if (info.err) continue;
     let logs: string[] | null | undefined;
     let slot = info.slot;
     let blockTime = info.blockTime ?? null;
-    try {
-      const tx = await connection.getTransaction(info.signature, {
-        commitment: "confirmed",
-        maxSupportedTransactionVersion: 0,
-      });
-      logs = tx?.meta?.logMessages;
-      slot = tx?.slot ?? slot;
-      blockTime = tx?.blockTime ?? blockTime;
-    } catch {
-      continue; // one flaky getTransaction shouldn't abort the whole crawl
+
+    // Retry with backoff. One getTransaction per signature is a lot of calls in
+    // a row, and public RPCs rate-limit long before a crawl of any size
+    // finishes; a single attempt means most of a backlog is silently dropped.
+    let attempt = 0;
+    for (;;) {
+      try {
+        const tx = await connection.getTransaction(info.signature, {
+          commitment: "confirmed",
+          maxSupportedTransactionVersion: 0,
+        });
+        logs = tx?.meta?.logMessages;
+        slot = tx?.slot ?? slot;
+        blockTime = tx?.blockTime ?? blockTime;
+        break;
+      } catch {
+        attempt++;
+        if (attempt > FETCH_RETRIES) break;
+        await sleep(RETRY_BASE_MS * 2 ** (attempt - 1));
+      }
     }
-    if (!logs) continue;
+    if (!logs) {
+      fetchFailed++;
+      continue;
+    }
 
     let seq = 0;
     try {
@@ -245,5 +274,5 @@ export async function crawlProgramEvents(
     }
   }
 
-  return { rows, newestSig, scanned: sigInfos.length };
+  return { rows, newestSig, scanned: sigInfos.length, fetchFailed };
 }

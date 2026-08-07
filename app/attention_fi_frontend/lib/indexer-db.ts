@@ -176,6 +176,22 @@ export async function setCursor(sig: string): Promise<void> {
     on conflict (id) do update set newest_sig = ${sig}, updated_at = now()`;
 }
 
+/**
+ * Mark a crawl as attempted without moving the cursor.
+ *
+ * The throttle in `crawlIfStale` keys off `updated_at`, and the cursor only
+ * advances on a clean crawl. Without this, a run that hits RPC trouble leaves
+ * `updated_at` stale and every subsequent read starts another full crawl —
+ * turning a rate-limit into a stampede against the same rate limit.
+ */
+export async function touchCursor(): Promise<void> {
+  await ensureSchema();
+  await sql`
+    insert into indexer_cursor (id, newest_sig, updated_at)
+    values (1, null, now())
+    on conflict (id) do update set updated_at = now()`;
+}
+
 /** Seconds since the cursor was last advanced, or null when never. */
 export async function cursorAge(): Promise<number | null> {
   await ensureSchema();
