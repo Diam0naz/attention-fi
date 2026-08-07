@@ -12,7 +12,7 @@
 import { NextResponse } from "next/server";
 import { getAssetSkinWithUri } from "@/lib/skin-db";
 import { isSkinClass, paletteFor, readNftFacts } from "@/lib/nft-metadata";
-import { tokenByMint } from "@/lib/token-db";
+import { resolveSubject } from "@/lib/nft-subject";
 import { CUSTOM_SKIN, CUSTOM_SKIN_ID } from "@/lib/nft-skins";
 
 /** Signature carries artwork rather than a palette, so paletteFor can't name it. */
@@ -54,19 +54,13 @@ export async function GET(
   // Which token's fees, resolved server-side. A genesis NFT's whole meaning is
   // "a share of *this* token", and the metadata previously said only "its
   // token's fee stream" — true, and useless to anyone deciding what it's worth.
-  const token =
-    !isPerk && facts.subjectMint ? await tokenByMint(facts.subjectMint).catch(() => null) : null;
-  const subject = token ? (token.symbol ? `$${token.symbol}` : `@${token.handle}`) : null;
-  // For prose only, an unregistered subject degrades to its shortened mint —
-  // matching the artwork and the in-app card. The name and description read as
-  // "0.30% of its token" otherwise, which is the vagueness the subject exists
-  // to remove. Deliberately not used for the Subject *trait* below: a truncated
-  // address there would only restate the full "Subject mint" attribute, worse.
-  const subjectLabel =
-    subject ??
-    (facts.subjectMint
-      ? `${facts.subjectMint.slice(0, 4)}…${facts.subjectMint.slice(-4)}`
-      : null);
+  // `name` is the resolved token; `label` degrades to the shortened mint for
+  // prose. The Subject *trait* uses only the former — a truncated address
+  // there would restate the full "Subject mint" attribute below it, worse than
+  // omitting it.
+  const { name: subject, label: subjectLabel } = isPerk
+    ? { name: null, label: null }
+    : await resolveSubject(facts.subjectMint);
   const name = isPerk
     ? `AttentionFi Perk · Level ${facts.level}`
     : `AttentionFi Genesis · ${((facts.shareBps ?? 0) / 100).toFixed(2)}%${subjectLabel ? ` of ${subjectLabel}` : ""}`;

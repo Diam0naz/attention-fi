@@ -1,16 +1,15 @@
 import { PublicKey } from "@solana/web3.js";
+import { staticRegistry } from "./static-registry";
 
 /**
- * Maps an X handle to its on-chain token mint. Seeded from DEFAULTS +
- * NEXT_PUBLIC_TOKEN_REGISTRY, and extended at runtime as tokens are launched
- * from the UI (persisted to localStorage). Until an entry exists, the UI falls
- * back to mock data for that token.
+ * Maps an X handle to its on-chain token mint. Seeded from the shared static
+ * registry (DEFAULTS + NEXT_PUBLIC_TOKEN_REGISTRY), and extended at runtime as
+ * tokens are launched from the UI (persisted to localStorage). Until an entry
+ * exists, the UI falls back to mock data for that token.
+ *
+ * The static seeds live in ./static-registry so server-rendered surfaces can
+ * read them too — see the note there.
  */
-const DEFAULTS: Record<string, string> = {
-  // Live demo token launched on devnet (Top100 tier). Opening /token/solana_kol
-  // reads this curve on-chain and flips the terminal to LIVE.
-  solana_kol: "FmYyWGtpvBEpyrY5JJhLkhWH1aiWdnVxzivJcBcfis4B",
-};
 
 /** Display metadata a launcher can attach — there's no on-chain metadata
  *  account for launched tokens (bare SPL mints), so this rides alongside the
@@ -32,14 +31,6 @@ type RegistryEntry = string | ({ mint: string } & LaunchedTokenMeta);
 
 const LS_KEY = "af.registry";
 
-function staticRegistry(): Record<string, string> {
-  try {
-    const fromEnv = JSON.parse(process.env.NEXT_PUBLIC_TOKEN_REGISTRY ?? "{}") as Record<string, string>;
-    return { ...DEFAULTS, ...fromEnv };
-  } catch {
-    return DEFAULTS;
-  }
-}
 
 /**
  * Tokens the server knows about, from /api/tokens.
