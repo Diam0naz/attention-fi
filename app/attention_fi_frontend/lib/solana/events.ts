@@ -11,9 +11,18 @@ import type { ChainEventInsert } from "@/lib/indexer-db";
 
 export interface CrawlResult {
   rows: ChainEventInsert[];
-  /** Newest signature seen this crawl — store as the cursor for the next one. */
+  /**
+   * Newest signature fully processed — safe to store as the next cursor.
+   *
+   * Deliberately not "newest signature seen". The cursor means "everything up
+   * to here is indexed", so it may only advance over transactions actually
+   * read.
+   */
   newestSig: string | null;
+  /** Signatures the crawl listed. */
   scanned: number;
+  /** Transactions whose logs it read. */
+  processed: number;
   /**
    * Transactions whose logs couldn't be fetched, after retries.
    *
@@ -23,6 +32,8 @@ export interface CrawlResult {
    * empty activity feed went unexplained.
    */
   fetchFailed: number;
+  /** True when it stopped early (budget or an unreadable tx). Call again. */
+  truncated: boolean;
 }
 
 function b58(v: unknown): string | null {
@@ -190,21 +201,37 @@ export interface CrawlOptions {
   /** Max signature pages to walk (pageSize each). Bounds RPC + latency. */
   maxPages?: number;
   pageSize?: number;
+  /**
+   * Wall-clock budget for the transaction reads, in milliseconds.
+   *
+   * A crawl runs inside a serverless invocation with a hard ceiling, and one
+   * `getTransaction` per signature is slow enough that a backlog cannot finish
+   * in a single run. Rather than being killed mid-flight and losing everything,
+   * the crawl stops cleanly and reports how far it got.
+   */
+  budgetMs?: number;
 }
 
 /**
  * Crawl the program's transactions newer than `until`, decoding every event
- * into flat rows. Signatures come back newest-first, so `newestSig` is the
- * first one seen — persist it as the next cursor.
+ * into flat rows.
+ *
+ * Signatures arrive newest-first but are processed **oldest-first**, so that
+ * `newestSig` can mean "everything up to here is indexed" rather than "here is
+ * the tip we saw". That is what makes an interrupted crawl resumable: whatever
+ * it finished stays finished, and the next run starts from the first thing it
+ * didn't reach. Advancing to the tip regardless — the previous behaviour —
+ * turns any gap into a permanent one.
  */
 export async function crawlProgramEvents(
   program: Program<AttentionFi>,
   opts: CrawlOptions = {},
 ): Promise<CrawlResult> {
-  const { until, maxPages = 2, pageSize = 25 } = opts;
+  const { until, maxPages = 2, pageSize = 25, budgetMs = 20_000 } = opts;
   const { connection } = program.provider;
   const programId = program.programId;
   const parser = new EventParser(programId, program.coder);
+  const deadline = Date.now() + budgetMs;
 
   const sigInfos: ConfirmedSignatureInfo[] = [];
   let before: string | undefined;
@@ -220,12 +247,25 @@ export async function crawlProgramEvents(
     if (batch.length < pageSize) break;
   }
 
-  const newestSig = sigInfos[0]?.signature ?? null;
   const rows: ChainEventInsert[] = [];
   let fetchFailed = 0;
+  let processed = 0;
+  // The newest signature whose logs we actually read. Stays null until one
+  // succeeds, so a crawl that reads nothing advances nothing.
+  let newestSig: string | null = null;
+  let truncated = false;
 
-  for (const info of sigInfos) {
-    if (info.err) continue;
+  for (const info of [...sigInfos].reverse()) {
+    if (Date.now() > deadline) {
+      truncated = true;
+      break;
+    }
+    // A failed transaction emitted no events, and skipping it is not a gap.
+    if (info.err) {
+      newestSig = info.signature;
+      continue;
+    }
+
     let logs: string[] | null | undefined;
     let slot = info.slot;
     let blockTime = info.blockTime ?? null;
@@ -251,8 +291,11 @@ export async function crawlProgramEvents(
       }
     }
     if (!logs) {
+      // Stop rather than skip. Continuing past an unread transaction and then
+      // advancing the cursor over it is exactly how history gets lost.
       fetchFailed++;
-      continue;
+      truncated = true;
+      break;
     }
 
     let seq = 0;
@@ -270,9 +313,12 @@ export async function crawlProgramEvents(
         }
       }
     } catch {
-      // Undecodable logs for this tx — skip it, keep indexing the rest.
+      // Undecodable logs for this tx — the transaction was still read, so it
+      // isn't a gap; keep going and let the cursor pass it.
     }
+    newestSig = info.signature;
+    processed++;
   }
 
-  return { rows, newestSig, scanned: sigInfos.length, fetchFailed };
+  return { rows, newestSig, scanned: sigInfos.length, fetchFailed, processed, truncated };
 }

@@ -25,41 +25,48 @@ export interface CrawlSummary {
   skipped?: string;
   /** The cursor the crawl started from, so an empty result is explicable. */
   cursorBefore?: string | null;
-  /** Transactions whose logs couldn't be read. Non-zero means RPC trouble,
+  /** Transactions whose logs it read. */
+  processed?: number;
+  /** Transactions whose logs it couldn't read. Non-zero means RPC trouble,
    *  not a quiet program. */
   fetchFailed?: number;
+  /** True when the crawl stopped early. Call again to continue from here. */
+  truncated?: boolean;
 }
 
 export async function runIndexerCrawl(
-  opts: { maxPages?: number; ignoreCursor?: boolean } = {},
+  opts: { maxPages?: number; ignoreCursor?: boolean; budgetMs?: number } = {},
 ): Promise<CrawlSummary> {
   if (!indexerDbConfigured()) {
     return { indexed: 0, scanned: 0, newestSig: null, skipped: "no-db" };
   }
   const program = getReadonlyProgram();
   const stored = await getCursor();
-  // The cursor advances whenever the crawl sees signatures, whether or not any
-  // of them decoded into events — which is right for the normal case (plenty of
-  // the program's transactions emit nothing we index) and wrong for the one
-  // that bites: if decoding was broken during a crawl, that history is skipped
-  // permanently and every later run correctly reports "nothing new" over an
-  // empty table. `ignoreCursor` is the way back.
+  // `ignoreCursor` re-scans from the tip. Kept as an escape hatch: a cursor is
+  // only ever as good as the runs that moved it, and a bad one is otherwise
+  // unrecoverable from outside the database.
   const until = opts.ignoreCursor ? undefined : (stored ?? undefined);
   // No cursor → backfill more history; incremental runs just chase the tip.
   const maxPages = opts.maxPages ?? (until ? 2 : 8);
-  const { rows, newestSig, scanned, fetchFailed } = await crawlProgramEvents(program, {
-    until,
-    maxPages,
-  });
+  const { rows, newestSig, scanned, processed, fetchFailed, truncated } =
+    await crawlProgramEvents(program, { until, maxPages, budgetMs: opts.budgetMs });
   if (rows.length > 0) await insertChainEvents(rows);
-  // Only advance the cursor when the crawl actually read what it scanned.
-  // Advancing past transactions we couldn't fetch is what buried this: the
-  // history is skipped, and the next run reports "nothing new" forever.
-  if (newestSig && fetchFailed === 0) await setCursor(newestSig);
-  // Either way, record that a crawl just ran, so the opportunistic throttle
-  // doesn't fire on every read while the RPC is unhappy.
+  // `newestSig` is now the newest transaction actually read, so it's safe to
+  // store even from a truncated run — that's what makes a long backlog finish
+  // across several calls instead of restarting from the tip each time.
+  if (newestSig) await setCursor(newestSig);
+  // Otherwise record that a crawl ran anyway, so the opportunistic throttle
+  // doesn't fire on every read while the RPC is unhappy and stampede it.
   else await touchCursor();
-  return { indexed: rows.length, scanned, newestSig, cursorBefore: stored, fetchFailed };
+  return {
+    indexed: rows.length,
+    scanned,
+    processed,
+    newestSig,
+    cursorBefore: stored,
+    fetchFailed,
+    truncated,
+  };
 }
 
 /** Throttled, non-throwing crawl — safe to await before serving a read. */
@@ -68,7 +75,10 @@ export async function crawlIfStale(): Promise<void> {
   try {
     const age = await cursorAge();
     if (age !== null && age < MIN_CRAWL_INTERVAL_S) return;
-    await runIndexerCrawl();
+    // A tight budget here on purpose: this runs *inside* a user-facing read,
+    // so it must top up the tip and get out of the way. Backlogs are for
+    // /api/indexer/crawl, which nobody is waiting on.
+    await runIndexerCrawl({ budgetMs: 4_000 });
   } catch {
     // An opportunistic crawl must never fail the read that triggered it.
   }
