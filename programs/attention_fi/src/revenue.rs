@@ -27,6 +27,33 @@ pub fn acc_increment(amount: u64, total_staked: u64) -> Result<u128> {
         .ok_or(AttentionError::MathOverflow.into())
 }
 
+/// Split a creator's fee into the genesis holders' share and the remainder.
+///
+/// Genesis NFTs sell a slice of the *creator's* fee stream, not a slice of the
+/// protocol's or an extra levy on the trader — so a token's genesis programme
+/// costs the treasury nothing and can never make a trade more expensive. An
+/// NFT holding `share_bps` receives that many basis points of every creator
+/// fee, for as long as it holds.
+///
+/// Clamped at the whole cut. `mint_genesis` bounds each NFT to 10,000 bps
+/// individually but nothing stops a creator minting several that sum past it;
+/// without the clamp the arithmetic would try to pay out more than came in and
+/// the trade would fail on an underflow — punishing traders for a decision the
+/// creator made.
+pub fn split_genesis_fee(creator_cut: u64, total_share_bps: u64) -> Result<(u64, u64)> {
+    if total_share_bps == 0 || creator_cut == 0 {
+        return Ok((0, creator_cut));
+    }
+    let genesis = u128::from(creator_cut)
+        .checked_mul(u128::from(total_share_bps))
+        .map(|product| product / 10_000)
+        .ok_or(AttentionError::MathOverflow)?;
+    let genesis = u64::try_from(genesis)
+        .unwrap_or(creator_cut)
+        .min(creator_cut);
+    Ok((genesis, creator_cut - genesis))
+}
+
 /// Total revenue (lamports) accrued to a `staked` balance at accumulator `acc`.
 pub fn accrued(staked: u64, acc: u128) -> Result<u128> {
     u128::from(staked)
@@ -45,6 +72,42 @@ pub fn pending(staked: u64, acc: u128, reward_debt: u128) -> Result<u64> {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
+    #[test]
+    fn genesis_share_comes_out_of_the_creator_cut() {
+        // 15% of the creator's fee to holders, 85% retained.
+        let (genesis, creator) = split_genesis_fee(1_000_000, 1_500).unwrap();
+        assert_eq!(genesis, 150_000);
+        assert_eq!(creator, 850_000);
+        assert_eq!(genesis + creator, 1_000_000, "nothing is created or lost");
+    }
+
+    #[test]
+    fn no_genesis_nfts_leaves_the_creator_whole() {
+        let (genesis, creator) = split_genesis_fee(1_000_000, 0).unwrap();
+        assert_eq!(genesis, 0);
+        assert_eq!(creator, 1_000_000);
+    }
+
+    #[test]
+    fn oversubscribed_shares_clamp_instead_of_underflowing() {
+        // A creator can mint NFTs summing past 100% of their own stream. The
+        // split must cap at what actually came in — paying out more would fail
+        // the trade, penalising a trader for the creator's decision.
+        let (genesis, creator) = split_genesis_fee(1_000_000, 25_000).unwrap();
+        assert_eq!(genesis, 1_000_000);
+        assert_eq!(creator, 0);
+    }
+
+    #[test]
+    fn dust_fees_never_pay_out_more_than_they_are() {
+        for cut in 0..50u64 {
+            let (genesis, creator) = split_genesis_fee(cut, 10_000).unwrap();
+            assert_eq!(genesis + creator, cut);
+        }
+    }
+
     use super::*;
 
     const ONE_SOL: u64 = 1_000_000_000;

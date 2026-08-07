@@ -1,12 +1,13 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token::{self, Mint, Token, TokenAccount, Transfer};
 
-use crate::constants::{CURVE_SEED, GLOBAL_SEED, PERK_SEED};
+use crate::constants::{CURVE_SEED, GENPOOL_SEED, GLOBAL_SEED, PERK_SEED};
 use crate::curve::{sell_quote, split_creator_fee};
 use crate::error::AttentionError;
 use crate::events::TradeEvent;
 use crate::nft::{discounted_fee_bps, perk_discount_bps};
-use crate::state::{BondingCurve, Global, PerkNft};
+use crate::revenue::{acc_increment, split_genesis_fee};
+use crate::state::{BondingCurve, GenesisPool, Global, PerkNft};
 
 #[derive(Accounts)]
 pub struct Sell<'info> {
@@ -43,6 +44,19 @@ pub struct Sell<'info> {
         constraint = perk.owner == seller.key() @ AttentionError::Unauthorized,
     )]
     pub perk: Option<Account<'info, PerkNft>>,
+
+    /// Optional genesis fee pool for this token. Supplied only when the token
+    /// has genesis NFTs; absent means the creator keeps their whole cut.
+    ///
+    /// Optional rather than required because most tokens never mint genesis
+    /// NFTs, and making every trade carry an account that usually does not
+    /// exist would be a tax on the common case.
+    #[account(
+        mut,
+        seeds = [GENPOOL_SEED, mint.key().as_ref()],
+        bump = genesis_pool.bump,
+    )]
+    pub genesis_pool: Option<Account<'info, GenesisPool>>,
 
     pub token_program: Program<'info, Token>,
 }
@@ -91,6 +105,16 @@ pub fn sell_handler(ctx: Context<Sell>, token_amount: u64, min_sol_out: u64) -> 
 
     // Split the fee: creator cut stays accrued in the curve, protocol cut to treasury.
     let (creator_cut, treasury_cut) = split_creator_fee(quote.fee, global.creator_fee_share_bps)?;
+    // The genesis holders' slice comes out of the creator's half, so the
+    // treasury's share and the trader's cost are untouched by it.
+    let total_share_bps = ctx
+        .accounts
+        .genesis_pool
+        .as_ref()
+        .map(|pool| pool.total_share_bps)
+        .unwrap_or(0);
+    let (genesis_cut, creator_cut) = split_genesis_fee(creator_cut, total_share_bps)?;
+    // The creator's retained cut stays in the curve; everything else leaves it.
     let curve_debit = quote
         .sol_from_curve
         .checked_sub(creator_cut)
@@ -114,6 +138,23 @@ pub fn sell_handler(ctx: Context<Sell>, token_amount: u64, min_sol_out: u64) -> 
             .treasury
             .to_account_info()
             .try_borrow_mut_lamports()? += treasury_cut;
+    }
+    // Curve -> genesis pool. Both are program-owned, so this is a direct
+    // lamport move like the two above rather than a system CPI.
+    if genesis_cut > 0 {
+        if let Some(pool) = &ctx.accounts.genesis_pool {
+            let increment = acc_increment(genesis_cut, pool.total_share_bps)?;
+            **pool.to_account_info().try_borrow_mut_lamports()? += genesis_cut;
+            let pool = ctx.accounts.genesis_pool.as_mut().unwrap();
+            pool.acc_per_share = pool
+                .acc_per_share
+                .checked_add(increment)
+                .ok_or(AttentionError::MathOverflow)?;
+            pool.reserves = pool
+                .reserves
+                .checked_add(genesis_cut)
+                .ok_or(AttentionError::MathOverflow)?;
+        }
     }
 
     // Update reserves and emit.
