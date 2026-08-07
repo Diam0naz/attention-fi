@@ -255,61 +255,14 @@ export function getChartSeries(
   return { candles, volumes };
 }
 
-export interface Trade { side: "buy" | "sell"; sol: number; tokens: number; priceUsd: number; wallet: string; ago: string }
-
-export function getTrades(handle: string): Trade[] {
-  const rand = mulberry32(hashStr(handle) ^ 0x1234abcd);
-  const agos = ["2s", "9s", "23s", "41s", "1m", "2m", "3m", "5m", "8m", "12m", "18m", "27m"];
-  return agos.map((ago) => {
-    const side = rand() > 0.42 ? "buy" : "sell";
-    const sol = +(rand() * 6 + 0.08).toFixed(2);
-    const tokens = Math.round(sol * 24_000 * (0.8 + rand() * 0.4));
-    const priceUsd = +(0.00002 + rand() * 0.00006).toFixed(6);
-    return { side, sol, tokens, priceUsd, wallet: randWallet(rand), ago };
-  });
-}
-
-/** Social-proof mentions that "feed" the mindshare score (design 1b). */
-export interface Mention { text: string; ago: string; impressions: number }
-
-export function getMentions(handle: string): Mention[] {
-  const rand = mulberry32(hashStr(handle) ^ 0x0feed1);
-  const quoted = 2 + Math.floor(rand() * 4);
-  const templates = [
-    `“the work @${handle} is shipping is genuinely the most underrated thing in the space right now”`,
-    `quoted by ${quoted} top-100 crypto-twitter accounts this week`,
-    `thread referencing @${handle}'s benchmark is compounding across the timeline`,
-  ];
-  const agos = ["2h ago", "6h ago", "1d ago"];
-  return templates.map((text, i) => ({
-    text,
-    ago: agos[i] ?? "1d ago",
-    impressions: Math.round(400 + rand() * 4200),
-  }));
-}
-
-export interface Holder { rank: number; wallet: string; pct: number; tag?: "curve" | "creator" | "others" }
-
-export function getHolders(handle: string): Holder[] {
-  const rand = mulberry32(hashStr(handle) ^ 0x55aa55aa);
-  const holders: Holder[] = [
-    { rank: 1, wallet: "Bonding curve", pct: +(34 + rand() * 8).toFixed(1), tag: "curve" },
-    { rank: 2, wallet: randWallet(rand), pct: +(7 + rand() * 3).toFixed(1), tag: "creator" },
-  ];
-  let base = 6;
-  for (let i = 3; i <= 9; i++) {
-    base = base * (0.72 + rand() * 0.12);
-    holders.push({ rank: i, wallet: randWallet(rand), pct: +base.toFixed(1) });
-  }
-  const sum = holders.reduce((a, h) => a + h.pct, 0);
-  holders.push({
-    rank: 10,
-    wallet: `+${1240 + Math.floor(rand() * 3000)} others`,
-    pct: +Math.max(0, 100 - sum).toFixed(1),
-    tag: "others",
-  });
-  return holders;
-}
+// Trades, mentions and holders used to be generated here, from a hash of the
+// handle. They now come from the chain and the social source instead — see
+// lib/solana/use-token-activity.ts, lib/solana/holders.ts and lib/mentions.ts.
+//
+// Removed rather than left unused. Fabricated holder distributions and invented
+// quotes attributed to real handles are not the kind of placeholder anyone
+// should be able to reach for by accident: the mock's distribution always
+// looked healthy, and its "mentions" put sentences in real people's mouths.
 
 /** Demo catalog handles are fictional — map them to real CT project accounts
  *  so the feed shows real profile pictures. Launched tokens use the handle

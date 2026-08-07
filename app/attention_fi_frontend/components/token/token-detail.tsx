@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, BadgeCheck, ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { getHolders, getTrades, type TokenDetail } from "@/lib/mock-data";
+import { type TokenDetail } from "@/lib/mock-data";
 import { X_URL } from "@/lib/config";
 import { PriceChart } from "@/components/token/price-chart";
 import { MindshareView } from "@/components/token/mindshare-view";
@@ -27,6 +27,7 @@ import { useSolUsd } from "@/lib/solana/sol-usd";
 import { useTokenBalance } from "@/lib/solana/use-token-balance";
 import { handleToMint } from "@/lib/solana/registry";
 import { useVenue } from "@/lib/solana/use-venue";
+import { useTokenHolders, useTokenTrades } from "@/lib/solana/use-token-activity";
 import {
   graduateToken,
   graduationOutlook,
@@ -39,6 +40,16 @@ import { TxStatus, type TxState } from "@/components/wallet/tx-status";
 
 const TABS = ["chart", "trades", "holders", "about"] as const;
 type Tab = (typeof TABS)[number];
+
+/** Compact "how long ago", from a block time. Null block times read as "—". */
+function sinceLabel(blockTime: number | null): string {
+  if (!blockTime) return "—";
+  const s = Math.max(0, Math.floor(Date.now() / 1000) - blockTime);
+  if (s < 60) return `${s}s`;
+  if (s < 3600) return `${Math.floor(s / 60)}m`;
+  if (s < 86_400) return `${Math.floor(s / 3600)}h`;
+  return `${Math.floor(s / 86_400)}d`;
+}
 
 function usd(n: number): string {
   if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
@@ -86,8 +97,15 @@ export function TokenDetailTerminal({ token: tokenProp }: { token: TokenDetail }
   );
   const mindshareValue = indexEntry?.mindshare ?? token.mindshare;
 
-  const trades = useMemo(() => getTrades(token.handle), [token.handle]);
-  const holders = useMemo(() => getHolders(token.handle), [token.handle]);
+  // Real activity, from the indexer and the token's own accounts. Both used to
+  // be generated from a hash of the handle — stable across reloads, plausibly
+  // shaped, and describing nothing.
+  const { trades, tradesUnavailable, loaded: tradesLoaded } = useTokenTrades(tokenMint);
+  const {
+    holders,
+    truncated: holdersTruncated,
+    loaded: holdersLoaded,
+  } = useTokenHolders(tokenMint, { creator: venue?.curve?.creator ?? null, viewer: address });
 
   const up = token.delta24h >= 0;
   // Mock fallback for catalog tokens that aren't on-chain; the live figure
@@ -370,47 +388,100 @@ export function TokenDetailTerminal({ token: tokenProp }: { token: TokenDetail }
                   <span className="text-right">Wallet</span>
                   <span className="text-right">Time</span>
                 </div>
-                {trades.map((tr, i) => (
-                  <div
-                    key={i}
-                    className="grid grid-cols-[64px_1fr_1fr_72px] items-center gap-2 border-t border-white/[0.05] px-3 py-2 font-mono text-[11px]"
-                  >
-                    <span className={cn("font-bold uppercase", tr.side === "buy" ? "text-signal" : "text-noise")}>
-                      {tr.side}
-                    </span>
-                    <span className="text-right text-[#F5F4F0]">{tr.sol.toFixed(2)}</span>
-                    <span className="text-right text-[#6B6B6B]">{tr.wallet}</span>
-                    <span className="text-right text-[#6B6B6B]">{tr.ago}</span>
+                {!tradesLoaded ? (
+                  <div className="px-3 py-8 text-center font-mono text-[11px] text-[#6B6B6B]">
+                    Reading recent trades…
                   </div>
-                ))}
+                ) : trades.length === 0 ? (
+                  // "No trades yet" and "we can't see trades" are different
+                  // facts, and one blank panel for both turns a deployment
+                  // problem into an apparently dead market.
+                  <div className="px-3 py-8 text-center font-mono text-[11px] leading-relaxed text-[#6B6B6B]">
+                    {tradesUnavailable
+                      ? "Trade history isn't available — no indexer is configured for this deployment."
+                      : "No trades yet. Be the first."}
+                  </div>
+                ) : (
+                  trades.map((tr) => (
+                    <a
+                      key={tr.signature}
+                      href={explorerTx(tr.signature)}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="grid grid-cols-[64px_1fr_1fr_72px] items-center gap-2 border-t border-white/[0.05] px-3 py-2 font-mono text-[11px] transition-colors hover:bg-white/[0.02]"
+                    >
+                      <span className={cn("font-bold uppercase", tr.side === "buy" ? "text-signal" : "text-noise")}>
+                        {tr.side}
+                        {/* Which venue filled it. After graduation these are
+                            the same market to a trader but a different
+                            instruction on-chain. */}
+                        {tr.onPool && <span className="ml-1 text-[8px] text-[#6B6B6B]">AMM</span>}
+                      </span>
+                      <span className="text-right text-[#F5F4F0]">{tr.sol.toFixed(3)}</span>
+                      <span className="text-right text-[#6B6B6B]">
+                        {tr.wallet ? `${tr.wallet.slice(0, 4)}…${tr.wallet.slice(-4)}` : "—"}
+                      </span>
+                      <span className="text-right text-[#6B6B6B]">{sinceLabel(tr.blockTime)}</span>
+                    </a>
+                  ))
+                )}
               </div>
             )}
 
             {tab === "holders" && (
               <div className="overflow-hidden rounded-sm border border-white/[0.06]">
+                {!holdersLoaded ? (
+                  <div className="px-3 py-8 text-center font-mono text-[11px] text-[#6B6B6B]">
+                    Reading token accounts…
+                  </div>
+                ) : holders.length === 0 ? (
+                  <div className="px-3 py-8 text-center font-mono text-[11px] text-[#6B6B6B]">
+                    Nobody holds this token yet.
+                  </div>
+                ) : (
+                  <>
                 {holders.map((h) => (
                   <div
-                    key={h.rank}
+                    key={h.wallet}
                     className="flex items-center gap-3 border-t border-white/[0.05] px-3 py-2.5 first:border-t-0 font-mono text-[11px]"
                   >
                     <span className="w-6 text-[#4b5563]">{h.rank}</span>
                     <span className="flex items-center gap-2 text-[#F5F4F0]">
-                      {h.wallet}
+                      {h.tag === "curve" || h.tag === "pool" || h.tag === "others"
+                        ? h.wallet
+                        : `${h.wallet.slice(0, 4)}…${h.wallet.slice(-4)}`}
                       {h.tag === "curve" && (
                         <span className="rounded-sm border border-pulse/40 px-1.5 py-0.5 text-[8px] text-pulse">CURVE</span>
                       )}
+                      {h.tag === "pool" && (
+                        <span className="rounded-sm border border-pulse/40 px-1.5 py-0.5 text-[8px] text-pulse">AMM</span>
+                      )}
                       {h.tag === "creator" && (
                         <span className="rounded-sm border border-signal/40 px-1.5 py-0.5 text-[8px] text-signal">CREATOR</span>
+                      )}
+                      {h.tag === "you" && (
+                        <span className="rounded-sm border border-signal/40 px-1.5 py-0.5 text-[8px] text-signal">YOU</span>
                       )}
                     </span>
                     <div className="ml-auto flex w-32 items-center gap-2">
                       <div className="h-1 flex-1 overflow-hidden rounded-full bg-white/[0.06]">
                         <div className="h-full rounded-full bg-signal/70" style={{ width: `${Math.min(100, h.pct)}%` }} />
                       </div>
-                      <span className="w-10 text-right text-[#9aa4af]">{h.pct}%</span>
+                      <span className="w-10 text-right text-[#9aa4af]">{h.pct.toFixed(1)}%</span>
                     </div>
                   </div>
                 ))}
+                {/* The RPC returns the top 20 accounts, so past that we know
+                    the remaining supply but not how many wallets hold it.
+                    Saying so beats inventing a holder count, which is exactly
+                    what the mock's "+2,431 others" did. */}
+                {holdersTruncated && (
+                  <p className="border-t border-white/[0.05] px-3 py-2 font-mono text-[9px] text-[#4b5563]">
+                    Top 20 accounts shown; the rest is aggregated.
+                  </p>
+                )}
+                  </>
+                )}
               </div>
             )}
 
@@ -664,7 +735,16 @@ export function TokenDetailTerminal({ token: tokenProp }: { token: TokenDetail }
             {/* stats */}
             <div className="mt-5 grid grid-cols-2 gap-3 border-t border-white/[0.08] pt-4">
               {[
-                { k: "HOLDERS", v: String(token.holders) },
+                // Real count once the accounts are read; the catalog figure is
+                // the fallback for tokens that aren't on-chain at all.
+                {
+                  k: "HOLDERS",
+                  v: holdersLoaded && holders.length > 0
+                    ? `${holders.filter((h) => h.tag !== "curve" && h.tag !== "pool" && h.tag !== "others").length}${holdersTruncated ? "+" : ""}`
+                    : holdersLoaded
+                      ? "0"
+                      : String(token.holders),
+                },
                 { k: "LIQUIDITY", v: usd(token.liquidityUsd) },
                 { k: "VIRTUAL RESERVES", v: `${token.virtualSol} SOL` },
                 { k: "CREATOR FEE", v: `${(token.creatorFeeBps / 100).toFixed(1)}%`, ok: token.verified },
