@@ -15,6 +15,8 @@ import { useTokenBalance } from "@/lib/solana/use-token-balance";
 import { USDC_MINT } from "@/lib/solana/config";
 import { myCreatedTokens, type CreatedToken } from "@/lib/solana/registry";
 import { useTokenIndex } from "@/lib/token-index";
+import { fetchLaunchedMints } from "@/lib/solana/launched";
+import { useReadonlyProgram } from "@/lib/solana/use-program";
 import { useHoldings } from "@/lib/solana/use-holdings";
 import { useNftPortfolio } from "@/components/nft/use-nft-portfolio";
 import { RefreshButton } from "@/components/ui/refresh-button";
@@ -50,7 +52,10 @@ export function ProfileView() {
   // (a bare SPL mint carries no handle on-chain), so this is the source of
   // truth for "what did I create" — not the mock portfolio.
   const { tokens: indexed } = useTokenIndex();
+  const readonlyProgram = useReadonlyProgram();
   const [launched, setLaunched] = useState<CreatedToken[]>([]);
+  // Mints that exist under any launch mechanism, not just bonding curves.
+  const [launchedMints, setLaunchedMints] = useState<Set<string>>(() => new Set());
   const [launchNonce, setLaunchNonce] = useState(0);
   useEffect(() => {
     let cancelled = false;
@@ -63,6 +68,17 @@ export function ProfileView() {
     };
   }, [address, launchNonce]);
 
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const mints = await fetchLaunchedMints(readonlyProgram).catch(() => new Set<string>());
+      if (!cancelled) setLaunchedMints(mints);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [readonlyProgram, launchNonce]);
+
   /** Re-read the profile's on-chain halves together. */
   async function refreshProfile() {
     nftPortfolio.refresh();
@@ -71,15 +87,20 @@ export function ProfileView() {
   }
   const created = useMemo(() => {
     return launched.map((t) => {
-      const live = indexed.find((i) => i.handle === t.handle);
+      const entry = indexed.find((i) => i.handle === t.handle);
       return {
         handle: t.handle,
         name: t.name ?? t.handle,
-        marketCap: live?.marketCap ?? 0,
-        live: Boolean(live?.live),
+        // Market cap only exists for a bonding curve; the other mechanisms
+        // price differently and this panel doesn't try to.
+        marketCap: entry?.marketCap ?? 0,
+        // Liveness comes from the mint existing under *any* mechanism, not
+        // from the bonding-curve index. A revenue, conviction or Dutch launch
+        // has no BondingCurve account and used to read PENDING forever.
+        live: launchedMints.has(t.mint),
       };
     });
-  }, [launched, indexed]);
+  }, [launched, indexed, launchedMints]);
 
   // Opt-in profile picture, persisted per wallet address (client-only). Loaded on
   // address change via adjust-state-on-prop-change (no setState-in-effect).

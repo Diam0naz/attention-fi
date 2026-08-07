@@ -6,6 +6,7 @@ use anchor_spl::token::{self, Mint, MintTo, SetAuthority, Token, TokenAccount};
 use crate::constants::{CURVE_SEED, GLOBAL_SEED};
 use crate::error::AttentionError;
 use crate::events::{LaunchEvent, MECH_BONDING};
+use crate::metadata::{create_token_metadata, MetadataCpi, TokenMetadataArgs};
 use crate::state::{BondingCurve, Global, MindshareTier};
 
 #[derive(Accounts)]
@@ -43,13 +44,26 @@ pub struct LaunchToken<'info> {
     )]
     pub vault: Account<'info, TokenAccount>,
 
+    /// CHECK: the token's Metaplex metadata PDA, created by the CPI below and
+    /// validated by the Token Metadata program against `mint`.
+    #[account(mut)]
+    pub metadata: UncheckedAccount<'info>,
+
+    /// CHECK: Metaplex Token Metadata program, validated by address.
+    #[account(address = anchor_spl::metadata::ID)]
+    pub token_metadata_program: UncheckedAccount<'info>,
+
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,
     pub associated_token_program: Program<'info, AssociatedToken>,
     pub rent: Sysvar<'info, Rent>,
 }
 
-pub fn launch_token_handler(ctx: Context<LaunchToken>, tier: MindshareTier) -> Result<()> {
+pub fn launch_token_handler(
+    ctx: Context<LaunchToken>,
+    tier: MindshareTier,
+    metadata: TokenMetadataArgs,
+) -> Result<()> {
     let global = &ctx.accounts.global;
     let total_supply = global.token_total_supply;
     let virtual_token_reserves = global.virtual_token_reserves;
@@ -70,6 +84,27 @@ pub fn launch_token_handler(ctx: Context<LaunchToken>, tier: MindshareTier) -> R
             signer_seeds,
         ),
         total_supply,
+    )?;
+
+    // Name the token on-chain, before the authority is revoked below.
+    //
+    // Order is load-bearing: CreateMetadataAccountV3 requires the mint
+    // authority to sign, so once the next call sets it to None this mint can
+    // never have metadata. A token launched without it shows as a bare address
+    // in every wallet and explorer, permanently.
+    create_token_metadata(
+        MetadataCpi {
+            metadata: ctx.accounts.metadata.to_account_info(),
+            mint: ctx.accounts.mint.to_account_info(),
+            mint_authority: ctx.accounts.curve.to_account_info(),
+            payer: ctx.accounts.creator.to_account_info(),
+            update_authority: ctx.accounts.curve.to_account_info(),
+            token_metadata_program: ctx.accounts.token_metadata_program.to_account_info(),
+            system_program: ctx.accounts.system_program.to_account_info(),
+            rent: ctx.accounts.rent.to_account_info(),
+        },
+        signer_seeds,
+        metadata,
     )?;
 
     // Fix the supply: no further minting is possible.

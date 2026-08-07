@@ -54,4 +54,9 @@ pub enum AttentionError {
     InsufficientActivity,
     #[msg("Perk level must be between 1 and MAX_PERK_LEVEL")]
     InvalidPerkLevel,
+    // Appended, never inserted: an #[error_code] variant's position *is* its
+    // on-chain code, so adding one in the middle silently renumbers every
+    // variant below it and every client that reports errors by number.
+    #[msg("Token name, symbol or URI is empty or exceeds the Metaplex limit")]
+    InvalidTokenMetadata,
 }

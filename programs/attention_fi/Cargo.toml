@@ -22,7 +22,7 @@ custom-panic = []
 
 [dependencies]
 anchor-lang = { version = "0.32.1", features = ["init-if-needed"] }
-anchor-spl = "0.32.1"
+anchor-spl = { version = "0.32.1", features = ["metadata"] }
 mpl-core = "=0.11.2"
 solana-attestation-service-client = "1.0.9"
 switchboard-on-demand = { version = "0.13.0", default-features = false, features = ["anchor"] }

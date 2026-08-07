@@ -328,14 +328,25 @@ async function fetchCreatedFromDb(creator: string): Promise<DbToken[]> {
 export async function myCreatedTokens(creator: string): Promise<CreatedToken[]> {
   const byHandle = new Map<string, CreatedToken>();
   const local = launchedRegistry();
+  // Local entries are this *browser's* launches, not this *wallet's*. Adding
+  // them unfiltered meant "Tokens you created" showed the same list no matter
+  // which wallet was connected — it couldn't change, because nothing in it
+  // depended on the wallet. Only entries that name this creator qualify.
+  //
+  // Entries written before the creator was recorded can't be attributed, so
+  // they're left to the database lookup below, which is creator-scoped and
+  // authoritative. That can hide a legacy launch that never synced; showing
+  // someone else's launch as yours is the worse of the two errors.
   for (const handle of Object.keys(local)) {
     const entry = local[handle]!;
-    byHandle.set(
+    if (typeof entry === "string" || entry.creator !== creator) continue;
+    byHandle.set(handle, {
       handle,
-      typeof entry === "string"
-        ? { handle, mint: entry }
-        : { handle, mint: entry.mint, name: entry.name, symbol: entry.symbol, image: entry.image },
-    );
+      mint: entry.mint,
+      name: entry.name,
+      symbol: entry.symbol,
+      image: entry.image,
+    });
   }
   for (const t of await fetchCreatedFromDb(creator)) {
     byHandle.set(t.handle, {

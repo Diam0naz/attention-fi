@@ -6,6 +6,7 @@ pub mod curve;
 pub mod error;
 pub mod events;
 pub mod instructions;
+pub mod metadata;
 pub mod nft;
 pub mod oracle;
 pub mod oracle_feed;
@@ -15,6 +16,7 @@ pub mod state;
 use anchor_lang::prelude::*;
 
 pub use instructions::*;
+pub use metadata::TokenMetadataArgs;
 pub use state::*;
 
 declare_id!("8fQW2JbfNytdjJ7LR8dvKWMUtpeQPRqxAa3JZvBLsVVc");
@@ -30,14 +32,21 @@ pub mod attention_fi {
 
     /// Launch a new token: mint the supply into a curve-owned vault and seed the
     /// bonding curve's starting price from the subject's mindshare tier.
-    pub fn launch_token(ctx: Context<LaunchToken>, tier: MindshareTier) -> Result<()> {
-        launch_token::launch_token_handler(ctx, tier)
+    pub fn launch_token(
+        ctx: Context<LaunchToken>,
+        tier: MindshareTier,
+        metadata: TokenMetadataArgs,
+    ) -> Result<()> {
+        launch_token::launch_token_handler(ctx, tier, metadata)
     }
 
     /// Launch a bonding-curve token seeded from a Switchboard mindshare feed
     /// (decentralized oracle) instead of a trusted keeper tier argument.
-    pub fn launch_from_feed(ctx: Context<LaunchFromFeed>) -> Result<()> {
-        launch_from_feed::launch_from_feed_handler(ctx)
+    pub fn launch_from_feed(
+        ctx: Context<LaunchFromFeed>,
+        metadata: TokenMetadataArgs,
+    ) -> Result<()> {
+        launch_from_feed::launch_from_feed_handler(ctx, metadata)
     }
 
     /// Refresh a token's on-chain mindshare snapshot from the Switchboard feed
@@ -85,8 +94,16 @@ pub mod attention_fi {
         start_price: u64,
         floor_price: u64,
         duration: i64,
+        metadata: TokenMetadataArgs,
     ) -> Result<()> {
-        start_auction::start_auction_handler(ctx, tier, start_price, floor_price, duration)
+        start_auction::start_auction_handler(
+            ctx,
+            tier,
+            start_price,
+            floor_price,
+            duration,
+            metadata,
+        )
     }
 
     /// Bid on a Dutch auction at the current descending price (price-capped).
@@ -106,8 +123,15 @@ pub mod attention_fi {
         tier: MindshareTier,
         lock_period: i64,
         early_exit_penalty_bps: u16,
+        metadata: TokenMetadataArgs,
     ) -> Result<()> {
-        launch_conviction::launch_conviction_handler(ctx, tier, lock_period, early_exit_penalty_bps)
+        launch_conviction::launch_conviction_handler(
+            ctx,
+            tier,
+            lock_period,
+            early_exit_penalty_bps,
+            metadata,
+        )
     }
 
     /// Buy on a conviction curve; re-locks the holder's position.
@@ -134,8 +158,9 @@ pub mod attention_fi {
         ctx: Context<LaunchRevenue>,
         tier: MindshareTier,
         share_price: u64,
+        metadata: TokenMetadataArgs,
     ) -> Result<()> {
-        launch_revenue::launch_revenue_handler(ctx, tier, share_price)
+        launch_revenue::launch_revenue_handler(ctx, tier, share_price, metadata)
     }
 
     /// Buy revenue shares at the fixed launch price; auto-stakes for revenue.
