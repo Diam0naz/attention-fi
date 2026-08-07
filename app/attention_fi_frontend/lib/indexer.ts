@@ -46,15 +46,20 @@ export async function runIndexerCrawl(
   // only ever as good as the runs that moved it, and a bad one is otherwise
   // unrecoverable from outside the database.
   const until = opts.ignoreCursor ? undefined : (stored ?? undefined);
-  // No cursor → backfill more history; incremental runs just chase the tip.
-  const maxPages = opts.maxPages ?? (until ? 2 : 8);
-  const { rows, newestSig, scanned, processed, fetchFailed, truncated } =
+  // Paging is one cheap call per 25 signatures and must reach `until`, so this
+  // is a safety bound rather than a throughput setting; `budgetMs` limits the
+  // expensive part.
+  const maxPages = opts.maxPages ?? 40;
+  const { rows, newestSig, scanned, processed, fetchFailed, truncated, contiguous } =
     await crawlProgramEvents(program, { until, maxPages, budgetMs: opts.budgetMs });
   if (rows.length > 0) await insertChainEvents(rows);
-  // `newestSig` is now the newest transaction actually read, so it's safe to
-  // store even from a truncated run — that's what makes a long backlog finish
-  // across several calls instead of restarting from the tip each time.
-  if (newestSig) await setCursor(newestSig);
+  // `newestSig` is the newest transaction actually read, so it's safe to store
+  // even from a truncated run — that's what lets a long backlog finish across
+  // several calls instead of restarting from the tip each time.
+  //
+  // Unless the run wasn't contiguous with the cursor, in which case storing it
+  // would skip the hole in between for good.
+  if (newestSig && contiguous) await setCursor(newestSig);
   // Otherwise record that a crawl ran anyway, so the opportunistic throttle
   // doesn't fire on every read while the RPC is unhappy and stampede it.
   else await touchCursor();

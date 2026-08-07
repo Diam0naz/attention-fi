@@ -32,8 +32,16 @@ export interface CrawlResult {
    * empty activity feed went unexplained.
    */
   fetchFailed: number;
-  /** True when it stopped early (budget or an unreadable tx). Call again. */
+  /** True when it stopped early (budget, an unreadable tx, or the page cap). */
   truncated: boolean;
+  /**
+   * Whether the signatures read run contiguously back to `until`.
+   *
+   * False means paging hit its cap before reaching the cursor, so what was
+   * read is a window at the tip with a hole behind it. `newestSig` is then not
+   * safe to store.
+   */
+  contiguous: boolean;
 }
 
 function b58(v: unknown): string | null {
@@ -198,7 +206,15 @@ function normalize(name: string, data: Record<string, unknown>, ctx: Ctx): Chain
 export interface CrawlOptions {
   /** Stop once this signature is reached (the last-indexed cursor). */
   until?: string;
-  /** Max signature pages to walk (pageSize each). Bounds RPC + latency. */
+  /**
+   * Safety bound on signature pages, not a throughput dial.
+   *
+   * Listing signatures is one RPC call per page and cheap; reading each
+   * transaction is the expensive part, and that is what `budgetMs` limits.
+   * Paging must run all the way back to `until` or the window it returns is
+   * anchored at the tip rather than at the cursor — see the note on the
+   * function below.
+   */
   maxPages?: number;
   pageSize?: number;
   /**
@@ -220,14 +236,27 @@ export interface CrawlOptions {
  * `newestSig` can mean "everything up to here is indexed" rather than "here is
  * the tip we saw". That is what makes an interrupted crawl resumable: whatever
  * it finished stays finished, and the next run starts from the first thing it
- * didn't reach. Advancing to the tip regardless — the previous behaviour —
- * turns any gap into a permanent one.
+ * didn't reach. Advancing to the tip regardless turns any gap into a permanent
+ * one.
+ *
+ * That guarantee depends entirely on paging reaching `until`. `until` does not
+ * mean "start here" — the RPC always begins at the tip and walks backward
+ * toward it, so a page limit that stops short returns a window anchored at the
+ * *newest* end. Processing that window oldest-first then sets the cursor near
+ * the tip and silently abandons everything between it and the old cursor.
+ * Which is precisely what happened: a 2-page limit against a 141-signature
+ * history walked the cursor to the tip having indexed nothing at all, and every
+ * later run correctly reported "nothing new" over an empty table.
+ *
+ * So paging runs to completion and only the transaction reads are budgeted.
+ * When even paging is cut short, the gap is real and the cursor must not move
+ * past it.
  */
 export async function crawlProgramEvents(
   program: Program<AttentionFi>,
   opts: CrawlOptions = {},
 ): Promise<CrawlResult> {
-  const { until, maxPages = 2, pageSize = 25, budgetMs = 20_000 } = opts;
+  const { until, maxPages = 40, pageSize = 25, budgetMs = 20_000 } = opts;
   const { connection } = program.provider;
   const programId = program.programId;
   const parser = new EventParser(programId, program.coder);
@@ -235,7 +264,15 @@ export async function crawlProgramEvents(
 
   const sigInfos: ConfirmedSignatureInfo[] = [];
   let before: string | undefined;
-  for (let page = 0; page < maxPages; page++) {
+  // True when paging stopped at the page cap rather than at `until` or the end
+  // of history — meaning the oldest signature held is *not* contiguous with the
+  // cursor, and advancing past it would skip whatever lies between.
+  let pagingIncomplete = false;
+  for (let page = 0; ; page++) {
+    if (page >= maxPages) {
+      pagingIncomplete = true;
+      break;
+    }
     const batch = await connection.getSignaturesForAddress(
       programId,
       { until, before, limit: pageSize },
@@ -244,6 +281,8 @@ export async function crawlProgramEvents(
     if (batch.length === 0) break;
     sigInfos.push(...batch);
     before = batch[batch.length - 1]!.signature;
+    // A short page means the RPC ran out of history or hit `until`; either way
+    // there is nothing older to fetch.
     if (batch.length < pageSize) break;
   }
 
@@ -320,5 +359,16 @@ export async function crawlProgramEvents(
     processed++;
   }
 
-  return { rows, newestSig, scanned: sigInfos.length, fetchFailed, processed, truncated };
+  return {
+    rows,
+    newestSig,
+    scanned: sigInfos.length,
+    fetchFailed,
+    processed,
+    truncated: truncated || pagingIncomplete,
+    // A gap makes every signature held non-contiguous with the cursor, so the
+    // caller must not advance it — the alternative is skipping history it can
+    // never come back for.
+    contiguous: !pagingIncomplete,
+  };
 }
