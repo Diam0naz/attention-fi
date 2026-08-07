@@ -149,9 +149,30 @@ export function handleToMint(handle: string): PublicKey | null {
   // This browser's own launches win, then the server registry, then statics.
   const entry = launchedRegistry()[key] ?? remoteRegistry()[key];
   const mint = (entry && mintOf(entry)) ?? staticRegistry()[key];
-  if (!mint) return null;
+  if (!mint) {
+    // Nothing in the registry — but the argument may already *be* a mint.
+    //
+    // Every trading surface routes by handle, so a token missing from the
+    // registry became untradeable in the app even while the wallet plainly
+    // held it and the profile priced it correctly. The registry is a naming
+    // convenience; the mint is the thing that actually identifies a token, and
+    // refusing to accept one made a lookup failure look like a broken market.
+    return asMint(handle);
+  }
   try {
     return new PublicKey(mint);
+  } catch {
+    return null;
+  }
+}
+
+/** Parse a string as a mint address, or null if it isn't one. */
+function asMint(value: string): PublicKey | null {
+  // Base58 pubkeys are 32–44 chars; anything shorter is a handle and would
+  // only make PublicKey throw.
+  if (value.length < 32 || value.length > 44) return null;
+  try {
+    return new PublicKey(value);
   } catch {
     return null;
   }

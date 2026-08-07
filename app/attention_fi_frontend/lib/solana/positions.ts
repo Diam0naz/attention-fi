@@ -3,6 +3,7 @@ import { Connection, PublicKey } from "@solana/web3.js";
 import type { AttentionFi } from "@/lib/idl/attention_fi";
 import { fetchAllPools, type PoolState } from "./amm";
 import { fetchAllCurves, fetchGlobal, type CurveState } from "./curve";
+import { staticHandleForMint } from "./static-registry";
 
 /** SPL Token program — where the wallet's token accounts live. */
 const TOKEN_PROGRAM_ID = new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
@@ -98,13 +99,25 @@ export async function fetchWalletPositions(
     // have.
     if (!curve) continue;
     const pool = poolByMint.get(mint) ?? null;
+    // The database first, then the configured seeds. Without the second lookup
+    // a token that exists only in configuration has no handle here, and every
+    // surface that routes by handle — the whole trade panel — gets a truncated
+    // mint that resolves to nothing. The position still prices correctly off
+    // the mint, so it looks held and untradeable at the same time.
+    let entry = meta.get(mint) ?? null;
+    if (!entry) {
+      const handle = staticHandleForMint(mint);
+      if (handle) {
+        entry = { handle, symbol: handle.slice(0, 4).toUpperCase(), name: handle };
+      }
+    }
     positions.push({
       mint,
       amount,
       curve,
       pool,
       venue: pool ? "pool" : curve.complete ? "stranded" : "curve",
-      meta: meta.get(mint) ?? null,
+      meta: entry,
     });
   }
 
