@@ -16,8 +16,15 @@ export async function GET(request: Request) {
   const limited = await rateLimit("indexer:crawl", clientKey(request));
   if (!limited.ok) return tooManyRequests(limited);
 
+  // `?full=1` re-scans from the tip regardless of the cursor. Needed because
+  // the cursor advances over history the crawl didn't decode, so a decode
+  // failure leaves a permanent hole no incremental run will ever revisit.
+  // Bounded by maxPages like any other crawl, and idempotent — the event store
+  // upserts on (signature, seq).
+  const full = new URL(request.url).searchParams.get("full") === "1";
+
   try {
-    const summary = await runIndexerCrawl();
+    const summary = await runIndexerCrawl(full ? { ignoreCursor: true, maxPages: 12 } : {});
     return NextResponse.json(summary);
   } catch (e) {
     const message = e instanceof Error ? e.message : "crawl failed";
