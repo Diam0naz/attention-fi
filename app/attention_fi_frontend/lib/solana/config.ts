@@ -7,6 +7,22 @@ export const CLUSTER = process.env.NEXT_PUBLIC_SOLANA_CLUSTER ?? "devnet";
 export const RPC_ENDPOINT =
   process.env.NEXT_PUBLIC_RPC_ENDPOINT ?? "https://api.devnet.solana.com";
 
+/**
+ * Server-only endpoint for the event indexer.
+ *
+ * The crawl issues one `getTransaction` per signature, which public RPCs
+ * rate-limit far more aggressively than account reads — devnet answers "Too
+ * many requests for a specific RPC call" after roughly ten in a row. That is
+ * enough to make a backlog of a few hundred transactions effectively
+ * un-crawlable, and it looks from the outside like a program nobody has used.
+ *
+ * Kept separate from RPC_ENDPOINT, and deliberately not NEXT_PUBLIC_: this one
+ * is called from route handlers only, so it can hold a keyed provider URL
+ * without shipping the key to every browser. Falls back to the shared endpoint
+ * when unset, so nothing breaks — it just stays slow.
+ */
+export const INDEXER_RPC_ENDPOINT = process.env.INDEXER_RPC_ENDPOINT || RPC_ENDPOINT;
+
 /** Program ID — defaults to the address baked into the IDL. */
 export const PROGRAM_ID = new PublicKey(process.env.NEXT_PUBLIC_PROGRAM_ID ?? idl.address);
 

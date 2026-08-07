@@ -2,7 +2,7 @@ import { AnchorProvider, Program } from "@anchor-lang/core";
 import { Connection, PublicKey, type Transaction, type VersionedTransaction } from "@solana/web3.js";
 import idlJson from "@/lib/idl/attention_fi.json";
 import type { AttentionFi } from "@/lib/idl/attention_fi";
-import { PROGRAM_ID, RPC_ENDPOINT } from "./config";
+import { INDEXER_RPC_ENDPOINT, PROGRAM_ID, RPC_ENDPOINT } from "./config";
 
 /** The slice of a wallet Anchor needs to sign. */
 export interface AnchorWalletLike {
@@ -21,6 +21,33 @@ export function getConnection(): Connection {
     disableRetryOnRateLimit: true,
   });
   return cached;
+}
+
+let indexerCached: Connection | null = null;
+
+/**
+ * Connection for the indexer's history reads.
+ *
+ * Separate from `getConnection` so a keyed provider can absorb the
+ * `getTransaction` volume a crawl needs without that key reaching the browser.
+ * Retries on rate limits are left enabled here — unlike the UI, nothing is
+ * waiting on this, and giving up costs a gap in the history rather than a
+ * slightly stale panel.
+ */
+export function getIndexerConnection(): Connection {
+  indexerCached ??= new Connection(INDEXER_RPC_ENDPOINT, { commitment: "confirmed" });
+  return indexerCached;
+}
+
+/** Program for the indexer, bound to the history-read connection. */
+export function getIndexerProgram(): Program<AttentionFi> {
+  const stub: AnchorWalletLike = {
+    publicKey: PublicKey.default,
+    signTransaction: () => Promise.reject(new Error("read-only provider cannot sign")),
+    signAllTransactions: () => Promise.reject(new Error("read-only provider cannot sign")),
+  };
+  const provider = new AnchorProvider(getIndexerConnection(), stub, { commitment: "confirmed" });
+  return new Program(idlJson as AttentionFi, provider);
 }
 
 /** Program bound to a connected wallet — required for anything that signs. */

@@ -4,7 +4,7 @@
 // safe to call on every activity read so the feed stays fresh without a cron
 // (wire a cron to /api/indexer/crawl in production for steadier coverage).
 
-import { getReadonlyProgram } from "@/lib/solana/program";
+import { getIndexerProgram } from "@/lib/solana/program";
 import { crawlProgramEvents } from "@/lib/solana/events";
 import {
   cursorAge,
@@ -30,6 +30,8 @@ export interface CrawlSummary {
   /** Transactions whose logs it couldn't read. Non-zero means RPC trouble,
    *  not a quiet program. */
   fetchFailed?: number;
+  /** Transactions permanently gone from the ledger; stepped over, not retried. */
+  unavailable?: number;
   /** True when the crawl stopped early. Call again to continue from here. */
   truncated?: boolean;
 }
@@ -40,7 +42,7 @@ export async function runIndexerCrawl(
   if (!indexerDbConfigured()) {
     return { indexed: 0, scanned: 0, newestSig: null, skipped: "no-db" };
   }
-  const program = getReadonlyProgram();
+  const program = getIndexerProgram();
   const stored = await getCursor();
   // `ignoreCursor` re-scans from the tip. Kept as an escape hatch: a cursor is
   // only ever as good as the runs that moved it, and a bad one is otherwise
@@ -50,7 +52,7 @@ export async function runIndexerCrawl(
   // is a safety bound rather than a throughput setting; `budgetMs` limits the
   // expensive part.
   const maxPages = opts.maxPages ?? 40;
-  const { rows, newestSig, scanned, processed, fetchFailed, truncated, contiguous } =
+  const { rows, newestSig, scanned, processed, fetchFailed, unavailable, truncated, contiguous } =
     await crawlProgramEvents(program, { until, maxPages, budgetMs: opts.budgetMs });
   if (rows.length > 0) await insertChainEvents(rows);
   // `newestSig` is the newest transaction actually read, so it's safe to store
@@ -70,6 +72,7 @@ export async function runIndexerCrawl(
     newestSig,
     cursorBefore: stored,
     fetchFailed,
+    unavailable,
     truncated,
   };
 }

@@ -32,6 +32,12 @@ export interface CrawlResult {
    * empty activity feed went unexplained.
    */
   fetchFailed: number;
+  /**
+   * Transactions the RPC answered for but had no logs — pruned or otherwise
+   * gone. Permanently unreadable, so the crawl steps over them rather than
+   * wedging; counted so a rising number is visible rather than silent.
+   */
+  unavailable: number;
   /** True when it stopped early (budget, an unreadable tx, or the page cap). */
   truncated: boolean;
   /**
@@ -288,6 +294,7 @@ export async function crawlProgramEvents(
 
   const rows: ChainEventInsert[] = [];
   let fetchFailed = 0;
+  let unavailable = 0;
   let processed = 0;
   // The newest signature whose logs we actually read. Stays null until one
   // succeeds, so a crawl that reads nothing advances nothing.
@@ -312,29 +319,42 @@ export async function crawlProgramEvents(
     // Retry with backoff. One getTransaction per signature is a lot of calls in
     // a row, and public RPCs rate-limit long before a crawl of any size
     // finishes; a single attempt means most of a backlog is silently dropped.
+    // "Not found" and "the RPC refused" are different answers and must not be
+    // conflated. A pruned or unavailable transaction is permanent: skipping it
+    // is the only way forward, and stopping would wedge the indexer on it for
+    // good. A refusal is transient: stopping is right, because continuing past
+    // it and then advancing the cursor is how history gets lost.
     let attempt = 0;
+    let refused = false;
     for (;;) {
       try {
         const tx = await connection.getTransaction(info.signature, {
           commitment: "confirmed",
           maxSupportedTransactionVersion: 0,
         });
-        logs = tx?.meta?.logMessages;
+        logs = tx?.meta?.logMessages ?? null;
         slot = tx?.slot ?? slot;
         blockTime = tx?.blockTime ?? blockTime;
         break;
       } catch {
         attempt++;
-        if (attempt > FETCH_RETRIES) break;
+        if (attempt > FETCH_RETRIES) {
+          refused = true;
+          break;
+        }
         await sleep(RETRY_BASE_MS * 2 ** (attempt - 1));
       }
     }
-    if (!logs) {
-      // Stop rather than skip. Continuing past an unread transaction and then
-      // advancing the cursor over it is exactly how history gets lost.
+    if (refused) {
       fetchFailed++;
       truncated = true;
       break;
+    }
+    if (!logs) {
+      // Answered, with nothing to decode. Nothing is lost by moving on.
+      unavailable++;
+      newestSig = info.signature;
+      continue;
     }
 
     let seq = 0;
@@ -364,6 +384,7 @@ export async function crawlProgramEvents(
     newestSig,
     scanned: sigInfos.length,
     fetchFailed,
+    unavailable,
     processed,
     truncated: truncated || pagingIncomplete,
     // A gap makes every signature held non-contiguous with the cursor, so the
