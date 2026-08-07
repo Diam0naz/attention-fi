@@ -101,6 +101,65 @@ export function venueQuote(
     : quoteSell(venue.curve, amount * 10 ** decimals) * netOfFee;
 }
 
+/** How close a curve is to graduating, and whether a given buy would tip it. */
+export interface GraduationOutlook {
+  /** Real SOL the curve must hold to graduate. */
+  thresholdSol: number;
+  /** Real SOL it holds now. */
+  reservesSol: number;
+  /** 0..1, clamped. */
+  progress: number;
+  /**
+   * SOL a buyer would have to spend to cross the line, grossed up for the fee.
+   *
+   * Not simply `threshold - reserves`: only the post-fee portion of a buy
+   * reaches the reserve that triggers graduation, so quoting the raw gap would
+   * understate what it actually takes.
+   */
+  remainingSol: number;
+  /** True when this specific buy would complete the curve. */
+  crosses: boolean;
+}
+
+/**
+ * What a buy does to a curve's graduation status.
+ *
+ * Worth surfacing because crossing the threshold is irreversible and abrupt.
+ * `complete` is set inside the same instruction that crosses it, and from that
+ * moment `buy` and `sell` both refuse — so the trade that graduates a token is
+ * also the last trade anyone makes on it until someone runs the migration. A
+ * buyer who didn't intend that gets no second chance: nothing in the program
+ * can move a curve back under the line, since the only operation that lowers
+ * reserves is a sell, and sells are refused too.
+ *
+ * Returns null once there's a pool, where the question no longer applies.
+ */
+export function graduationOutlook(
+  venue: Venue,
+  solIn: number,
+  graduationLamports: bigint,
+  feeBps: number,
+): GraduationOutlook | null {
+  if (venue.kind === "pool") return null;
+  const thresholdSol = Number(graduationLamports) / LAMPORTS_PER_SOL;
+  const reservesSol = Number(venue.curve.realSolReserves) / LAMPORTS_PER_SOL;
+  const netOfFee = 1 - feeBps / 10_000;
+  const gap = Math.max(0, thresholdSol - reservesSol);
+
+  return {
+    thresholdSol,
+    reservesSol,
+    progress: thresholdSol > 0 ? Math.min(1, reservesSol / thresholdSol) : 0,
+    // Grossed up: a buy of X only adds X * (1 - fee) to the reserve.
+    remainingSol: netOfFee > 0 ? gap / netOfFee : gap,
+    // Already complete counts as crossed regardless of the amount — the
+    // caller shouldn't have to special-case a curve that's past the line.
+    crosses:
+      venue.kind === "stranded" ||
+      (solIn > 0 && reservesSol + solIn * netOfFee >= thresholdSol),
+  };
+}
+
 /**
  * Execute a trade on whichever venue is live, with slippage protection.
  *

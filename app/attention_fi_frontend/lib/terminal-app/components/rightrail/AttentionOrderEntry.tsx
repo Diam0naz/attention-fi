@@ -9,6 +9,7 @@ import { fetchGlobal } from "@/lib/solana/curve";
 import { handleToMint } from "@/lib/solana/registry";
 import {
   graduateToken,
+  graduationOutlook,
   resolveVenue,
   tradeOnVenue,
   venueQuote,
@@ -75,6 +76,7 @@ export function AttentionOrderEntry() {
   const [venue, setVenue] = useState<Venue | null>(null);
   const [decimals, setDecimals] = useState(6);
   const [feeBps, setFeeBps] = useState(100);
+  const [graduationLamports, setGraduationLamports] = useState(0n);
   const [tx, setTx] = useState<TxState>({ kind: "idle" });
   const [walletModal, setWalletModal] = useState(false);
 
@@ -104,6 +106,7 @@ export function AttentionOrderEntry() {
       if (g) {
         setDecimals(g.tokenDecimals);
         setFeeBps(g.feeBps);
+        setGraduationLamports(g.graduationSol);
       }
     };
     void load();
@@ -145,6 +148,13 @@ export function AttentionOrderEntry() {
   // Nothing trades between completion and migration, so the ticket becomes a
   // graduate button rather than a buy button that is certain to fail.
   const stranded = venue?.kind === "stranded";
+  // Whether this order would tip the curve over its threshold. Surfaced before
+  // submitting, since the crossing can't be undone by any later transaction.
+  const outlook =
+    venue && graduationLamports > 0n
+      ? graduationOutlook(venue, side === "buy" ? amountNum : 0, graduationLamports, feeBps)
+      : null;
+  const wouldGraduate = side === "buy" && !stranded && outlook?.crosses === true;
 
   const canSubmit =
     connected && program !== null && venue !== null && !stranded && amountNum > 0 && tx.kind !== "pending";
@@ -330,6 +340,32 @@ export function AttentionOrderEntry() {
         </span>
       </div>
 
+      {outlook && !stranded && (
+        <div className="num flex items-center justify-between text-2xs">
+          <span className="text-low">To graduation</span>
+          <span className={wouldGraduate ? "text-down" : "text-mid"}>
+            {outlook.reservesSol.toFixed(1)}/{outlook.thresholdSol.toFixed(0)} SOL
+          </span>
+        </div>
+      )}
+
+      {/* Before the order, not after. The instruction that crosses the
+          threshold also closes the curve — to buys and to sells — and no later
+          transaction can reopen it. */}
+      {wouldGraduate && (
+        <div className="rounded border border-down/40 bg-down-muted p-2">
+          <p className="text-2xs leading-4 text-down">
+            This buy graduates @{symbol}. The curve closes on the spot — no more
+            buys, no more sells — until the AMM migration is run.
+          </p>
+          <p className="mt-1 text-2xs leading-4 text-mid">
+            Anyone can run the migration straight after, including you. There is
+            no way back to the curve. Keep the order under{" "}
+            {outlook!.remainingSol.toFixed(3)} SOL to leave it trading.
+          </p>
+        </div>
+      )}
+
       {connected ? (
         <button
           type="button"
@@ -340,7 +376,11 @@ export function AttentionOrderEntry() {
           )}
           onClick={() => void submit()}
         >
-          {tx.kind === "pending" ? "Confirm in wallet…" : `${side} on-chain`}
+          {tx.kind === "pending"
+            ? "Confirm in wallet…"
+            : wouldGraduate
+              ? "buy & graduate"
+              : `${side} on-chain`}
         </button>
       ) : (
         <button

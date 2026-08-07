@@ -27,7 +27,13 @@ import { useSolUsd } from "@/lib/solana/sol-usd";
 import { useTokenBalance } from "@/lib/solana/use-token-balance";
 import { handleToMint } from "@/lib/solana/registry";
 import { useVenue } from "@/lib/solana/use-venue";
-import { graduateToken, tradeOnVenue, venueQuote, venueSpot } from "@/lib/solana/venue";
+import {
+  graduateToken,
+  graduationOutlook,
+  tradeOnVenue,
+  venueQuote,
+  venueSpot,
+} from "@/lib/solana/venue";
 import { explorerTx } from "@/lib/solana/config";
 import { TxStatus, type TxState } from "@/components/wallet/tx-status";
 
@@ -50,7 +56,13 @@ export function TokenDetailTerminal({ token: tokenProp }: { token: TokenDetail }
   const mintKey = handleToMint(token.handle);
   const tokenMint = mintKey?.toBase58() ?? "";
   // Which venue is live decides both the quote and where the order goes.
-  const { venue, decimals: venueDecimals, feeBps, refresh: refreshVenue } = useVenue(mintKey);
+  const {
+    venue,
+    decimals: venueDecimals,
+    feeBps,
+    graduationLamports,
+    refresh: refreshVenue,
+  } = useVenue(mintKey);
   // How many of THIS token the wallet holds (null when none / unregistered).
   const heldTokens = useTokenBalance(tokenMint);
   // Real wallet SOL when connected; mock as a preview fallback.
@@ -78,6 +90,8 @@ export function TokenDetailTerminal({ token: tokenProp }: { token: TokenDetail }
   const holders = useMemo(() => getHolders(token.handle), [token.handle]);
 
   const up = token.delta24h >= 0;
+  // Mock fallback for catalog tokens that aren't on-chain; the live figure
+  // below comes from the curve's own reserves once a venue resolves.
   const gradPct = Math.min(100, Math.round((token.raisedUsd / token.targetUsd) * 100));
   // Every mechanism now has its own panel, so this one is only ever reached for
   // a bonding curve (or a catalog token that isn't launched yet) — it
@@ -105,6 +119,13 @@ export function TokenDetailTerminal({ token: tokenProp }: { token: TokenDetail }
   // Between completion and migration the token trades nowhere — the curve
   // refuses and the pool doesn't exist yet.
   const stranded = venue?.kind === "stranded";
+  // Whether *this* buy would graduate the token. Checked before the trade
+  // rather than reported after, because crossing the line can't be undone.
+  const outlook =
+    venue && graduationLamports > 0n
+      ? graduationOutlook(venue, side === "buy" ? amt : 0, graduationLamports, feeBps)
+      : null;
+  const wouldGraduate = side === "buy" && !stranded && outlook?.crosses === true;
   // Balance for the active side: SOL when buying, token holdings when selling.
   const sideBalance = side === "buy" ? walletSol : heldTokens ?? 0;
   const balLoading = connected && (side === "buy" ? solBalance == null : heldTokens == null);
@@ -218,19 +239,46 @@ export function TokenDetailTerminal({ token: tokenProp }: { token: TokenDetail }
       <div className="grid flex-1 lg:grid-cols-[1fr_380px]">
         {/* left: chart + info */}
         <div className="border-white/[0.08] p-5 sm:p-7 lg:border-r">
-          {gradPct < 100 && (
+          {/* Graduation status, live from the curve where there is one. The
+              three states are genuinely different and used to collapse into
+              one optimistic banner. */}
+          {venue?.kind === "pool" ? (
+            <div className="mb-4 flex items-center gap-3 rounded-sm border border-white/[0.1] bg-white/[0.03] px-3.5 py-2.5">
+              <span className="text-[14px]">🎓</span>
+              <span className="flex-1 text-[12px]">
+                ${token.symbol} has graduated. It trades on its own AMM pool now
+                — the bonding curve is closed for good.
+              </span>
+            </div>
+          ) : stranded ? (
+            <div className="mb-4 flex items-center gap-3 rounded-sm border border-noise/40 bg-noise/[0.07] px-3.5 py-2.5">
+              <span className="text-[14px]">⏳</span>
+              <span className="flex-1 text-[12px]">
+                ${token.symbol} graduated but hasn&apos;t been migrated yet, so
+                it can&apos;t be traded at all until someone runs it. Anyone
+                can — the panel on the right has the button.
+              </span>
+            </div>
+          ) : (outlook ? outlook.progress < 1 : gradPct < 100) ? (
             <div className="mb-4 flex items-center gap-3 rounded-sm border border-signal/30 bg-signal/[0.07] px-3.5 py-2.5">
               <span className="text-[14px]">🎓</span>
               <span className="flex-1 text-[12px]">
-                Almost there — ${token.symbol} is{" "}
-                <span className="font-bold text-signal">{gradPct}% to graduation</span>. The next buys
-                migrate liquidity to a native AMM.
+                ${token.symbol} is{" "}
+                <span className="font-bold text-signal">
+                  {outlook ? Math.round(outlook.progress * 100) : gradPct}% to graduation
+                </span>
+                .{" "}
+                {outlook
+                  ? `Another ${outlook.remainingSol.toFixed(2)} SOL of buying completes the curve and closes it permanently.`
+                  : "The next buys migrate liquidity to a native AMM."}
               </span>
               <span className="whitespace-nowrap font-mono text-[10px] text-signal">
-                {usd(token.raisedUsd)} / {usd(token.targetUsd)}
+                {outlook
+                  ? `${outlook.reservesSol.toFixed(1)} / ${outlook.thresholdSol.toFixed(0)} SOL`
+                  : `${usd(token.raisedUsd)} / ${usd(token.targetUsd)}`}
               </span>
             </div>
-          )}
+          ) : null}
 
           {/* header */}
           <div className="flex items-center gap-3">
@@ -525,6 +573,45 @@ export function TokenDetailTerminal({ token: tokenProp }: { token: TokenDetail }
               <span className="text-[#F5F4F0]">1.0%</span>
             </div>
 
+            {/* Live progress toward graduation, from the curve's own real
+                reserves — the same number the program tests. */}
+            {outlook && !stranded && (
+              <div className="mt-2.5">
+                <div className="flex justify-between font-mono text-[10px] text-[#6B6B6B]">
+                  <span>To graduation</span>
+                  <span className="text-[#F5F4F0]">
+                    {outlook.reservesSol.toFixed(2)} / {outlook.thresholdSol.toFixed(0)} SOL
+                  </span>
+                </div>
+                <div className="mt-1 h-1 overflow-hidden rounded-full bg-white/[0.06]">
+                  <div
+                    className={cn("h-full rounded-full", wouldGraduate ? "bg-noise" : "bg-signal")}
+                    style={{ width: `${Math.round(outlook.progress * 100)}%` }}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Shown before the trade, not after. Crossing the threshold ends
+                trading on the curve inside the same instruction that crosses
+                it, and nothing can move a curve back under the line. */}
+            {wouldGraduate && (
+              <div className="mt-3">
+                <Notice tone="danger" title="This buy would graduate the token">
+                  It takes the curve past {outlook!.thresholdSol.toFixed(0)} SOL, which
+                  completes it. The bonding curve stops accepting trades
+                  immediately — including sells — and stays closed until someone
+                  runs the migration into the AMM pool. That step is
+                  permissionless, so you could run it yourself straight after.
+                  There is no way back to the curve afterwards. Buying{" "}
+                  {outlook!.remainingSol > 0.001
+                    ? `under ${outlook!.remainingSol.toFixed(3)} SOL`
+                    : "less"}{" "}
+                  keeps it trading as it is.
+                </Notice>
+              </div>
+            )}
+
             <button
               onClick={submit}
               disabled={stranded}
@@ -535,9 +622,13 @@ export function TokenDetailTerminal({ token: tokenProp }: { token: TokenDetail }
             >
               {stranded
                 ? "MIGRATION REQUIRED"
-                : connected
-                  ? `${side.toUpperCase()} $${token.symbol}`
-                  : "CONNECT TO TRADE"}
+                : !connected
+                  ? "CONNECT TO TRADE"
+                  : wouldGraduate
+                    ? // Naming the consequence on the button itself, so it's
+                      // legible to someone who skims past the notice above.
+                      `BUY & GRADUATE $${token.symbol}`
+                    : `${side.toUpperCase()} $${token.symbol}`}
             </button>
             {/* Name the venue that will fill the order, not the one the token
                 launched on — after graduation they're different. */}

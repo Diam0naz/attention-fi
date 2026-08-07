@@ -10,6 +10,8 @@ export interface VenueState {
   venue: Venue | null;
   decimals: number;
   feeBps: number;
+  /** Real SOL a curve must hold to graduate, in lamports. */
+  graduationLamports: bigint;
   /** False until the first read lands, so "no venue" and "not read" differ. */
   loaded: boolean;
   /** Re-read after an action that changes the venue — notably graduation. */
@@ -28,6 +30,7 @@ export function useVenue(mint: PublicKey | null): VenueState {
   const [venue, setVenue] = useState<Venue | null>(null);
   const [decimals, setDecimals] = useState(6);
   const [feeBps, setFeeBps] = useState(100);
+  const [graduationLamports, setGraduationLamports] = useState(0n);
   const [loaded, setLoaded] = useState(false);
   const [nonce, setNonce] = useState(0);
 
@@ -54,6 +57,7 @@ export function useVenue(mint: PublicKey | null): VenueState {
       if (g) {
         setDecimals(g.tokenDecimals);
         setFeeBps(g.feeBps);
+        setGraduationLamports(g.graduationSol);
       }
       setLoaded(true);
     };
@@ -68,5 +72,5 @@ export function useVenue(mint: PublicKey | null): VenueState {
 
   // No mint is a settled answer, not a pending one — there's nothing to read,
   // so callers shouldn't sit on a spinner waiting for a fetch that never runs.
-  return { venue, decimals, feeBps, loaded: mint ? loaded : true, refresh };
+  return { venue, decimals, feeBps, graduationLamports, loaded: mint ? loaded : true, refresh };
 }
