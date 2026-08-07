@@ -7,7 +7,7 @@ use crate::auction::{current_price, is_perpetual};
 use crate::constants::{GLOBAL_SEED, NFTAUCTION_SEED};
 use crate::error::AttentionError;
 use crate::events::{NftAuctionEvent, NFT_SOLD};
-use crate::nft::last_sale_attributes;
+use crate::nft::{has_attributes_plugin, last_sale_attributes};
 use crate::state::{Global, NftAuction};
 
 #[derive(Accounts)]
@@ -107,18 +107,33 @@ pub fn buy_nft_handler(ctx: Context<BuyNft>, max_price: u64) -> Result<()> {
     // while the asset is still escrowed. Doing it afterwards would depend on a
     // delegation surviving a change of owner.
     //
-    // The plugin is guaranteed to exist by the time anything can be bought:
-    // start_nft_auction mints with it, and list_nft_auction adds it while the
-    // seller is signing. This is what makes the price readable by a wallet or
-    // a marketplace that has never heard of AttentionFi, rather than living
-    // only in an event that needs an indexer to find.
-    UpdatePluginV1CpiBuilder::new(&ctx.accounts.mpl_core_program.to_account_info())
-        .asset(&ctx.accounts.asset.to_account_info())
-        .payer(&ctx.accounts.buyer.to_account_info())
-        .authority(Some(&ctx.accounts.auction.to_account_info()))
-        .system_program(&ctx.accounts.system_program.to_account_info())
-        .plugin(Plugin::Attributes(last_sale_attributes(price, now)))
-        .invoke_signed(signer_seeds)?;
+    // Skipped when the asset has no Attributes plugin, rather than assumed.
+    //
+    // `start_nft_auction` mints with the plugin and `list_nft_auction` adds it,
+    // so every listing made under the current program has one — but listings
+    // made before that shipped do not, and this used to update unconditionally.
+    // mpl-core answers PluginNotFound, the whole instruction unwinds, and a
+    // perfectly valid sale becomes impossible: the buyer's wallet just declines,
+    // forever, for a reason nothing on screen could explain.
+    //
+    // The plugin also can't be added here to compensate. Attributes is
+    // authority-managed and the asset's update authority is the seller, who
+    // isn't a signer in this instruction — only the lister can grant it, which
+    // is exactly why `list_nft_auction` does.
+    //
+    // So the annotation degrades instead of blocking. It is a convenience for
+    // wallets and marketplaces that have never heard of AttentionFi; the
+    // authoritative price is in NftAuctionEvent either way. A missing nicety
+    // must never cost someone a sale.
+    if has_attributes_plugin(&ctx.accounts.asset.try_borrow_data()?) {
+        UpdatePluginV1CpiBuilder::new(&ctx.accounts.mpl_core_program.to_account_info())
+            .asset(&ctx.accounts.asset.to_account_info())
+            .payer(&ctx.accounts.buyer.to_account_info())
+            .authority(Some(&ctx.accounts.auction.to_account_info()))
+            .system_program(&ctx.accounts.system_program.to_account_info())
+            .plugin(Plugin::Attributes(last_sale_attributes(price, now)))
+            .invoke_signed(signer_seeds)?;
+    }
 
     // Transfer the escrowed NFT to the buyer; auction PDA (owner) signs.
     TransferV1CpiBuilder::new(&ctx.accounts.mpl_core_program.to_account_info())
