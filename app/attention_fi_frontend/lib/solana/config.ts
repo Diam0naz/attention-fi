@@ -23,6 +23,20 @@ export const RPC_ENDPOINT =
  */
 export const INDEXER_RPC_ENDPOINT = process.env.INDEXER_RPC_ENDPOINT || RPC_ENDPOINT;
 
+/**
+ * Endpoint the /api/rpc proxy forwards to. Server-only, same reasoning.
+ * Reuses the indexer's endpoint, which is already the keyed one.
+ */
+export const SERVER_RPC_ENDPOINT = INDEXER_RPC_ENDPOINT;
+
+/**
+ * Route browser reads through /api/rpc instead of straight to RPC_ENDPOINT.
+ *
+ * Opt-in so a deployment without a keyed upstream keeps working unchanged —
+ * proxying to the same public endpoint would add a hop and fix nothing.
+ */
+export const USE_RPC_PROXY = process.env.NEXT_PUBLIC_USE_RPC_PROXY === "1";
+
 /** Program ID — defaults to the address baked into the IDL. */
 export const PROGRAM_ID = new PublicKey(process.env.NEXT_PUBLIC_PROGRAM_ID ?? idl.address);
 

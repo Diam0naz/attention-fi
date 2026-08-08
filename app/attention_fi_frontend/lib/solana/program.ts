@@ -2,7 +2,7 @@ import { AnchorProvider, Program } from "@anchor-lang/core";
 import { Connection, PublicKey, type Transaction, type VersionedTransaction } from "@solana/web3.js";
 import idlJson from "@/lib/idl/attention_fi.json";
 import type { AttentionFi } from "@/lib/idl/attention_fi";
-import { INDEXER_RPC_ENDPOINT, PROGRAM_ID, RPC_ENDPOINT } from "./config";
+import { INDEXER_RPC_ENDPOINT, PROGRAM_ID, RPC_ENDPOINT, USE_RPC_PROXY } from "./config";
 
 /** The slice of a wallet Anchor needs to sign. */
 export interface AnchorWalletLike {
@@ -16,11 +16,25 @@ let cached: Connection | null = null;
 export function getConnection(): Connection {
   // Fail fast on 429s instead of web3.js's internal retry loop spamming the
   // console — callers poll anyway, so the next wave picks up the data.
-  cached ??= new Connection(RPC_ENDPOINT, {
+  cached ??= new Connection(browserEndpoint(), {
     commitment: "confirmed",
     disableRetryOnRateLimit: true,
   });
   return cached;
+}
+
+/**
+ * Where browser reads go.
+ *
+ * The proxy path has to be absolute because web3.js parses it as a URL, and it
+ * only exists in the browser — on the server there is no origin to resolve it
+ * against, and server code should use the upstream endpoint directly anyway.
+ */
+function browserEndpoint(): string {
+  if (USE_RPC_PROXY && typeof window !== "undefined") {
+    return `${window.location.origin}/api/rpc`;
+  }
+  return RPC_ENDPOINT;
 }
 
 let indexerCached: Connection | null = null;
