@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { crawlIfStale } from "@/lib/indexer";
 import { getActivity, indexerDbConfigured, type ActivityRow } from "@/lib/indexer-db";
 import { allTokens, tokenByHandle, tokenDbConfigured } from "@/lib/token-db";
+import { staticRegistry } from "@/lib/solana/static-registry";
 
 export const dynamic = "force-dynamic";
 
@@ -70,6 +71,24 @@ export async function GET(req: NextRequest) {
       const t = await tokenByHandle(normHandle(handleParam)).catch(() => null);
       if (t) mint = t.mint;
     }
+  }
+
+  // Configured tokens as well as launched ones. The registry holds tokens
+  // created through the app; the static seeds hold tokens set up outside it,
+  // and a feed that only knows the former labels the latter with a truncated
+  // mint — while ?handle= for it silently matches nothing and returns an empty
+  // feed for a token that has traded plenty. Added second so a real launch
+  // record always wins; the seeds carry a handle and nothing else.
+  for (const [handle, address] of Object.entries(staticRegistry())) {
+    if (!meta.has(address)) {
+      meta.set(address, { handle, symbol: null, name: null });
+    }
+  }
+  if (handleParam && !mint) {
+    const seeded = Object.entries(staticRegistry()).find(
+      ([h]) => h === normHandle(handleParam),
+    );
+    if (seeded) mint = seeded[1];
   }
 
   await crawlIfStale();
