@@ -100,8 +100,19 @@ interface Ctx {
   blockTime: number | null;
 }
 
-/** Map one decoded event to a flat row, or null for events we don't index. */
-function normalize(name: string, data: Record<string, unknown>, ctx: Ctx): ChainEventInsert | null {
+/**
+ * Map one decoded event to a flat row, or null for events we don't index.
+ *
+ * `name` is normalised to PascalCase first. Anchor's IDL declares events as
+ * `AmmSwapEvent` but its EventParser hands back `ammSwapEvent`, and matching
+ * the declared spelling meant every event fell through to `default` and was
+ * dropped. Nothing about that was visible from outside: the crawl reported
+ * reading transactions and finding no events, which reads exactly like a
+ * program nobody has used. Accepting either spelling costs one line and
+ * survives the coder changing its mind again.
+ */
+function normalize(rawName: string, data: Record<string, unknown>, ctx: Ctx): ChainEventInsert | null {
+  const name = rawName.charAt(0).toUpperCase() + rawName.slice(1);
   const base = {
     signature: ctx.signature,
     seq: ctx.seq,
