@@ -320,6 +320,18 @@ export async function fetchGlobal(program: Program<AttentionFi>) {
 }
 
 /**
+ * What an NFT purchase actually debits: the price, plus the market fee charged
+ * on top of it.
+ *
+ * The program's `max_total` bounds this sum rather than the price alone —
+ * bounding the price left the fee outside the only guard a buyer sets, so the
+ * figure they authorised was not the figure they could be charged.
+ */
+export function nftTotalCost(price: bigint, nftFeeBps: number): bigint {
+  return price + (price * BigInt(nftFeeBps)) / 10_000n;
+}
+
+/**
  * The NFT market's fee schedule.
  *
  * Null when the account doesn't exist, which is a real state rather than an

@@ -4,6 +4,7 @@ use mpl_core::types::{Attribute, Attributes, DataState, Plugin, PluginAuthorityP
 
 use crate::constants::{CURVE_SEED, GENESIS_SEED, GENPOOL_SEED, GLOBAL_SEED};
 use crate::error::AttentionError;
+use crate::genesis::validate_added_share;
 use crate::revenue::accrued;
 use crate::state::{BondingCurve, GenesisNft, GenesisPool, Global};
 
@@ -60,10 +61,12 @@ pub struct MintGenesis<'info> {
 }
 
 pub fn mint_genesis_handler(ctx: Context<MintGenesis>, share_bps: u16, uri: String) -> Result<()> {
-    require!(
-        share_bps > 0 && share_bps <= 10_000,
-        AttentionError::InvalidAuctionParams
-    );
+    // Bounded against what the token's stream already owes, not just against
+    // 100% on its own. Per-NFT validation alone let a creator sell a run at a
+    // stated percentage and then mint themselves enough shares to reduce the
+    // buyers' cut to rounding error — taking their money and then taking back
+    // what they bought.
+    validate_added_share(ctx.accounts.pool.total_share_bps, share_bps)?;
 
     let subject_mint = ctx.accounts.subject_mint.key();
     // Transferable (no freeze plugin) so the fee-share right can trade on secondary.

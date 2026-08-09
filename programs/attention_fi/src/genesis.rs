@@ -75,6 +75,27 @@ pub fn validate_group(
     Ok(())
 }
 
+/// Check one more NFT's share against what a token's fee stream already owes.
+///
+/// The group path has always been capped at listing time, but the one-off
+/// `mint_genesis` path was not: it bounded each NFT to 10,000 bps individually
+/// and then added to `GenesisPool::total_share_bps` unconditionally. Since that
+/// total is the denominator every payout is divided by, a creator could sell a
+/// run at a stated percentage and afterwards mint themselves NFTs until the
+/// buyers' share rounded to nothing — taking their money and then removing what
+/// they bought. The cap has to live on both paths or it protects neither.
+pub fn validate_added_share(committed_share_bps: u64, share_bps: u16) -> Result<()> {
+    require!(share_bps > 0, AttentionError::InvalidGenesisGroup);
+    let committed = committed_share_bps
+        .checked_add(u64::from(share_bps))
+        .ok_or(AttentionError::MathOverflow)?;
+    require!(
+        committed <= BPS_DENOMINATOR,
+        AttentionError::ShareOversubscribed
+    );
+    Ok(())
+}
+
 /// New `minted_units` after adding `batch` units, or an error if the group is
 /// full. Also rejects an empty or oversized batch, so a call that would mint
 /// nothing fails loudly instead of costing a fee for no effect.
@@ -206,6 +227,30 @@ mod tests {
         assert_eq!(record_sale(0, 3).unwrap(), 1);
         assert_eq!(record_sale(2, 3).unwrap(), 3);
         assert!(record_sale(3, 3).is_err());
+    }
+
+    #[test]
+    fn a_single_mint_cannot_push_the_stream_past_itself() {
+        // The rug this closes: a run of 10 x 100bps has sold, committing 1000.
+        // The creator may still issue 90% more, but not a basis point beyond.
+        assert!(validate_added_share(1_000, 9_000).is_ok());
+        assert!(validate_added_share(1_000, 9_001).is_err());
+        // And once the stream is fully committed, nothing more can be added.
+        assert!(validate_added_share(10_000, 1).is_err());
+        assert!(validate_added_share(0, 10_000).is_ok());
+    }
+
+    #[test]
+    fn an_already_oversubscribed_pool_cannot_be_pushed_further() {
+        // Pools minted before the cap existed can already exceed 100%. They
+        // must not be made worse, and the check must not overflow reasoning
+        // about them.
+        assert!(validate_added_share(25_000, 1).is_err());
+        assert!(validate_added_share(u64::MAX, 1).is_err());
+        assert!(
+            validate_added_share(0, 0).is_err(),
+            "a zero share earns nothing"
+        );
     }
 
     #[test]

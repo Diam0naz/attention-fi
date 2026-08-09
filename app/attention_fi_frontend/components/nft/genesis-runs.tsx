@@ -9,7 +9,7 @@ import { Notice } from "@/components/ui/notice";
 import { TxStatus, type TxState } from "@/components/wallet/tx-status";
 import { useProgram, useReadonlyProgram } from "@/lib/solana/use-program";
 import { explorerTx } from "@/lib/solana/config";
-import { fetchGlobal } from "@/lib/solana/curve";
+import { fetchFeeConfig, fetchGlobal, nftTotalCost } from "@/lib/solana/curve";
 import { handleToMint, launchedHandles, mintToToken } from "@/lib/solana/registry";
 import {
   fetchAllocation,
@@ -60,6 +60,9 @@ export function GenesisRuns({ address }: { address: string }) {
   // it's a field on Global, not a seed — so a buy that doesn't carry it is
   // rejected before it reaches a wallet.
   const [treasury, setTreasury] = useState<string | null>(null);
+  // A unit's price is fixed, but the market fee is charged on top and the
+  // program's ceiling now covers both — so the client has to know the rate.
+  const [nftFeeBps, setNftFeeBps] = useState<number | null>(null);
   const [tx, setTx] = useState<TxInfo | null>(null);
   const [nonce, setNonce] = useState(0);
   const refresh = useCallback(() => setNonce((n) => n + 1), []);
@@ -67,13 +70,15 @@ export function GenesisRuns({ address }: { address: string }) {
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-      const [list, global] = await Promise.all([
+      const [list, global, fees] = await Promise.all([
         fetchGenesisGroups(readProgram).catch(() => []),
         fetchGlobal(readProgram).catch(() => null),
+        fetchFeeConfig(readProgram).catch(() => null),
       ]);
       if (cancelled) return;
       setGroups(list);
       setTreasury(global?.treasury ?? null);
+      setNftFeeBps(fees?.nftFeeBps ?? null);
     })();
     return () => {
       cancelled = true;
@@ -115,6 +120,7 @@ export function GenesisRuns({ address }: { address: string }) {
               group={g}
               address={address}
               treasury={treasury}
+              nftFeeBps={nftFeeBps}
               owned
               onTx={setTx}
               onDone={refresh}
@@ -142,6 +148,7 @@ export function GenesisRuns({ address }: { address: string }) {
               group={g}
               address={address}
               treasury={treasury}
+              nftFeeBps={nftFeeBps}
               onTx={setTx}
               onDone={refresh}
             />
@@ -362,6 +369,7 @@ function RunCard({
   group,
   address,
   treasury,
+  nftFeeBps,
   owned,
   onTx,
   onDone,
@@ -369,6 +377,7 @@ function RunCard({
   group: GenesisGroupData;
   address: string;
   treasury: string | null;
+  nftFeeBps: number | null;
   owned?: boolean;
   onTx: (t: TxInfo) => void;
   onDone: () => void;
@@ -407,18 +416,18 @@ function RunCard({
 
   async function buy() {
     if (!signProgram || !units?.[0]) return;
-    if (!treasury) {
+    if (!treasury || nftFeeBps === null) {
       return onTx({
         state: "failed",
-        title: "Couldn't read the protocol treasury",
-        detail: "The fee has nowhere to go — try again in a moment.",
+        title: "Couldn't read the protocol fee settings",
+        detail: "Try again in a moment.",
       });
     }
     const asset = new PublicKey(units[0].asset);
     setBusy("buy");
     try {
       const sig = await signProgram.methods
-        .buyGenesisUnit(new BN(group.price.toString()))
+        .buyGenesisUnit(new BN(nftTotalCost(group.price, nftFeeBps).toString()))
         .accountsPartial({
           buyer: new PublicKey(address),
           treasury: new PublicKey(treasury),
@@ -613,7 +622,9 @@ function RunCard({
             <Action
               busy={busy === "buy"}
               onClick={() => void buy()}
-              disabled={remaining === 0 || allowance === 0 || units === null || !treasury}
+              disabled={
+                remaining === 0 || allowance === 0 || units === null || !treasury || nftFeeBps === null
+              }
             >
               BUY A UNIT · {sol(group.price)} SOL
             </Action>

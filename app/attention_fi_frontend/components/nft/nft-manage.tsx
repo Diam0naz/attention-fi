@@ -16,7 +16,7 @@ import { TiltCard } from "@/components/reactbits/tilt-card";
 import { NftLanyard } from "@/components/nft/nft-lanyard";
 import { useScrollLock } from "@/lib/use-scroll-lock";
 import { useProgram, useReadonlyProgram } from "@/lib/solana/use-program";
-import { fetchGlobal } from "@/lib/solana/curve";
+import { fetchFeeConfig, fetchGlobal, nftTotalCost } from "@/lib/solana/curve";
 import { DISCOUNT_PER_LEVEL_BPS, explorerTx, PROGRAM_ID } from "@/lib/solana/config";
 import { SkinPicker } from "@/components/nft/skin-picker";
 import { AssetSkinPicker } from "@/components/nft/asset-skin-picker";
@@ -122,6 +122,9 @@ export function NftManage({ section }: { section: Section }) {
   const [auctions, setAuctions] = useState<NftAuctionData[]>([]);
   const [auctionsStatus, setAuctionsStatus] = useState<"loading" | "ready" | "error">("loading");
   const [treasury, setTreasury] = useState<string | null>(null);
+  // The market fee is charged on top of a listing's price, so a bid ceiling
+  // that ignores it is a ceiling on the wrong number.
+  const [nftFeeBps, setNftFeeBps] = useState<number | null>(null);
   // Buying used to fire straight from the card. On a descending auction that
   // spends real SOL with no chance to read the price first, so confirm.
   const [confirmBuy, setConfirmBuy] = useState<NftAuctionData | null>(null);
@@ -374,20 +377,29 @@ export function NftManage({ section }: { section: Section }) {
     return new PublicKey(global.treasury);
   }
 
+  /** The market fee rate, fetched on demand for the same reason as above. */
+  async function resolveNftFeeBps(): Promise<number | null> {
+    if (nftFeeBps !== null) return nftFeeBps;
+    const fees = await fetchFeeConfig(readProgram).catch(() => null);
+    if (!fees) return null;
+    setNftFeeBps(fees.nftFeeBps);
+    return fees.nftFeeBps;
+  }
+
   async function buyNow(a: NftAuctionData) {
     if (!signProgram || !address) return setWalletOpen(true);
     const price = currentAuctionPrice(a, now);
-    // Price only falls before the auction ends, so a small cushion above the
-    // client-observed price absorbs clock drift without ever overpaying.
-    const maxPrice = (price * 102n) / 100n;
     setTx({ state: "pending", title: "Buying asset…", detail: short(a.asset) });
     try {
       // Fetched rather than read straight from state: a button that silently
       // does nothing because a loader hasn't run yet reads as a broken app.
       const treasuryKey = await resolveTreasury();
       if (!treasuryKey) throw new Error("Couldn't read the protocol treasury.");
+      const feeBps = await resolveNftFeeBps();
+      if (feeBps === null) throw new Error("Couldn't read the NFT market fee.");
+      const maxTotal = (nftTotalCost(price, feeBps) * 102n) / 100n;
       const sig = await signProgram.methods
-        .buyNft(new BN(maxPrice.toString()))
+        .buyNft(new BN(maxTotal.toString()))
         .accountsPartial({
           buyer: new PublicKey(address),
           treasury: treasuryKey,
@@ -538,10 +550,14 @@ export function NftManage({ section }: { section: Section }) {
     try {
       const treasuryKey = await resolveTreasury();
       if (!treasuryKey) throw new Error("Couldn't read the protocol treasury.");
+      const feeBps = await resolveNftFeeBps();
+      if (feeBps === null) throw new Error("Couldn't read the NFT market fee.");
       const price = collectionPrice(c, Date.now());
-      const maxPrice = (price * 102n) / 100n;
+      // A cushion over price *and* fee: the listing price only falls, so this
+      // absorbs clock drift without ever authorising more than intended.
+      const maxTotal = (nftTotalCost(price, feeBps) * 102n) / 100n;
       const sig = await signProgram.methods
-        .buyCollection(new BN(maxPrice.toString()))
+        .buyCollection(new BN(maxTotal.toString()))
         .accountsPartial({
           buyer: new PublicKey(address),
           treasury: treasuryKey,
@@ -756,7 +772,10 @@ export function NftManage({ section }: { section: Section }) {
         .claimGenesisFee()
         .accountsPartial({
           holder: new PublicKey(address),
-          owner: new PublicKey(address),
+          // The claim is authorised against whoever owns the asset right now,
+          // read from the Core account rather than a field cached at mint —
+          // so the fee right actually follows the NFT when it changes hands.
+          asset: new PublicKey(g.asset),
           genesis: genesisPda,
         })
         .rpc();

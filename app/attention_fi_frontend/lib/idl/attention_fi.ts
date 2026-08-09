@@ -715,15 +715,20 @@ export type AttentionFi = {
         {
           "name": "genesisPool",
           "docs": [
-            "Optional genesis fee pool for this token. Supplied only when the token",
-            "has genesis NFTs; absent means the creator keeps their whole cut.",
+            "The token's genesis fee pool.",
             "",
-            "Optional rather than required because most tokens never mint genesis",
-            "NFTs, and making every trade carry an account that usually does not",
-            "exist would be a tax on the common case."
+            "Required, and unchecked because it may legitimately not exist: most",
+            "tokens never issue genesis NFTs. Whether it exists is read from the",
+            "chain below rather than inferred from whether the caller bothered to",
+            "pass it. As an `Option` this was a hole — omitting it made",
+            "`total_share_bps` read as zero, so the whole creator fee accrued to the",
+            "creator and the holders who had paid for a share of that stream were",
+            "simply skipped. It cost the trader nothing to omit, and the creator was",
+            "the one who gained.",
+            "",
+            "account; the handler validates the contents before trusting them."
           ],
           "writable": true,
-          "optional": true,
           "pda": {
             "seeds": [
               {
@@ -885,7 +890,7 @@ export type AttentionFi = {
       ],
       "args": [
         {
-          "name": "maxPrice",
+          "name": "maxTotal",
           "type": "u64"
         }
       ]
@@ -1408,7 +1413,7 @@ export type AttentionFi = {
       ],
       "args": [
         {
-          "name": "maxPrice",
+          "name": "maxTotal",
           "type": "u64"
         }
       ]
@@ -1529,7 +1534,7 @@ export type AttentionFi = {
       ],
       "args": [
         {
-          "name": "maxPrice",
+          "name": "maxTotal",
           "type": "u64"
         }
       ]
@@ -1806,7 +1811,10 @@ export type AttentionFi = {
           }
         },
         {
-          "name": "owner",
+          "name": "asset",
+          "docs": [
+            "`has_one = asset`, and read below to find who owns it now."
+          ],
           "relations": [
             "genesis"
           ]
@@ -4670,6 +4678,10 @@ export type AttentionFi = {
         {
           "name": "days",
           "type": "u16"
+        },
+        {
+          "name": "maxLamports",
+          "type": "u64"
         }
       ]
     },
@@ -5224,15 +5236,20 @@ export type AttentionFi = {
         {
           "name": "genesisPool",
           "docs": [
-            "Optional genesis fee pool for this token. Supplied only when the token",
-            "has genesis NFTs; absent means the creator keeps their whole cut.",
+            "The token's genesis fee pool.",
             "",
-            "Optional rather than required because most tokens never mint genesis",
-            "NFTs, and making every trade carry an account that usually does not",
-            "exist would be a tax on the common case."
+            "Required, and unchecked because it may legitimately not exist: most",
+            "tokens never issue genesis NFTs. Whether it exists is read from the",
+            "chain below rather than inferred from whether the caller bothered to",
+            "pass it. As an `Option` this was a hole — omitting it made",
+            "`total_share_bps` read as zero, so the whole creator fee accrued to the",
+            "creator and the holders who had paid for a share of that stream were",
+            "simply skipped. It cost the trader nothing to omit, and the creator was",
+            "the one who gained.",
+            "",
+            "account; the handler validates the contents before trusting them."
           ],
           "writable": true,
-          "optional": true,
           "pda": {
             "seeds": [
               {
@@ -6492,15 +6509,16 @@ export type AttentionFi = {
         {
           "name": "genesisPool",
           "docs": [
-            "Optional genesis fee pool for this token. Supplied only when the token",
-            "has genesis NFTs; absent means the creator keeps their whole cut.",
+            "The token's genesis fee pool.",
             "",
-            "Optional rather than required because most tokens never mint genesis",
-            "NFTs, and making every trade carry an account that usually does not",
-            "exist would be a tax on the common case."
+            "Required, and unchecked because it may legitimately not exist. As an",
+            "`Option` this was a hole on every trading path: omitting it made",
+            "`total_share_bps` read as zero, so the entire creator fee accrued to the",
+            "creator and the holders who had paid for a slice of it were skipped —",
+            "at no cost to the trader who omitted it.",
+            ""
           ],
           "writable": true,
-          "optional": true,
           "pda": {
             "seeds": [
               {
@@ -7509,6 +7527,26 @@ export type AttentionFi = {
       "code": 6034,
       "name": "genesisUnitsInEscrow",
       "msg": "Reclaim the group's unsold units before closing it"
+    },
+    {
+      "code": 6035,
+      "name": "shareOversubscribed",
+      "msg": "That would commit more than 100% of the token's fee stream"
+    },
+    {
+      "code": 6036,
+      "name": "genesisPoolRequired",
+      "msg": "This token has genesis holders — its fee pool must be supplied"
+    },
+    {
+      "code": 6037,
+      "name": "costAboveMax",
+      "msg": "Total cost exceeds the maximum the caller authorised"
+    },
+    {
+      "code": 6038,
+      "name": "invalidAsset",
+      "msg": "That account is not a Metaplex Core asset"
     }
   ],
   "types": [

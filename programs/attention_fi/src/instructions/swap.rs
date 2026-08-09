@@ -9,8 +9,8 @@ use crate::curve::{mul_div, split_creator_fee};
 use crate::error::AttentionError;
 use crate::events::AmmSwapEvent;
 use crate::nft::{discounted_fee_bps, perk_discount_bps};
-use crate::revenue::{acc_increment, split_genesis_fee};
-use crate::state::{AmmPool, BondingCurve, GenesisPool, Global, PerkNft};
+use crate::revenue::{credit_genesis_pool, genesis_share_bps, split_genesis_fee};
+use crate::state::{AmmPool, BondingCurve, Global, PerkNft};
 
 #[derive(Accounts)]
 pub struct Swap<'info> {
@@ -68,18 +68,17 @@ pub struct Swap<'info> {
     )]
     pub perk: Option<Box<Account<'info, PerkNft>>>,
 
-    /// Optional genesis fee pool for this token. Supplied only when the token
-    /// has genesis NFTs; absent means the creator keeps their whole cut.
+    /// The token's genesis fee pool.
     ///
-    /// Optional rather than required because most tokens never mint genesis
-    /// NFTs, and making every trade carry an account that usually does not
-    /// exist would be a tax on the common case.
-    #[account(
-        mut,
-        seeds = [GENPOOL_SEED, mint.key().as_ref()],
-        bump = genesis_pool.bump,
-    )]
-    pub genesis_pool: Option<Box<Account<'info, GenesisPool>>>,
+    /// Required, and unchecked because it may legitimately not exist. As an
+    /// `Option` this was a hole on every trading path: omitting it made
+    /// `total_share_bps` read as zero, so the entire creator fee accrued to the
+    /// creator and the holders who had paid for a slice of it were skipped —
+    /// at no cost to the trader who omitted it.
+    ///
+    /// CHECK: the seeds pin the address; the handler validates the contents.
+    #[account(mut, seeds = [GENPOOL_SEED, mint.key().as_ref()], bump)]
+    pub genesis_pool: UncheckedAccount<'info>,
 
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,
@@ -111,13 +110,17 @@ pub struct Swap<'info> {
 /// tokens — and a fee paid in tokens would need a token account for the
 /// treasury and the curve on every mint in existence. Pricing gross and
 /// skimming the proceeds gives the same economics in one currency.
-pub fn swap_handler(
-    ctx: Context<Swap>,
+pub fn swap_handler<'info>(
+    ctx: Context<'_, '_, '_, 'info, Swap<'info>>,
     amount_in: u64,
     min_amount_out: u64,
     is_buy: bool,
 ) -> Result<()> {
     require!(amount_in > 0, AttentionError::ZeroAmount);
+
+    // Existence is a fact about the chain, not about the transaction.
+    let pool_info = ctx.accounts.genesis_pool.to_account_info();
+    let total_share_bps = genesis_share_bps(&pool_info)?;
 
     // A perk discount now genuinely reduces what the creator and the treasury
     // collect, exactly as it does on the curve. While the fee stayed in the
@@ -162,12 +165,6 @@ pub fn swap_handler(
             split_creator_fee(fee, ctx.accounts.global.creator_fee_share_bps)?;
         // The genesis holders' slice comes out of the creator's half, so the
         // treasury's share and the trader's cost are untouched by it.
-        let total_share_bps = ctx
-            .accounts
-            .genesis_pool
-            .as_ref()
-            .map(|pool| pool.total_share_bps)
-            .unwrap_or(0);
         let (genesis_cut, creator_cut) = split_genesis_fee(creator_cut, total_share_bps)?;
 
         // Trader -> pool (only what actually becomes liquidity).
@@ -210,28 +207,17 @@ pub fn swap_handler(
             )?;
         }
         if genesis_cut > 0 {
-            if let Some(pool) = &ctx.accounts.genesis_pool {
-                let increment = acc_increment(genesis_cut, pool.total_share_bps)?;
-                system_program::transfer(
-                    CpiContext::new(
-                        ctx.accounts.system_program.to_account_info(),
-                        system_program::Transfer {
-                            from: ctx.accounts.trader.to_account_info(),
-                            to: pool.to_account_info(),
-                        },
-                    ),
-                    genesis_cut,
-                )?;
-                let pool = ctx.accounts.genesis_pool.as_mut().unwrap();
-                pool.acc_per_share = pool
-                    .acc_per_share
-                    .checked_add(increment)
-                    .ok_or(AttentionError::MathOverflow)?;
-                pool.reserves = pool
-                    .reserves
-                    .checked_add(genesis_cut)
-                    .ok_or(AttentionError::MathOverflow)?;
-            }
+            system_program::transfer(
+                CpiContext::new(
+                    ctx.accounts.system_program.to_account_info(),
+                    system_program::Transfer {
+                        from: ctx.accounts.trader.to_account_info(),
+                        to: pool_info.clone(),
+                    },
+                ),
+                genesis_cut,
+            )?;
+            credit_genesis_pool(&pool_info, genesis_cut)?;
         }
         ctx.accounts.curve.creator_fees = ctx
             .accounts
@@ -295,12 +281,6 @@ pub fn swap_handler(
             split_creator_fee(fee, ctx.accounts.global.creator_fee_share_bps)?;
         // The genesis holders' slice comes out of the creator's half, so the
         // treasury's share and the trader's cost are untouched by it.
-        let total_share_bps = ctx
-            .accounts
-            .genesis_pool
-            .as_ref()
-            .map(|pool| pool.total_share_bps)
-            .unwrap_or(0);
         let (genesis_cut, creator_cut) = split_genesis_fee(creator_cut, total_share_bps)?;
 
         // Trader -> pool vault (tokens in).
@@ -341,19 +321,8 @@ pub fn swap_handler(
             .to_account_info()
             .try_borrow_mut_lamports()? += treasury_cut;
         if genesis_cut > 0 {
-            if let Some(pool) = &ctx.accounts.genesis_pool {
-                let increment = acc_increment(genesis_cut, pool.total_share_bps)?;
-                **pool.to_account_info().try_borrow_mut_lamports()? += genesis_cut;
-                let pool = ctx.accounts.genesis_pool.as_mut().unwrap();
-                pool.acc_per_share = pool
-                    .acc_per_share
-                    .checked_add(increment)
-                    .ok_or(AttentionError::MathOverflow)?;
-                pool.reserves = pool
-                    .reserves
-                    .checked_add(genesis_cut)
-                    .ok_or(AttentionError::MathOverflow)?;
-            }
+            **pool_info.try_borrow_mut_lamports()? += genesis_cut;
+            credit_genesis_pool(&pool_info, genesis_cut)?;
         }
 
         ctx.accounts.curve.creator_fees = ctx

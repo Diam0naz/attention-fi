@@ -75,4 +75,12 @@ pub enum AttentionError {
     NoUnitsToReclaim,
     #[msg("Reclaim the group's unsold units before closing it")]
     GenesisUnitsInEscrow,
+    #[msg("That would commit more than 100% of the token's fee stream")]
+    ShareOversubscribed,
+    #[msg("This token has genesis holders — its fee pool must be supplied")]
+    GenesisPoolRequired,
+    #[msg("Total cost exceeds the maximum the caller authorised")]
+    CostAboveMax,
+    #[msg("That account is not a Metaplex Core asset")]
+    InvalidAsset,
 }

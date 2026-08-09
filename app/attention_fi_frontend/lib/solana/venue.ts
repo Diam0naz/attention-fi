@@ -30,37 +30,6 @@ export type Venue =
   | { kind: "pool"; curve: CurveState | null; pool: PoolState };
 
 /**
- * Whether a token's genesis fee pool exists.
- *
- * The trading instructions take it as an optional account: present, a slice of
- * each creator fee is routed to genesis NFT holders; absent, the creator keeps
- * their whole cut. It must not be supplied speculatively — passing an address
- * for an account that was never created fails the entire trade, and most tokens
- * never mint a genesis NFT.
- *
- * Cached per mint because it is a one-way fact. A pool is created with the
- * token's first genesis NFT and never removed, so a positive answer can never
- * become negative and is worth remembering; a negative one is re-checked, since
- * that is the answer that can change.
- */
-const genesisPoolSeen = new Set<string>();
-
-async function findGenesisPool(
-  program: Program<AttentionFi>,
-  mint: PublicKey,
-): Promise<PublicKey | null> {
-  const pda = genesisPoolPda(mint);
-  if (genesisPoolSeen.has(pda.toBase58())) return pda;
-  try {
-    await program.account.genesisPool.fetch(pda);
-    genesisPoolSeen.add(pda.toBase58());
-    return pda;
-  } catch {
-    return null;
-  }
-}
-
-/**
  * Which venue prices and executes trades for this mint.
  *
  * Pool existence decides, not `curve.complete`: `complete` is set the instant
@@ -217,11 +186,14 @@ export async function tradeOnVenue(
   decimals: number,
   slippageBps = 100,
 ): Promise<string> {
-  const [global, venue, genesisPool] = await Promise.all([
+  const [global, venue] = await Promise.all([
     program.account.global.fetch(globalPda()),
     resolveVenue(program, mint),
-    findGenesisPool(program, mint),
   ]);
+  // Always passed, never probed. The program reads whether the pool exists from
+  // the account itself, because an omittable pool let any trade route the
+  // genesis holders' slice back to the creator for free.
+  const genesisPool = genesisPoolPda(mint);
   if (!venue) throw new Error("This token isn't live on-chain yet.");
   if (venue.kind === "stranded") {
     throw new Error(
@@ -299,7 +271,7 @@ function swapOnPoolTx(
   minAmountOut: bigint,
   isBuy: boolean,
   treasury: PublicKey,
-  genesisPool: PublicKey | null,
+  genesisPool: PublicKey,
 ): Promise<string> {
   const pool = poolPda(mint);
   return program.methods

@@ -78,7 +78,11 @@ pub struct PromoteListing<'info> {
     pub system_program: Program<'info, System>,
 }
 
-pub fn promote_listing_handler(ctx: Context<PromoteListing>, days: u16) -> Result<()> {
+pub fn promote_listing_handler(
+    ctx: Context<PromoteListing>,
+    days: u16,
+    max_lamports: u64,
+) -> Result<()> {
     require!(days > 0, AttentionError::InvalidAuctionParams);
     require!(days <= MAX_PROMO_DAYS, AttentionError::InvalidAuctionParams);
 
@@ -108,6 +112,10 @@ pub fn promote_listing_handler(ctx: Context<PromoteListing>, days: u16) -> Resul
     let lamports = u64::from(days)
         .checked_mul(ctx.accounts.fee_config.promo_lamports_per_day)
         .ok_or(AttentionError::MathOverflow)?;
+    // The price is read at execution, not at signing, so the payer states what
+    // they agreed to. Without this the only thing standing between a pending
+    // promotion and an arbitrary debit was the authority's good behaviour.
+    require!(lamports <= max_lamports, AttentionError::CostAboveMax);
 
     system_program::transfer(
         CpiContext::new(

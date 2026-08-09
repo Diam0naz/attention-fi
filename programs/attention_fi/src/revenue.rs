@@ -12,6 +12,7 @@
 //! integer division. All functions are pure for off-chain unit testing.
 
 use crate::error::AttentionError;
+use crate::state::GenesisPool;
 use anchor_lang::prelude::*;
 
 /// Fixed-point scale for the per-share accumulator.
@@ -52,6 +53,56 @@ pub fn split_genesis_fee(creator_cut: u64, total_share_bps: u64) -> Result<(u64,
         .unwrap_or(creator_cut)
         .min(creator_cut);
     Ok((genesis, creator_cut - genesis))
+}
+
+/// A token's committed genesis share, read straight from the pool account.
+///
+/// An empty account means the token never issued genesis NFTs, which is the
+/// common case and not an error. Reading existence from the chain is the whole
+/// point: as a caller-supplied `Option` this number could be forced to zero by
+/// simply leaving the account out, which handed the holders' slice back to the
+/// creator at no cost to whoever omitted it.
+///
+/// The address is pinned by seeds at the call site, and the owner check below
+/// closes the rest — data at that address can only have been written by this
+/// program, but saying so costs one comparison.
+pub fn genesis_share_bps(info: &AccountInfo) -> Result<u64> {
+    if info.data_is_empty() {
+        return Ok(0);
+    }
+    require_keys_eq!(*info.owner, crate::ID, AttentionError::Unauthorized);
+    let data = info.try_borrow_data()?;
+    let pool = GenesisPool::try_deserialize(&mut &data[..])?;
+    Ok(pool.total_share_bps)
+}
+
+/// Book `amount` of fees into the pool's accumulator and reserves, in place.
+///
+/// Moving the lamports is left to the caller because it differs by site — a
+/// system transfer from a trader, a direct move from one program-owned account
+/// to another. This is only the bookkeeping half.
+///
+/// Serialised by hand because the account is loaded by hand: Anchor writes back
+/// what its own `Accounts` machinery deserialised, and this deliberately isn't
+/// that.
+pub fn credit_genesis_pool(info: &AccountInfo, amount: u64) -> Result<()> {
+    require_keys_eq!(*info.owner, crate::ID, AttentionError::Unauthorized);
+    let mut data = info.try_borrow_mut_data()?;
+    let mut pool = GenesisPool::try_deserialize(&mut &data[..])?;
+
+    let increment = acc_increment(amount, pool.total_share_bps)?;
+    pool.acc_per_share = pool
+        .acc_per_share
+        .checked_add(increment)
+        .ok_or(AttentionError::MathOverflow)?;
+    pool.reserves = pool
+        .reserves
+        .checked_add(amount)
+        .ok_or(AttentionError::MathOverflow)?;
+
+    let mut cursor = std::io::Cursor::new(&mut **data);
+    pool.try_serialize(&mut cursor)?;
+    Ok(())
 }
 
 /// Total revenue (lamports) accrued to a `staked` balance at accumulator `acc`.

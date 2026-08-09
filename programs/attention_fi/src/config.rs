@@ -65,6 +65,16 @@ pub fn validate_virtual_token_reserves(reserves: u64) -> Result<()> {
     Ok(())
 }
 
+/// Most a day of promoted placement may be priced at (10 SOL).
+///
+/// A ceiling as well as a floor, because `promote_listing` charges whatever
+/// this says at the moment the transaction lands. Without an upper bound a
+/// retune — or a compromised authority — could turn a pending 0.09 SOL
+/// promotion into an arbitrary debit against a payer who saw a different
+/// number when they signed. Set far above any sane price so it constrains
+/// mistakes and malice rather than policy.
+pub const MAX_PROMO_LAMPORTS_PER_DAY: u64 = 10 * 1_000_000_000;
+
 /// The daily price of promoted placement.
 ///
 /// Must cost something. Free promotion isn't a generous setting, it's a broken
@@ -72,6 +82,10 @@ pub fn validate_virtual_token_reserves(reserves: u64) -> Result<()> {
 /// commitment, and at zero every listing can promote itself forever.
 pub fn validate_promo_price(lamports_per_day: u64) -> Result<()> {
     require!(lamports_per_day > 0, AttentionError::InvalidConfig);
+    require!(
+        lamports_per_day <= MAX_PROMO_LAMPORTS_PER_DAY,
+        AttentionError::InvalidConfig
+    );
     Ok(())
 }
 
@@ -116,6 +130,15 @@ mod tests {
             assert!(validate_creator_share_bps(share).is_ok(), "share {share}");
         }
         assert!(validate_creator_share_bps(BPS_DENOMINATOR + 1).is_err());
+    }
+
+    #[test]
+    fn placement_is_priced_between_a_floor_and_a_ceiling() {
+        assert!(validate_promo_price(MAX_PROMO_LAMPORTS_PER_DAY).is_ok());
+        assert!(
+            validate_promo_price(MAX_PROMO_LAMPORTS_PER_DAY + 1).is_err(),
+            "an unbounded price is charged to whoever's transaction lands next"
+        );
     }
 
     #[test]

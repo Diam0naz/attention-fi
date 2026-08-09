@@ -8,8 +8,8 @@ use crate::curve::{buy_quote, split_creator_fee};
 use crate::error::AttentionError;
 use crate::events::{GraduateEvent, TradeEvent};
 use crate::nft::{discounted_fee_bps, perk_discount_bps};
-use crate::revenue::{acc_increment, split_genesis_fee};
-use crate::state::{BondingCurve, GenesisPool, Global, PerkNft};
+use crate::revenue::{credit_genesis_pool, genesis_share_bps, split_genesis_fee};
+use crate::state::{BondingCurve, Global, PerkNft};
 
 #[derive(Accounts)]
 pub struct Buy<'info> {
@@ -52,25 +52,32 @@ pub struct Buy<'info> {
     )]
     pub perk: Option<Account<'info, PerkNft>>,
 
-    /// Optional genesis fee pool for this token. Supplied only when the token
-    /// has genesis NFTs; absent means the creator keeps their whole cut.
+    /// The token's genesis fee pool.
     ///
-    /// Optional rather than required because most tokens never mint genesis
-    /// NFTs, and making every trade carry an account that usually does not
-    /// exist would be a tax on the common case.
-    #[account(
-        mut,
-        seeds = [GENPOOL_SEED, mint.key().as_ref()],
-        bump = genesis_pool.bump,
-    )]
-    pub genesis_pool: Option<Account<'info, GenesisPool>>,
+    /// Required, and unchecked because it may legitimately not exist: most
+    /// tokens never issue genesis NFTs. Whether it exists is read from the
+    /// chain below rather than inferred from whether the caller bothered to
+    /// pass it. As an `Option` this was a hole — omitting it made
+    /// `total_share_bps` read as zero, so the whole creator fee accrued to the
+    /// creator and the holders who had paid for a share of that stream were
+    /// simply skipped. It cost the trader nothing to omit, and the creator was
+    /// the one who gained.
+    ///
+    /// CHECK: the seeds pin the address, so a caller cannot substitute another
+    /// account; the handler validates the contents before trusting them.
+    #[account(mut, seeds = [GENPOOL_SEED, mint.key().as_ref()], bump)]
+    pub genesis_pool: UncheckedAccount<'info>,
 
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,
     pub associated_token_program: Program<'info, AssociatedToken>,
 }
 
-pub fn buy_handler(ctx: Context<Buy>, sol_amount: u64, min_tokens_out: u64) -> Result<()> {
+pub fn buy_handler<'info>(
+    ctx: Context<'_, '_, '_, 'info, Buy<'info>>,
+    sol_amount: u64,
+    min_tokens_out: u64,
+) -> Result<()> {
     require!(sol_amount > 0, AttentionError::ZeroAmount);
     require!(!ctx.accounts.curve.complete, AttentionError::CurveComplete);
 
@@ -102,12 +109,9 @@ pub fn buy_handler(ctx: Context<Buy>, sol_amount: u64, min_tokens_out: u64) -> R
     let (creator_cut, treasury_cut) = split_creator_fee(quote.fee, global.creator_fee_share_bps)?;
     // The genesis holders' slice comes out of the creator's half, so the
     // treasury's share and the trader's cost are untouched by it.
-    let total_share_bps = ctx
-        .accounts
-        .genesis_pool
-        .as_ref()
-        .map(|pool| pool.total_share_bps)
-        .unwrap_or(0);
+    // Existence is a fact about the chain, not about the transaction.
+    let pool_info = ctx.accounts.genesis_pool.to_account_info();
+    let total_share_bps = genesis_share_bps(&pool_info)?;
     let (genesis_cut, creator_cut) = split_genesis_fee(creator_cut, total_share_bps)?;
 
     // Buyer -> curve (reserves + creator accrual, both held in the curve account).
@@ -128,28 +132,17 @@ pub fn buy_handler(ctx: Context<Buy>, sol_amount: u64, min_tokens_out: u64) -> R
 
     // Buyer -> genesis pool (holders' slice of the creator's fee).
     if genesis_cut > 0 {
-        if let Some(pool) = &ctx.accounts.genesis_pool {
-            let increment = acc_increment(genesis_cut, pool.total_share_bps)?;
-            system_program::transfer(
-                CpiContext::new(
-                    ctx.accounts.system_program.to_account_info(),
-                    system_program::Transfer {
-                        from: ctx.accounts.buyer.to_account_info(),
-                        to: pool.to_account_info(),
-                    },
-                ),
-                genesis_cut,
-            )?;
-            let pool = ctx.accounts.genesis_pool.as_mut().unwrap();
-            pool.acc_per_share = pool
-                .acc_per_share
-                .checked_add(increment)
-                .ok_or(AttentionError::MathOverflow)?;
-            pool.reserves = pool
-                .reserves
-                .checked_add(genesis_cut)
-                .ok_or(AttentionError::MathOverflow)?;
-        }
+        system_program::transfer(
+            CpiContext::new(
+                ctx.accounts.system_program.to_account_info(),
+                system_program::Transfer {
+                    from: ctx.accounts.buyer.to_account_info(),
+                    to: pool_info.clone(),
+                },
+            ),
+            genesis_cut,
+        )?;
+        credit_genesis_pool(&pool_info, genesis_cut)?;
     }
 
     // Buyer -> treasury (protocol cut).

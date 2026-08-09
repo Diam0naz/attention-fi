@@ -63,7 +63,7 @@ pub struct BuyCollection<'info> {
     pub system_program: Program<'info, System>,
 }
 
-pub fn buy_collection_handler(ctx: Context<BuyCollection>, max_price: u64) -> Result<()> {
+pub fn buy_collection_handler(ctx: Context<BuyCollection>, max_total: u64) -> Result<()> {
     require!(!ctx.accounts.auction.complete, AttentionError::SoldOut);
 
     let auction = &ctx.accounts.auction;
@@ -83,13 +83,18 @@ pub fn buy_collection_handler(ctx: Context<BuyCollection>, max_price: u64) -> Re
         auction.duration,
         now,
     )?;
-    require!(price <= max_price, AttentionError::PriceAboveMax);
 
     let fee = u128::from(price)
         .checked_mul(u128::from(ctx.accounts.fee_config.nft_fee_bps))
         .and_then(|product| product.checked_div(10_000))
         .ok_or(AttentionError::MathOverflow)?;
     let fee = u64::try_from(fee).map_err(|_| AttentionError::MathOverflow)?;
+    // The ceiling covers what actually leaves the buyer's wallet. The fee is
+    // charged on top of the price and its rate is tunable between signing and
+    // landing, so a guard on the price alone bounded the wrong number — the
+    // buyer authorised one figure and could be debited a larger one.
+    let total = price.checked_add(fee).ok_or(AttentionError::MathOverflow)?;
+    require!(total <= max_total, AttentionError::CostAboveMax);
 
     // Buyer -> creator (price), buyer -> treasury (fee on top).
     system_program::transfer(

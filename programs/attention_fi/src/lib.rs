@@ -58,12 +58,20 @@ pub mod attention_fi {
     }
 
     /// Buy tokens along the curve with SOL (slippage-guarded).
-    pub fn buy(ctx: Context<Buy>, sol_amount: u64, min_tokens_out: u64) -> Result<()> {
+    pub fn buy<'info>(
+        ctx: Context<'_, '_, '_, 'info, Buy<'info>>,
+        sol_amount: u64,
+        min_tokens_out: u64,
+    ) -> Result<()> {
         buy::buy_handler(ctx, sol_amount, min_tokens_out)
     }
 
     /// Sell tokens back into the curve for SOL (slippage-guarded).
-    pub fn sell(ctx: Context<Sell>, token_amount: u64, min_sol_out: u64) -> Result<()> {
+    pub fn sell<'info>(
+        ctx: Context<'_, '_, '_, 'info, Sell<'info>>,
+        token_amount: u64,
+        min_sol_out: u64,
+    ) -> Result<()> {
         sell::sell_handler(ctx, token_amount, min_sol_out)
     }
 
@@ -79,8 +87,8 @@ pub mod attention_fi {
     }
 
     /// Swap on a graduated token's AMM pool. `is_buy` = SOL in / tokens out.
-    pub fn swap(
-        ctx: Context<Swap>,
+    pub fn swap<'info>(
+        ctx: Context<'_, '_, '_, 'info, Swap<'info>>,
         amount_in: u64,
         min_amount_out: u64,
         is_buy: bool,
@@ -302,8 +310,8 @@ pub mod attention_fi {
 
     /// Buy one unit from a token's genesis group at the listed price, subject
     /// to the group's per-wallet cap.
-    pub fn buy_genesis_unit(ctx: Context<BuyGenesisUnit>, max_price: u64) -> Result<()> {
-        buy_genesis_unit::buy_genesis_unit_handler(ctx, max_price)
+    pub fn buy_genesis_unit(ctx: Context<BuyGenesisUnit>, max_total: u64) -> Result<()> {
+        buy_genesis_unit::buy_genesis_unit_handler(ctx, max_total)
     }
 
     /// Mint a plain Core NFT (collectible with an optional image), standalone
@@ -364,8 +372,8 @@ pub mod attention_fi {
     }
 
     /// Buy the 1-of-1 NFT at the current descending price; transfers it to the buyer.
-    pub fn buy_nft(ctx: Context<BuyNft>, max_price: u64) -> Result<()> {
-        buy_nft::buy_nft_handler(ctx, max_price)
+    pub fn buy_nft(ctx: Context<BuyNft>, max_total: u64) -> Result<()> {
+        buy_nft::buy_nft_handler(ctx, max_total)
     }
 
     /// List an NFT the caller already owns as a descending 1-of-1 auction.
@@ -406,8 +414,8 @@ pub mod attention_fi {
     }
 
     /// Buy a listed collection at its current descending price.
-    pub fn buy_collection(ctx: Context<BuyCollection>, max_price: u64) -> Result<()> {
-        buy_collection::buy_collection_handler(ctx, max_price)
+    pub fn buy_collection(ctx: Context<BuyCollection>, max_total: u64) -> Result<()> {
+        buy_collection::buy_collection_handler(ctx, max_total)
     }
 
     /// Return an unsold collection's update authority to its lister.
@@ -419,8 +427,12 @@ pub mod attention_fi {
     ///
     /// The alternative to charging rent for listing space: listing stays free
     /// and perpetual, and money only ever buys extra visibility.
-    pub fn promote_listing(ctx: Context<PromoteListing>, days: u16) -> Result<()> {
-        promote_listing::promote_listing_handler(ctx, days)
+    pub fn promote_listing(
+        ctx: Context<PromoteListing>,
+        days: u16,
+        max_lamports: u64,
+    ) -> Result<()> {
+        promote_listing::promote_listing_handler(ctx, days, max_lamports)
     }
 
     /// Route a token's fees to its genesis NFT holders (split pro-rata by share).
