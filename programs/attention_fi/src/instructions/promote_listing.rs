@@ -3,12 +3,12 @@ use anchor_lang::system_program;
 
 use crate::auction::is_perpetual;
 use crate::constants::{
-    COLLECTIONAUCTION_SEED, GLOBAL_SEED, MAX_PROMO_DAYS, NFTAUCTION_SEED, PROMO_LAMPORTS_PER_DAY,
+    COLLECTIONAUCTION_SEED, FEECONFIG_SEED, GLOBAL_SEED, MAX_PROMO_DAYS, NFTAUCTION_SEED,
     PROMO_SEED,
 };
 use crate::error::AttentionError;
 use crate::events::ListingPromotedEvent;
-use crate::state::{CollectionAuction, Global, NftAuction, Promotion};
+use crate::state::{CollectionAuction, FeeConfig, Global, NftAuction, Promotion};
 
 /// Seconds in a day.
 const DAY: i64 = 86_400;
@@ -36,6 +36,10 @@ pub struct PromoteListing<'info> {
 
     #[account(seeds = [GLOBAL_SEED], bump = global.bump)]
     pub global: Account<'info, Global>,
+
+    /// Holds the daily price, so placement can be repriced without a redeploy.
+    #[account(seeds = [FEECONFIG_SEED], bump = fee_config.bump)]
+    pub fee_config: Account<'info, FeeConfig>,
 
     /// CHECK: must equal the treasury recorded in Global.
     #[account(mut, address = global.treasury)]
@@ -102,7 +106,7 @@ pub fn promote_listing_handler(ctx: Context<PromoteListing>, days: u16) -> Resul
     }
 
     let lamports = u64::from(days)
-        .checked_mul(PROMO_LAMPORTS_PER_DAY)
+        .checked_mul(ctx.accounts.fee_config.promo_lamports_per_day)
         .ok_or(AttentionError::MathOverflow)?;
 
     system_program::transfer(

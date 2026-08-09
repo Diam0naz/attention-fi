@@ -17,6 +17,9 @@ const ASSOCIATED_TOKEN_PROGRAM_ID = new PublicKey(
 const MPL_CORE_PROGRAM_ID = new PublicKey(
   "CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d"
 );
+const TOKEN_METADATA_PROGRAM_ID = new PublicKey(
+  "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s"
+);
 
 // Mirror the tier seeds from constants.rs (lamports of starting virtual SOL).
 const SEED_TOP_100 = 26_700_000_000;
@@ -1425,5 +1428,603 @@ describe("attention_fi creator fees (SAS-gated claim)", () => {
     const claimed = await program.account.bondingCurve.fetch(curvePda);
     assert.strictEqual(claimed.creatorFees.toString(), "0", "creator fees drained on claim");
     assert.isTrue(after > before, "verified creator received the fees (net of gas)");
+  });
+});
+
+describe("attention_fi genesis group", () => {
+  anchor.setProvider(anchor.AnchorProvider.env());
+  const provider = anchor.getProvider() as anchor.AnchorProvider;
+  const program = anchor.workspace.attentionFi as Program<AttentionFi>;
+  const wallet = provider.wallet.publicKey;
+
+  const [globalPda] = PublicKey.findProgramAddressSync(
+    [Buffer.from("global")],
+    program.programId
+  );
+
+  // Group terms: 4 units at 5% of the creator's fee stream each, 0.5 SOL a
+  // unit, two to a wallet.
+  const TOTAL_UNITS = 4;
+  // The NFT market's default fee (2.5%), which is deliberately not the 1% the
+  // curve charges — a genesis unit is a sale, not a trade.
+  const NFT_FEE_BPS = 250;
+  const SHARE_BPS = 500;
+  const PRICE = LAMPORTS_PER_SOL / 2;
+  const PER_WALLET_CAP = 2;
+
+  const mintKp = Keypair.generate();
+  const collectionKp = Keypair.generate();
+  const subjectMint = mintKp.publicKey;
+  const [curvePda] = PublicKey.findProgramAddressSync(
+    [Buffer.from("curve"), subjectMint.toBuffer()],
+    program.programId
+  );
+  const [groupPda] = PublicKey.findProgramAddressSync(
+    [Buffer.from("gengroup"), subjectMint.toBuffer()],
+    program.programId
+  );
+  const [poolPda] = PublicKey.findProgramAddressSync(
+    [Buffer.from("genpool"), subjectMint.toBuffer()],
+    program.programId
+  );
+  const [feeConfigPda] = PublicKey.findProgramAddressSync(
+    [Buffer.from("feeconfig")],
+    program.programId
+  );
+
+  let treasury: PublicKey;
+  // Units minted into the group, in mint order.
+  const units: PublicKey[] = [];
+  const buyer = Keypair.generate();
+  const secondBuyer = Keypair.generate();
+
+  const genesisPda = (asset: PublicKey) =>
+    PublicKey.findProgramAddressSync(
+      [Buffer.from("genesis"), asset.toBuffer()],
+      program.programId
+    )[0];
+  const allocationPda = (who: PublicKey) =>
+    PublicKey.findProgramAddressSync(
+      [Buffer.from("genalloc"), subjectMint.toBuffer(), who.toBuffer()],
+      program.programId
+    )[0];
+
+  // Sent as the buyer's own transaction rather than through `.rpc()`, which
+  // would make the provider wallet the fee payer — and that wallet is the
+  // creator here, so its balance would move by the price *and* the fee, and the
+  // proceeds assertion below could not tell the two apart.
+  async function buyUnit(who: Keypair, asset: PublicKey): Promise<void> {
+    const tx = await program.methods
+      .buyGenesisUnit(new anchor.BN(PRICE))
+      .accountsStrict({
+        buyer: who.publicKey,
+        global: globalPda,
+        feeConfig: feeConfigPda,
+        treasury,
+        creator: wallet,
+        subjectMint,
+        group: groupPda,
+        collection: collectionKp.publicKey,
+        asset,
+        genesis: genesisPda(asset),
+        pool: poolPda,
+        allocation: allocationPda(who.publicKey),
+        mplCoreProgram: MPL_CORE_PROGRAM_ID,
+        systemProgram: SystemProgram.programId,
+      })
+      .transaction();
+    await anchor.web3.sendAndConfirmTransaction(provider.connection, tx, [who], {
+      commitment: "confirmed",
+    });
+  }
+
+  before(async () => {
+    const existing = await program.account.global.fetchNullable(globalPda);
+    if (existing) {
+      treasury = existing.treasury;
+    } else {
+      treasury = Keypair.generate().publicKey;
+      await program.methods
+        .initialize()
+        .accountsStrict({
+          authority: wallet,
+          global: globalPda,
+          feeConfig: feeConfigPda,
+          treasury,
+          systemProgram: SystemProgram.programId,
+        })
+        .rpc();
+    }
+
+    // The group is gated on the subject token's curve, so it needs a real launch.
+    await program.methods
+      .launchToken(
+        { emerging: {} },
+        { name: "Genesis Subject", symbol: "GEN", uri: "https://attention.fi/t.json" },
+      )
+      .accountsStrict({
+        creator: wallet,
+        global: globalPda,
+        mint: subjectMint,
+        curve: curvePda,
+        vault: ata(curvePda, subjectMint),
+        metadata: PublicKey.findProgramAddressSync(
+          [
+            Buffer.from("metadata"),
+            TOKEN_METADATA_PROGRAM_ID.toBuffer(),
+            subjectMint.toBuffer(),
+          ],
+          TOKEN_METADATA_PROGRAM_ID,
+        )[0],
+        tokenMetadataProgram: TOKEN_METADATA_PROGRAM_ID,
+        systemProgram: SystemProgram.programId,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+        rent: SYSVAR_RENT_PUBKEY,
+      })
+      .signers([mintKp])
+      .rpc();
+
+    await program.methods
+      .createCollection("Genesis Run", "https://attention.fi/run.json")
+      .accountsStrict({
+        payer: wallet,
+        collection: collectionKp.publicKey,
+        mplCoreProgram: MPL_CORE_PROGRAM_ID,
+        systemProgram: SystemProgram.programId,
+      })
+      .signers([collectionKp])
+      .rpc();
+
+    for (const who of [buyer, secondBuyer]) {
+      const sig = await provider.connection.requestAirdrop(
+        who.publicKey,
+        3 * LAMPORTS_PER_SOL
+      );
+      await provider.connection.confirmTransaction(sig, "confirmed");
+    }
+  });
+
+  it("lists a group and escrows the collection's update authority", async () => {
+    await program.methods
+      .listGenesisGroup(
+        TOTAL_UNITS,
+        SHARE_BPS,
+        new anchor.BN(PRICE),
+        PER_WALLET_CAP
+      )
+      .accountsStrict({
+        creator: wallet,
+        subjectMint,
+        curve: curvePda,
+        group: groupPda,
+        pool: poolPda,
+        collection: collectionKp.publicKey,
+        mplCoreProgram: MPL_CORE_PROGRAM_ID,
+        systemProgram: SystemProgram.programId,
+      })
+      .rpc();
+
+    const group = await program.account.genesisGroup.fetch(groupPda);
+    assert.strictEqual(group.totalUnits, TOTAL_UNITS);
+    assert.strictEqual(group.shareBps, SHARE_BPS);
+    assert.strictEqual(group.price.toString(), PRICE.toString());
+    assert.strictEqual(group.perWalletCap, PER_WALLET_CAP);
+    assert.strictEqual(group.mintedUnits, 0);
+    assert.strictEqual(group.soldUnits, 0);
+    assert.strictEqual(
+      group.collection.toBase58(),
+      collectionKp.publicKey.toBase58()
+    );
+
+    // The collection's update authority now sits at the group PDA — that is what
+    // makes `totalUnits` binding, since only `mintGenesisBatch` can add to it.
+    const acc = await provider.connection.getAccountInfo(
+      collectionKp.publicKey
+    );
+    assert.strictEqual(
+      new PublicKey(acc!.data.subarray(1, 33)).toBase58(),
+      groupPda.toBase58(),
+      "collection authority escrowed under the group"
+    );
+
+    // Nothing is committed against the fee stream until a unit actually sells.
+    const pool = await program.account.genesisPool.fetch(poolPda);
+    assert.strictEqual(pool.totalShareBps.toString(), "0");
+  });
+
+  it("mints units into the group, and refuses to overfill it", async () => {
+    const batch = [Keypair.generate(), Keypair.generate(), Keypair.generate()];
+    await program.methods
+      .mintGenesisBatch("https://attention.fi/unit.json")
+      .accountsStrict({
+        creator: wallet,
+        subjectMint,
+        group: groupPda,
+        collection: collectionKp.publicKey,
+        mplCoreProgram: MPL_CORE_PROGRAM_ID,
+        systemProgram: SystemProgram.programId,
+      })
+      .remainingAccounts(
+        batch.map((kp) => ({
+          pubkey: kp.publicKey,
+          isSigner: true,
+          isWritable: true,
+        }))
+      )
+      .preInstructions([
+        anchor.web3.ComputeBudgetProgram.setComputeUnitLimit({
+          units: 600_000,
+        }),
+      ])
+      .signers(batch)
+      .rpc();
+    units.push(...batch.map((kp) => kp.publicKey));
+
+    const group = await program.account.genesisGroup.fetch(groupPda);
+    assert.strictEqual(group.mintedUnits, 3, "three of four units minted");
+
+    for (const unit of units) {
+      const acc = await provider.connection.getAccountInfo(unit);
+      assert.strictEqual(acc!.owner.toBase58(), MPL_CORE_PROGRAM_ID.toBase58());
+    }
+
+    // Only one unit is left, so a two-unit batch must be rejected whole.
+    const overfill = [Keypair.generate(), Keypair.generate()];
+    let threw = false;
+    try {
+      await program.methods
+        .mintGenesisBatch("https://attention.fi/unit.json")
+        .accountsStrict({
+          creator: wallet,
+          subjectMint,
+          group: groupPda,
+          collection: collectionKp.publicKey,
+          mplCoreProgram: MPL_CORE_PROGRAM_ID,
+          systemProgram: SystemProgram.programId,
+        })
+        .remainingAccounts(
+          overfill.map((kp) => ({
+            pubkey: kp.publicKey,
+            isSigner: true,
+            isWritable: true,
+          }))
+        )
+        .signers(overfill)
+        .rpc();
+    } catch (err) {
+      threw = true;
+      assert.include(String(err), "GenesisGroupFull");
+    }
+    assert.isTrue(threw, "a batch past the declared total is rejected");
+    assert.strictEqual(
+      (await program.account.genesisGroup.fetch(groupPda)).mintedUnits,
+      3,
+      "the rejected batch minted nothing"
+    );
+  });
+
+  it("sells units at the listed price and enforces the per-wallet cap", async () => {
+    const creatorBefore = await provider.connection.getBalance(wallet);
+    const treasuryBefore = await provider.connection.getBalance(treasury);
+
+    await buyUnit(buyer, units[0]);
+
+    const genesis = await program.account.genesisNft.fetch(
+      genesisPda(units[0])
+    );
+    assert.strictEqual(genesis.owner.toBase58(), buyer.publicKey.toBase58());
+    assert.strictEqual(genesis.shareBps, SHARE_BPS);
+    assert.strictEqual(genesis.subjectMint.toBase58(), subjectMint.toBase58());
+
+    const creatorAfter = await provider.connection.getBalance(wallet);
+    const treasuryAfter = await provider.connection.getBalance(treasury);
+    assert.strictEqual(
+      creatorAfter - creatorBefore,
+      PRICE,
+      "creator paid the listed price"
+    );
+    assert.strictEqual(
+      treasuryAfter - treasuryBefore,
+      (PRICE * NFT_FEE_BPS) / 10_000,
+      "charged the NFT market's fee, not the curve's trading fee"
+    );
+
+    // The unit is the buyer's now, not the escrow's.
+    const unitAcc = await provider.connection.getAccountInfo(units[0]);
+    assert.strictEqual(
+      new PublicKey(unitAcc!.data.subarray(1, 33)).toBase58(),
+      buyer.publicKey.toBase58(),
+      "unit transferred to the buyer"
+    );
+
+    // Only sold units dilute the stream.
+    let pool = await program.account.genesisPool.fetch(poolPda);
+    assert.strictEqual(pool.totalShareBps.toString(), SHARE_BPS.toString());
+
+    await buyUnit(buyer, units[1]);
+    const allocation = await program.account.genesisAllocation.fetch(
+      allocationPda(buyer.publicKey)
+    );
+    assert.strictEqual(
+      allocation.units,
+      2,
+      "both purchases counted against the cap"
+    );
+
+    let threw = false;
+    try {
+      await buyUnit(buyer, units[2]);
+    } catch (err) {
+      threw = true;
+      assert.include(String(err), "WalletCapReached");
+    }
+    assert.isTrue(threw, "a third unit for the same wallet is refused");
+
+    // A different wallet can still take the remaining minted unit.
+    await buyUnit(secondBuyer, units[2]);
+
+    const group = await program.account.genesisGroup.fetch(groupPda);
+    assert.strictEqual(group.soldUnits, 3, "every minted unit sold");
+    pool = await program.account.genesisPool.fetch(poolPda);
+    assert.strictEqual(
+      pool.totalShareBps.toString(),
+      (3 * SHARE_BPS).toString(),
+      "15% of the fee stream committed across three holders"
+    );
+
+    // The fourth unit was declared but never minted, so there is nothing to sell.
+    const unmintedAsset = Keypair.generate().publicKey;
+    threw = false;
+    try {
+      await buyUnit(secondBuyer, unmintedAsset);
+    } catch (err) {
+      threw = true;
+      assert.include(String(err), "SoldOut");
+    }
+    assert.isTrue(threw, "a unit that was never minted cannot be bought");
+  });
+});
+
+describe("attention_fi protocol config", () => {
+  anchor.setProvider(anchor.AnchorProvider.env());
+  const provider = anchor.getProvider() as anchor.AnchorProvider;
+  const program = anchor.workspace.attentionFi as Program<AttentionFi>;
+  const wallet = provider.wallet.publicKey;
+
+  const [globalPda] = PublicKey.findProgramAddressSync(
+    [Buffer.from("global")],
+    program.programId
+  );
+  const [feeConfigPda] = PublicKey.findProgramAddressSync(
+    [Buffer.from("feeconfig")],
+    program.programId
+  );
+
+  let treasury: PublicKey;
+  // Restored after the retune so the other suites see the shipped economics.
+  let originalFeeBps: number;
+
+  const mintKp = Keypair.generate();
+  const subjectMint = mintKp.publicKey;
+  const [curvePda] = PublicKey.findProgramAddressSync(
+    [Buffer.from("curve"), subjectMint.toBuffer()],
+    program.programId
+  );
+  const vault = ata(curvePda, subjectMint);
+  const buyerAta = ata(wallet, subjectMint);
+
+  async function buy(lamports: number): Promise<void> {
+    await program.methods
+      .buy(new anchor.BN(lamports), new anchor.BN(0))
+      .accountsStrict({
+        buyer: wallet,
+        global: globalPda,
+        treasury,
+        curve: curvePda,
+        mint: subjectMint,
+        vault,
+        buyerTokenAccount: buyerAta,
+        perk: null,
+        genesisPool: null,
+        systemProgram: SystemProgram.programId,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+      })
+      .rpc();
+  }
+
+  before(async () => {
+    const existing = await program.account.global.fetchNullable(globalPda);
+    if (existing) {
+      treasury = existing.treasury;
+    } else {
+      treasury = Keypair.generate().publicKey;
+      await program.methods
+        .initialize()
+        .accountsStrict({
+          authority: wallet,
+          global: globalPda,
+          feeConfig: feeConfigPda,
+          treasury,
+          systemProgram: SystemProgram.programId,
+        })
+        .rpc();
+    }
+    originalFeeBps = (await program.account.global.fetch(globalPda)).feeBps;
+
+    await program.methods
+      .launchToken(
+        { emerging: {} },
+        { name: "Config Subject", symbol: "CFG", uri: "https://attention.fi/c.json" }
+      )
+      .accountsStrict({
+        creator: wallet,
+        global: globalPda,
+        mint: subjectMint,
+        curve: curvePda,
+        vault,
+        metadata: PublicKey.findProgramAddressSync(
+          [
+            Buffer.from("metadata"),
+            TOKEN_METADATA_PROGRAM_ID.toBuffer(),
+            subjectMint.toBuffer(),
+          ],
+          TOKEN_METADATA_PROGRAM_ID
+        )[0],
+        tokenMetadataProgram: TOKEN_METADATA_PROGRAM_ID,
+        systemProgram: SystemProgram.programId,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+        rent: SYSVAR_RENT_PUBKEY,
+      })
+      .signers([mintKp])
+      .rpc();
+  });
+
+  after(async () => {
+    await program.methods
+      .updateConfig(originalFeeBps, null, null, null)
+      .accountsStrict({ authority: wallet, global: globalPda })
+      .rpc();
+  });
+
+  it("retunes the trading fee, and the next trade is charged the new rate", async () => {
+    // The whole point: this used to take a redeploy.
+    const SPEND = LAMPORTS_PER_SOL;
+    const before = await provider.connection.getBalance(treasury);
+    await buy(SPEND);
+    const atOldRate = (await provider.connection.getBalance(treasury)) - before;
+    // 1% fee, half to the treasury and half accrued to the creator.
+    assert.strictEqual(atOldRate, (SPEND * originalFeeBps) / 10_000 / 2);
+
+    await program.methods
+      .updateConfig(300, null, null, null)
+      .accountsStrict({ authority: wallet, global: globalPda })
+      .rpc();
+
+    const global = await program.account.global.fetch(globalPda);
+    assert.strictEqual(global.feeBps, 300, "fee retuned in place");
+    assert.strictEqual(
+      global.creatorFeeShareBps,
+      5000,
+      "an omitted argument leaves its value alone"
+    );
+
+    const mid = await provider.connection.getBalance(treasury);
+    await buy(SPEND);
+    const atNewRate = (await provider.connection.getBalance(treasury)) - mid;
+    assert.strictEqual(
+      atNewRate,
+      (SPEND * 300) / 10_000 / 2,
+      "the very next trade pays the new rate"
+    );
+  });
+
+  it("refuses a fee past the ceiling and a caller who isn't the authority", async () => {
+    let threw = false;
+    try {
+      await program.methods
+        .updateConfig(10_000, null, null, null)
+        .accountsStrict({ authority: wallet, global: globalPda })
+        .rpc();
+    } catch (err) {
+      threw = true;
+      assert.include(String(err), "InvalidConfig");
+    }
+    assert.isTrue(threw, "bps/percent confusion is caught, not applied");
+
+    const stranger = Keypair.generate();
+    const sig = await provider.connection.requestAirdrop(
+      stranger.publicKey,
+      LAMPORTS_PER_SOL
+    );
+    await provider.connection.confirmTransaction(sig, "confirmed");
+
+    threw = false;
+    try {
+      const tx = await program.methods
+        .updateConfig(0, null, null, null)
+        .accountsStrict({ authority: stranger.publicKey, global: globalPda })
+        .transaction();
+      await anchor.web3.sendAndConfirmTransaction(provider.connection, tx, [stranger], {
+        commitment: "confirmed",
+      });
+    } catch (err) {
+      threw = true;
+      assert.include(String(err), "Unauthorized");
+    }
+    assert.isTrue(threw, "only the protocol authority may retune it");
+  });
+
+  it("prices the NFT market separately from the curve", async () => {
+    await program.methods
+      .setFeeConfig(400, new anchor.BN(LAMPORTS_PER_SOL / 50))
+      .accountsStrict({
+        authority: wallet,
+        global: globalPda,
+        feeConfig: feeConfigPda,
+        systemProgram: SystemProgram.programId,
+      })
+      .rpc();
+
+    let fees = await program.account.feeConfig.fetch(feeConfigPda);
+    assert.strictEqual(fees.nftFeeBps, 400);
+    assert.strictEqual(fees.promoLamportsPerDay.toString(), String(LAMPORTS_PER_SOL / 50));
+
+    // Retuning the trading fee leaves the market's fee where it was — the two
+    // numbers were only ever the same by accident of storage.
+    await program.methods
+      .updateConfig(100, null, null, null)
+      .accountsStrict({ authority: wallet, global: globalPda })
+      .rpc();
+    fees = await program.account.feeConfig.fetch(feeConfigPda);
+    assert.strictEqual(fees.nftFeeBps, 400, "NFT fee untouched by a trading retune");
+    assert.strictEqual(
+      (await program.account.global.fetch(globalPda)).feeBps,
+      100,
+      "and the trading fee moved on its own"
+    );
+
+    // Omitted arguments keep the stored value rather than resetting it.
+    await program.methods
+      .setFeeConfig(null, null)
+      .accountsStrict({
+        authority: wallet,
+        global: globalPda,
+        feeConfig: feeConfigPda,
+        systemProgram: SystemProgram.programId,
+      })
+      .rpc();
+    fees = await program.account.feeConfig.fetch(feeConfigPda);
+    assert.strictEqual(fees.nftFeeBps, 400, "an omitted fee is not a reset to default");
+
+    let threw = false;
+    try {
+      await program.methods
+        .setFeeConfig(2_000, null)
+        .accountsStrict({
+          authority: wallet,
+          global: globalPda,
+          feeConfig: feeConfigPda,
+          systemProgram: SystemProgram.programId,
+        })
+        .rpc();
+    } catch (err) {
+      threw = true;
+      assert.include(String(err), "InvalidConfig");
+    }
+    assert.isTrue(threw, "the market fee is bounded by the same ceiling");
+
+    // Leave the NFT market on its shipped schedule for the other suites.
+    await program.methods
+      .setFeeConfig(250, new anchor.BN(LAMPORTS_PER_SOL / 100))
+      .accountsStrict({
+        authority: wallet,
+        global: globalPda,
+        feeConfig: feeConfigPda,
+        systemProgram: SystemProgram.programId,
+      })
+      .rpc();
   });
 });

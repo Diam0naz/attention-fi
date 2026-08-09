@@ -4,11 +4,11 @@ use mpl_core::instructions::{TransferV1CpiBuilder, UpdatePluginV1CpiBuilder};
 use mpl_core::types::Plugin;
 
 use crate::auction::{current_price, is_perpetual};
-use crate::constants::{GLOBAL_SEED, NFTAUCTION_SEED};
+use crate::constants::{FEECONFIG_SEED, GLOBAL_SEED, NFTAUCTION_SEED};
 use crate::error::AttentionError;
 use crate::events::{NftAuctionEvent, NFT_SOLD};
 use crate::nft::{has_attributes_plugin, last_sale_attributes};
-use crate::state::{Global, NftAuction};
+use crate::state::{FeeConfig, Global, NftAuction};
 
 #[derive(Accounts)]
 pub struct BuyNft<'info> {
@@ -17,6 +17,10 @@ pub struct BuyNft<'info> {
 
     #[account(seeds = [GLOBAL_SEED], bump = global.bump)]
     pub global: Account<'info, Global>,
+
+    /// The NFT market's own fee, which is not the curve's trading fee.
+    #[account(seeds = [FEECONFIG_SEED], bump = fee_config.bump)]
+    pub fee_config: Account<'info, FeeConfig>,
 
     /// CHECK: must equal the treasury recorded in Global.
     #[account(mut, address = global.treasury)]
@@ -68,7 +72,7 @@ pub fn buy_nft_handler(ctx: Context<BuyNft>, max_price: u64) -> Result<()> {
     require!(price <= max_price, AttentionError::PriceAboveMax);
 
     let fee = u128::from(price)
-        .checked_mul(u128::from(ctx.accounts.global.fee_bps))
+        .checked_mul(u128::from(ctx.accounts.fee_config.nft_fee_bps))
         .and_then(|product| product.checked_div(10_000))
         .ok_or(AttentionError::MathOverflow)?;
     let fee = u64::try_from(fee).map_err(|_| AttentionError::MathOverflow)?;

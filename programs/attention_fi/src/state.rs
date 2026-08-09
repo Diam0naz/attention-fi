@@ -27,6 +27,26 @@ pub struct Global {
     pub bump: u8,
 }
 
+/// The NFT market's own fee schedule, tunable without a redeploy.
+///
+/// Lives beside `Global` rather than inside it because `Global` is already
+/// on-chain at a fixed length (see `FEECONFIG_SEED`), and it holds the NFT
+/// numbers specifically: a trading fee and a marketplace fee answer different
+/// questions and were never the same number, they were just stored as one.
+///
+/// Required by the instructions that charge it, never optional. An optional
+/// override would let a buyer omit the account and pay the old, lower number —
+/// the opposite of the perk discount, where omitting it only costs the caller.
+#[account]
+#[derive(InitSpace)]
+pub struct FeeConfig {
+    /// Fee on an NFT or collection sale, in bps of the sale price.
+    pub nft_fee_bps: u16,
+    /// Cost of one day of promoted placement, lamports.
+    pub promo_lamports_per_day: u64,
+    pub bump: u8,
+}
+
 /// Per-token bonding curve. One PDA per mint, seeded by mindshare tier.
 #[account]
 #[derive(InitSpace)]
@@ -324,6 +344,60 @@ pub struct GenesisPool {
     pub acc_per_share: u128,
     /// Lamports of deposited fees still available to claim.
     pub reserves: u64,
+    pub bump: u8,
+}
+
+/// A token's fixed-price run of genesis fee-share NFTs. One PDA per subject mint.
+///
+/// Where `mint_genesis` issues one NFT to a named recipient on terms the creator
+/// negotiated off-chain, a group is a public offer: N identical units, a fixed
+/// price, one collection, and a cap on how many any single wallet may take.
+///
+/// The PDA is the collection's update authority for the group's whole life,
+/// which is what makes `total_units` mean anything. If the creator kept it they
+/// could mint extra units into the same collection at any time, and every
+/// existing holder's share of the fee stream would quietly shrink — the buyer
+/// would have no way to tell a five-unit run from a five-hundred-unit one. With
+/// the authority escrowed here, the only path to a new unit is
+/// `mint_genesis_batch`, which counts.
+#[account]
+#[derive(InitSpace)]
+pub struct GenesisGroup {
+    /// The token whose fee stream every unit shares.
+    pub subject_mint: Pubkey,
+    /// Seller of the units, and the collection's authority on a reclaim.
+    pub creator: Pubkey,
+    /// Core collection holding the units; its update authority is escrowed here.
+    pub collection: Pubkey,
+    /// Fixed price per unit, lamports. Protocol fee is charged on top.
+    pub price: u64,
+    /// Slice of the creator's fee stream each unit carries, in bps.
+    pub share_bps: u16,
+    /// Units this group will ever contain.
+    pub total_units: u16,
+    /// Units minted into the collection so far (<= `total_units`).
+    pub minted_units: u16,
+    /// Units sold so far (<= `minted_units`).
+    pub sold_units: u16,
+    /// Most units one wallet may buy.
+    pub per_wallet_cap: u16,
+    pub bump: u8,
+}
+
+/// How many units one wallet has taken from one token's genesis group.
+///
+/// Keyed by (subject mint, buyer) rather than counted on the buyer's NFTs: the
+/// units are transferable, so a buyer who sold theirs on would otherwise be
+/// free to come back and buy the cap again. What the cap limits is how much of
+/// the run one wallet may take from the group, which is a fact about purchases,
+/// not about current holdings.
+#[account]
+#[derive(InitSpace)]
+pub struct GenesisAllocation {
+    pub subject_mint: Pubkey,
+    pub buyer: Pubkey,
+    /// Units bought from this group, ever.
+    pub units: u16,
     pub bump: u8,
 }
 

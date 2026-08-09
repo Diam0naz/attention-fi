@@ -158,6 +158,73 @@ pub struct NftListedEvent {
     pub timestamp: i64,
 }
 
+/// Emitted when a token opens a fixed-price run of genesis fee-share NFTs.
+#[event]
+pub struct GenesisGroupListedEvent {
+    pub subject_mint: Pubkey,
+    pub creator: Pubkey,
+    pub collection: Pubkey,
+    /// Units the run will ever contain — the denominator a buyer's share is
+    /// judged against, and the number the escrowed collection authority makes
+    /// binding.
+    pub total_units: u16,
+    pub share_bps: u16,
+    pub price: u64,
+    pub per_wallet_cap: u16,
+    pub timestamp: i64,
+}
+
+/// Emitted when units are minted into a group's collection.
+#[event]
+pub struct GenesisBatchMintedEvent {
+    pub subject_mint: Pubkey,
+    pub collection: Pubkey,
+    /// Units created by this call.
+    pub units: u16,
+    /// Running total minted, out of `total_units`.
+    pub minted_units: u16,
+    pub timestamp: i64,
+}
+
+/// Emitted when a buyer takes one unit out of a group.
+#[event]
+pub struct GenesisUnitSoldEvent {
+    pub subject_mint: Pubkey,
+    pub asset: Pubkey,
+    pub buyer: Pubkey,
+    pub price: u64,
+    /// Protocol fee charged on top of `price`.
+    pub fee: u64,
+    pub share_bps: u16,
+    /// Units sold from the group after this sale.
+    pub sold_units: u16,
+    pub timestamp: i64,
+}
+
+/// Emitted when the protocol's trading economics are retuned.
+///
+/// Every field is the value in force *after* the call, supplied or not, so an
+/// indexer reading one event knows the whole configuration rather than a diff
+/// it has to replay from genesis to interpret.
+#[event]
+pub struct ConfigUpdatedEvent {
+    pub authority: Pubkey,
+    pub fee_bps: u16,
+    pub creator_fee_share_bps: u16,
+    pub graduation_sol: u64,
+    pub virtual_token_reserves: u64,
+    pub timestamp: i64,
+}
+
+/// Emitted when the NFT market's fee schedule changes.
+#[event]
+pub struct FeeConfigUpdatedEvent {
+    pub authority: Pubkey,
+    pub nft_fee_bps: u16,
+    pub promo_lamports_per_day: u64,
+    pub timestamp: i64,
+}
+
 /// Emitted when protocol authority moves to a different wallet.
 ///
 /// Authority gates every privileged instruction, so a handover is the single

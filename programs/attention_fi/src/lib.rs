@@ -1,10 +1,12 @@
 pub mod amm;
 pub mod auction;
+pub mod config;
 pub mod constants;
 pub mod conviction;
 pub mod curve;
 pub mod error;
 pub mod events;
+pub mod genesis;
 pub mod instructions;
 pub mod metadata;
 pub mod nft;
@@ -184,6 +186,34 @@ pub mod attention_fi {
         verify_handle::verify_handle_handler(ctx, handle, uri)
     }
 
+    /// Retune the protocol's trading economics without a redeploy. Each
+    /// argument is optional; omitting one leaves that value untouched.
+    pub fn update_config(
+        ctx: Context<UpdateConfig>,
+        fee_bps: Option<u16>,
+        creator_fee_share_bps: Option<u16>,
+        graduation_sol: Option<u64>,
+        virtual_token_reserves: Option<u64>,
+    ) -> Result<()> {
+        update_config::update_config_handler(
+            ctx,
+            fee_bps,
+            creator_fee_share_bps,
+            graduation_sol,
+            virtual_token_reserves,
+        )
+    }
+
+    /// Set the NFT market's fee schedule — its sale fee and the daily price of
+    /// promoted placement — creating the account on first call.
+    pub fn set_fee_config(
+        ctx: Context<SetFeeConfig>,
+        nft_fee_bps: Option<u16>,
+        promo_lamports_per_day: Option<u64>,
+    ) -> Result<()> {
+        set_fee_config::set_fee_config_handler(ctx, nft_fee_bps, promo_lamports_per_day)
+    }
+
     /// Set or rotate the dedicated key authorized to sign SAS attestations
     /// (admin-gated by `Global.authority`).
     pub fn set_issuer(ctx: Context<SetIssuer>, issuer: Pubkey) -> Result<()> {
@@ -226,6 +256,39 @@ pub mod attention_fi {
     /// carrying a `share_bps` claim on its fee stream.
     pub fn mint_genesis(ctx: Context<MintGenesis>, share_bps: u16, uri: String) -> Result<()> {
         mint_genesis::mint_genesis_handler(ctx, share_bps, uri)
+    }
+
+    /// Open a fixed-price run of genesis fee-share NFTs for a token, escrowing
+    /// the collection's update authority so the declared size is binding.
+    pub fn list_genesis_group(
+        ctx: Context<ListGenesisGroup>,
+        total_units: u16,
+        share_bps: u16,
+        price: u64,
+        per_wallet_cap: u16,
+    ) -> Result<()> {
+        list_genesis_group::list_genesis_group_handler(
+            ctx,
+            total_units,
+            share_bps,
+            price,
+            per_wallet_cap,
+        )
+    }
+
+    /// Mint units into a listed genesis group — one Core asset per unit, held
+    /// in escrow until bought. Assets are passed as remaining accounts.
+    pub fn mint_genesis_batch<'info>(
+        ctx: Context<'_, '_, '_, 'info, MintGenesisBatch<'info>>,
+        uri: String,
+    ) -> Result<()> {
+        mint_genesis_batch::mint_genesis_batch_handler(ctx, uri)
+    }
+
+    /// Buy one unit from a token's genesis group at the listed price, subject
+    /// to the group's per-wallet cap.
+    pub fn buy_genesis_unit(ctx: Context<BuyGenesisUnit>, max_price: u64) -> Result<()> {
+        buy_genesis_unit::buy_genesis_unit_handler(ctx, max_price)
     }
 
     /// Mint a plain Core NFT (collectible with an optional image), standalone

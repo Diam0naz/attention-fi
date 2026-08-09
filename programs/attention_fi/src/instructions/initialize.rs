@@ -1,11 +1,12 @@
 use anchor_lang::prelude::*;
 
 use crate::constants::{
-    DEFAULT_CREATOR_FEE_SHARE_BPS, DEFAULT_FEE_BPS, DEFAULT_GRADUATION_SOL,
-    DEFAULT_VIRTUAL_TOKEN_RESERVES, GLOBAL_SEED, TOKEN_DECIMALS, TOKEN_TOTAL_SUPPLY,
+    DEFAULT_CREATOR_FEE_SHARE_BPS, DEFAULT_FEE_BPS, DEFAULT_GRADUATION_SOL, DEFAULT_NFT_FEE_BPS,
+    DEFAULT_VIRTUAL_TOKEN_RESERVES, FEECONFIG_SEED, GLOBAL_SEED, PROMO_LAMPORTS_PER_DAY,
+    TOKEN_DECIMALS, TOKEN_TOTAL_SUPPLY,
 };
 use crate::error::AttentionError;
-use crate::state::Global;
+use crate::state::{FeeConfig, Global};
 
 #[derive(Accounts)]
 pub struct Initialize<'info> {
@@ -20,6 +21,18 @@ pub struct Initialize<'info> {
         bump,
     )]
     pub global: Account<'info, Global>,
+
+    /// The NFT market's fee schedule. Created here so a new deployment is
+    /// complete in one call; a protocol deployed before this account existed
+    /// gets one from `set_fee_config` instead.
+    #[account(
+        init,
+        payer = authority,
+        space = 8 + FeeConfig::INIT_SPACE,
+        seeds = [FEECONFIG_SEED],
+        bump,
+    )]
+    pub fee_config: Account<'info, FeeConfig>,
 
     /// CHECK: fee destination. Constrained to a System-owned account so fees can
     /// never be routed into a program-controlled account.
@@ -41,5 +54,10 @@ pub fn initialize_handler(ctx: Context<Initialize>) -> Result<()> {
     global.token_decimals = TOKEN_DECIMALS;
     global.tokens_launched = 0;
     global.bump = ctx.bumps.global;
+
+    let fee_config = &mut ctx.accounts.fee_config;
+    fee_config.nft_fee_bps = DEFAULT_NFT_FEE_BPS;
+    fee_config.promo_lamports_per_day = PROMO_LAMPORTS_PER_DAY;
+    fee_config.bump = ctx.bumps.fee_config;
     Ok(())
 }

@@ -2,6 +2,15 @@ use anchor_lang::prelude::*;
 
 // ---- PDA seeds ----
 pub const GLOBAL_SEED: &[u8] = b"global";
+/// Singleton PDA holding the NFT market's fee schedule.
+///
+/// Separate from `Global` rather than two more fields on it. `Global` is live
+/// on-chain and Anchor sizes an account exactly, so lengthening the struct
+/// leaves every existing `Global` too short to deserialize — the config that
+/// gates every instruction in the program would stop loading, and the
+/// instruction meant to repair it could not read it either. The same reasoning
+/// gave `Promotion` and `MindshareState` their own accounts.
+pub const FEECONFIG_SEED: &[u8] = b"feeconfig";
 pub const CURVE_SEED: &[u8] = b"curve";
 pub const AMM_SEED: &[u8] = b"amm";
 pub const AUCTION_SEED: &[u8] = b"auction";
@@ -18,6 +27,12 @@ pub const PERK_AUTH_SEED: &[u8] = b"perkauth";
 pub const PERKGRANT_SEED: &[u8] = b"perkgrant";
 pub const GENESIS_SEED: &[u8] = b"genesis";
 pub const GENPOOL_SEED: &[u8] = b"genpool";
+/// A token's fixed-price run of genesis fee-share NFTs, keyed by subject mint.
+pub const GENGROUP_SEED: &[u8] = b"gengroup";
+/// One wallet's holdings from one token's group — the per-wallet cap is
+/// enforced by this PDA existing and counting, so the limit survives the buyer
+/// using a fresh transaction, a different RPC or a different session.
+pub const GENALLOC_SEED: &[u8] = b"genalloc";
 pub const NFTAUCTION_SEED: &[u8] = b"nftauction";
 /// Escrow for a whole collection on sale. Separate from `NFTAUCTION_SEED`
 /// because a collection is a different Core account type that changes hands a
@@ -69,6 +84,14 @@ pub const DEFAULT_VIRTUAL_TOKEN_RESERVES: u64 = 1_073_000_000 * 1_000_000;
 // ---- Economics ----
 /// Trading fee on the curve, in basis points (1% = 100).
 pub const DEFAULT_FEE_BPS: u16 = 100;
+/// Fee on an NFT or collection sale, in basis points (2.5% = 250).
+///
+/// Deliberately not the curve's fee. The two price different things: a trading
+/// fee is charged over and over on the same capital as it moves along a curve,
+/// so it has to be small, while a marketplace fee is charged once when a piece
+/// changes hands, and 2.5% is what the NFT market charges. Sharing one number
+/// meant every retune of one silently repriced the other.
+pub const DEFAULT_NFT_FEE_BPS: u16 = 250;
 /// Share of each trading fee routed to the (verified) creator, in bps of the fee.
 /// 5000 = 50% of a 1% fee => 0.5% to creator, 0.5% to protocol (per the brief).
 pub const DEFAULT_CREATOR_FEE_SHARE_BPS: u16 = 5000;

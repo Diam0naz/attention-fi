@@ -59,4 +59,16 @@ pub enum AttentionError {
     // variant below it and every client that reports errors by number.
     #[msg("Token name, symbol or URI is empty or exceeds the Metaplex limit")]
     InvalidTokenMetadata,
+    #[msg("Genesis group size, share, price or per-wallet cap is invalid")]
+    InvalidGenesisGroup,
+    #[msg("Genesis group already holds every unit it declared")]
+    GenesisGroupFull,
+    #[msg("Genesis batch is empty or exceeds the per-call limit")]
+    InvalidGenesisBatch,
+    #[msg("Wallet already holds its maximum units of this genesis group")]
+    WalletCapReached,
+    #[msg("That asset is not a unit of this genesis group")]
+    AssetNotInGroup,
+    #[msg("Config value is outside the range the protocol accepts")]
+    InvalidConfig,
 }
