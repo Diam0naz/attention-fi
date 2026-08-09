@@ -18,6 +18,7 @@ import { useTokenIndex } from "@/lib/token-index";
 import { fetchLaunchedMints } from "@/lib/solana/launched";
 import { useReadonlyProgram } from "@/lib/solana/use-program";
 import { useHoldings } from "@/lib/solana/use-holdings";
+import { CreatorFeesPanel } from "@/components/profile/creator-fees-panel";
 import { useNftPortfolio } from "@/components/nft/use-nft-portfolio";
 import { RefreshButton } from "@/components/ui/refresh-button";
 import { syncRegistry } from "@/lib/solana/registry";
@@ -42,7 +43,17 @@ export function ProfileView() {
   // Real balances priced off the live curves. The mock this replaced derived
   // holdings from the wallet address, so every wallet saw a stable, plausible
   // portfolio it did not own.
-  const { holdings, totalUsd, claimableUsd, loaded: holdingsLoaded } = useHoldings();
+  // Bumped after a claim lands so the balances re-read rather than showing a
+  // figure the creator has just withdrawn.
+  const [holdingsNonce, setHoldingsNonce] = useState(0);
+  const {
+    holdings,
+    totalUsd,
+    claimableUsd,
+    claimable,
+    claimableLamports,
+    loaded: holdingsLoaded,
+  } = useHoldings(holdingsNonce);
   // Read from the Verification PDA. This line previously reported a mock
   // handle, i.e. told a wallet it was verified as someone it isn't.
   const nftPortfolio = useNftPortfolio();
@@ -223,6 +234,19 @@ export function ProfileView() {
           </div>
         </div>
 
+        {/* The claim for the stat above. Sits directly under the overview
+            because a balance and the button that releases it belong together —
+            they were a screen apart, which is to say the button didn't exist. */}
+        <div className="mt-5">
+          <CreatorFeesPanel
+            claims={claimable}
+            totalLamports={claimableLamports}
+            verified={Boolean(nftPortfolio.data?.verification)}
+            loaded={holdingsLoaded}
+            onClaimed={() => setHoldingsNonce((n) => n + 1)}
+          />
+        </div>
+
         {/* holdings */}
         <Section title="Holdings" count={holdings.length}>
           <div className="overflow-hidden rounded-sm border border-white/[0.06]">
@@ -331,7 +355,7 @@ export function ProfileView() {
                     </span>
                   </div>
                   <div className="mt-1 font-mono text-[10px] text-[#6B6B6B]">
-                    {c.name} · manage &amp; claim creator fees on the token page →
+                    {c.name} · open the token page →
                   </div>
                 </Link>
               ))}

@@ -8,6 +8,7 @@ import { getConnection } from "@/lib/solana/program";
 import { quoteSell, spotPriceSol } from "@/lib/solana/curve";
 import { poolSpotSol, swapQuote } from "@/lib/solana/amm";
 import { fetchWalletPositions } from "@/lib/solana/positions";
+import type { CreatorFeeClaim } from "@/lib/solana/creator-fees";
 import { solUsd } from "@/lib/solana/sol-usd";
 
 export interface Holding {
@@ -54,11 +55,22 @@ export interface HoldingsState {
    * can't yet withdraw it.
    */
   claimableUsd: number;
+  /** The same figure broken out per token, which is how it must be claimed. */
+  claimable: CreatorFeeClaim[];
+  /** Total unclaimed lamports — the exact number, before any USD conversion. */
+  claimableLamports: bigint;
   /** False until the first read completes, so "none" and "not read" differ. */
   loaded: boolean;
 }
 
-const EMPTY: HoldingsState = { holdings: [], totalUsd: 0, claimableUsd: 0, loaded: false };
+const EMPTY: HoldingsState = {
+  holdings: [],
+  totalUsd: 0,
+  claimableUsd: 0,
+  claimable: [],
+  claimableLamports: 0n,
+  loaded: false,
+};
 
 /**
  * What the connected wallet actually holds of AttentionFi tokens, priced off
@@ -83,7 +95,7 @@ export function useHoldings(nonce = 0): HoldingsState {
     const load = async () => {
       try {
         const owner = new PublicKey(address);
-        const { positions, decimals, feeBps, claimableLamports } = await fetchWalletPositions(
+        const { positions, decimals, feeBps, claimable } = await fetchWalletPositions(
           readonly,
           getConnection(),
           owner,
@@ -142,12 +154,20 @@ export function useHoldings(nonce = 0): HoldingsState {
 
         holdings.sort((a, b) => b.valueUsd - a.valueUsd);
         const totalUsd = holdings.reduce((sum, h) => sum + h.valueUsd, 0);
+        const claimableLamports = claimable.reduce((sum, c) => sum + c.lamports, 0n);
         const claimableUsd = (Number(claimableLamports) / 1e9) * usdRate;
 
         if (!cancelled) {
           setSnapshot({
             key: `${address}:${nonce}`,
-            state: { holdings, totalUsd, claimableUsd, loaded: true },
+            state: {
+              holdings,
+              totalUsd,
+              claimableUsd,
+              claimable,
+              claimableLamports,
+              loaded: true,
+            },
           });
         }
       } catch {

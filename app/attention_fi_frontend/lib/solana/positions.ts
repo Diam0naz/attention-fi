@@ -3,6 +3,7 @@ import { Connection, PublicKey } from "@solana/web3.js";
 import type { AttentionFi } from "@/lib/idl/attention_fi";
 import { fetchAllPools, type PoolState } from "./amm";
 import { fetchAllCurves, fetchGlobal, type CurveState } from "./curve";
+import type { CreatorFeeClaim } from "./creator-fees";
 import { staticHandleForMint } from "./static-registry";
 
 /** SPL Token program — where the wallet's token accounts live. */
@@ -35,8 +36,14 @@ export interface WalletPositions {
   positions: WalletPosition[];
   decimals: number;
   feeBps: number;
-  /** Creator fees accrued across tokens this wallet launched, in lamports. */
-  claimableLamports: bigint;
+  /**
+   * Unclaimed creator fees, one entry per token this wallet launched.
+   *
+   * Per-token rather than a single total because `claim_creator_fee` is a
+   * per-curve instruction: a lump sum can be displayed but not claimed, and the
+   * screen showing it needs to know which mints to send.
+   */
+  claimable: CreatorFeeClaim[];
 }
 
 /**
@@ -121,9 +128,22 @@ export async function fetchWalletPositions(
     });
   }
 
-  const claimableLamports = curves
-    .filter((c) => c.creator === owner.toBase58())
-    .reduce((sum, c) => sum + c.creatorFees, 0n);
+  // Every curve this wallet created that still owes it something. Curves with
+  // a zero balance are dropped here rather than at the call site, because the
+  // program rejects a zero claim and a row offering one would only ever fail.
+  const claimable: CreatorFeeClaim[] = [];
+  for (const c of curves) {
+    if (c.creator !== owner.toBase58() || c.creatorFees === 0n) continue;
+    const entry = meta.get(c.mint) ?? null;
+    const handle = entry?.handle ?? staticHandleForMint(c.mint);
+    claimable.push({
+      mint: c.mint,
+      handle: handle ?? `${c.mint.slice(0, 6)}…`,
+      symbol: entry?.symbol ?? (handle ? handle.slice(0, 4).toUpperCase() : "—"),
+      lamports: c.creatorFees,
+    });
+  }
+  claimable.sort((a, b) => (b.lamports > a.lamports ? 1 : b.lamports < a.lamports ? -1 : 0));
 
-  return { positions, decimals, feeBps, claimableLamports };
+  return { positions, decimals, feeBps, claimable };
 }

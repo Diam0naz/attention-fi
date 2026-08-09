@@ -7,6 +7,7 @@ import * as fs from "fs";
 const { PublicKey, Keypair, SystemProgram, SYSVAR_RENT_PUBKEY, LAMPORTS_PER_SOL } =
   anchor.web3;
 type PublicKey = anchor.web3.PublicKey;
+type Keypair = anchor.web3.Keypair;
 
 const TOKEN_PROGRAM_ID = new PublicKey(
   "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
