@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { PublicKey, Transaction } from "@solana/web3.js";
+import { BN } from "@anchor-lang/core";
 import { ArrowLeft, ShieldCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useWallet } from "@/components/wallet/wallet-provider";
@@ -11,7 +12,7 @@ import { TxStatus, type TxState } from "@/components/wallet/tx-status";
 import { Footer } from "@/components/feed/footer";
 import { useProgram, useReadonlyProgram } from "@/lib/solana/use-program";
 import { useIsAdmin } from "@/lib/solana/use-admin";
-import { fetchGlobal } from "@/lib/solana/curve";
+import { fetchFeeConfig, fetchGlobal } from "@/lib/solana/curve";
 import { explorerAddress, explorerTx } from "@/lib/solana/config";
 import { Notice } from "@/components/ui/notice";
 import {
@@ -42,9 +43,21 @@ interface GlobalConfig {
   feeBps: number;
   creatorFeeShareBps: number;
   graduationSol: bigint;
+  virtualTokenReserves: bigint;
   tokenDecimals: number;
   tokensLaunched: bigint;
 }
+
+interface FeeSchedule {
+  nftFeeBps: number;
+  promoLamportsPerDay: bigint;
+}
+
+/** The ceiling `config.rs` enforces on any fee, in percent. */
+const MAX_FEE_PCT = 10;
+
+/** Trim a number to a plain decimal string, for seeding an editable field. */
+const pct = (bps: number) => String(bps / 100);
 
 export function AdminView() {
   const { connected, address, shortAddress, disconnect } = useWallet();
@@ -54,6 +67,7 @@ export function AdminView() {
 
   const [walletOpen, setWalletOpen] = useState(false);
   const [config, setConfig] = useState<GlobalConfig | null>(null);
+  const [fees, setFees] = useState<FeeSchedule | null>(null);
   const [grants, setGrants] = useState<PerkGrantData[]>([]);
   const [claimed, setClaimed] = useState<ClaimedPerkData[]>([]);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
@@ -72,6 +86,17 @@ export function AdminView() {
   const [granting, setGranting] = useState(false);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
 
+  // economics form — seeded from Global once it loads, then owned by the user
+  const [feePct, setFeePct] = useState("");
+  const [sharePct, setSharePct] = useState("");
+  const [gradSol, setGradSol] = useState("");
+  const [savingConfig, setSavingConfig] = useState(false);
+
+  // NFT market form
+  const [nftFeePct, setNftFeePct] = useState("");
+  const [promoSol, setPromoSol] = useState("");
+  const [savingFees, setSavingFees] = useState(false);
+
   // issuer form
   const [issuer, setIssuer] = useState("");
   const [settingIssuer, setSettingIssuer] = useState(false);
@@ -83,15 +108,26 @@ export function AdminView() {
     let cancelled = false;
     void (async () => {
       try {
-        const [g, gr, cl] = await Promise.all([
+        const [g, f, gr, cl] = await Promise.all([
           fetchGlobal(readProgram),
+          fetchFeeConfig(readProgram),
           fetchPerkGrants(readProgram),
           fetchClaimedPerks(readProgram),
         ]);
         if (cancelled) return;
         setConfig(g);
+        setFees(f);
         setGrants(gr);
         setClaimed(cl);
+        // Seed the editors with what's live. Done here rather than on every
+        // render so a refresh mid-edit can't overwrite what's being typed.
+        if (g) {
+          setFeePct(pct(g.feeBps));
+          setSharePct(pct(g.creatorFeeShareBps));
+          setGradSol(String(Number(g.graduationSol) / LAMPORTS_PER_SOL));
+        }
+        setNftFeePct(f ? pct(f.nftFeeBps) : "2.5");
+        setPromoSol(f ? String(Number(f.promoLamportsPerDay) / LAMPORTS_PER_SOL) : "0.01");
         setStatus("ready");
       } catch {
         if (!cancelled) setStatus("error");
@@ -161,6 +197,126 @@ export function AdminView() {
     } finally {
       setGranting(false);
       setProgress(null);
+    }
+  }
+
+  /**
+   * Retune the trading economics.
+   *
+   * Only the fields that actually differ are sent; the rest go as null and the
+   * program leaves them alone. That matters more than it looks: restating every
+   * value on each save means a console showing a stale read would quietly
+   * revert whatever changed since it loaded.
+   */
+  async function saveEconomics() {
+    if (!signProgram || !address) return setWalletOpen(true);
+    if (!config) return;
+
+    const fee = Math.round(Number(feePct) * 100);
+    const share = Math.round(Number(sharePct) * 100);
+    const grad = Math.round(Number(gradSol) * LAMPORTS_PER_SOL);
+
+    // Checked here as well as on-chain so a typo is caught before a signature
+    // is requested, not after the wallet round trip.
+    if (!Number.isFinite(fee) || fee < 0 || fee > MAX_FEE_PCT * 100) {
+      return setTx({
+        state: "failed",
+        title: "Fee out of range",
+        detail: `The protocol fee must be between 0% and ${MAX_FEE_PCT}%.`,
+      });
+    }
+    if (!Number.isFinite(share) || share < 0 || share > 10_000) {
+      return setTx({
+        state: "failed",
+        title: "Creator share out of range",
+        detail: "The creator's cut is a share of the fee, so it cannot exceed 100%.",
+      });
+    }
+    if (!Number.isFinite(grad) || grad <= 0) {
+      return setTx({
+        state: "failed",
+        title: "Graduation threshold must be above zero",
+        detail: "At zero every curve would graduate on its first buy.",
+      });
+    }
+
+    const nextFee = fee === config.feeBps ? null : fee;
+    const nextShare = share === config.creatorFeeShareBps ? null : share;
+    const nextGrad = BigInt(grad) === config.graduationSol ? null : new BN(grad.toString());
+    if (nextFee === null && nextShare === null && nextGrad === null) {
+      return setTx({ state: "confirmed", title: "Nothing to change", detail: "Already live." });
+    }
+
+    setSavingConfig(true);
+    setTx(null);
+    try {
+      const sig = await signProgram.methods
+        .updateConfig(nextFee, nextShare, nextGrad, null)
+        .accountsPartial({ authority: new PublicKey(address) })
+        .rpc();
+      setTx({
+        state: "confirmed",
+        title: "Economics updated",
+        detail: "Applies to the next trade on every token.",
+        signature: short(sig),
+        explorerUrl: explorerTx(sig),
+      });
+      refresh();
+    } catch (e) {
+      setTx({
+        state: "failed",
+        title: "Could not update config",
+        detail: e instanceof Error ? e.message : "Transaction failed",
+      });
+    } finally {
+      setSavingConfig(false);
+    }
+  }
+
+  /** Set the NFT market's own fees, creating the account on first save. */
+  async function saveFees() {
+    if (!signProgram || !address) return setWalletOpen(true);
+
+    const fee = Math.round(Number(nftFeePct) * 100);
+    const promo = Math.round(Number(promoSol) * LAMPORTS_PER_SOL);
+    if (!Number.isFinite(fee) || fee < 0 || fee > MAX_FEE_PCT * 100) {
+      return setTx({
+        state: "failed",
+        title: "Fee out of range",
+        detail: `A marketplace fee must be between 0% and ${MAX_FEE_PCT}%.`,
+      });
+    }
+    if (!Number.isFinite(promo) || promo <= 0) {
+      return setTx({
+        state: "failed",
+        title: "Placement must cost something",
+        detail: "At zero, every listing can promote itself forever and the ranking means nothing.",
+      });
+    }
+
+    setSavingFees(true);
+    setTx(null);
+    try {
+      const sig = await signProgram.methods
+        .setFeeConfig(fee, new BN(promo.toString()))
+        .accountsPartial({ authority: new PublicKey(address) })
+        .rpc();
+      setTx({
+        state: "confirmed",
+        title: fees ? "NFT fees updated" : "NFT fee schedule created",
+        detail: `${(fee / 100).toFixed(2)}% a sale · ${promoSol} SOL a day for placement`,
+        signature: short(sig),
+        explorerUrl: explorerTx(sig),
+      });
+      refresh();
+    } catch (e) {
+      setTx({
+        state: "failed",
+        title: "Could not set NFT fees",
+        detail: e instanceof Error ? e.message : "Transaction failed",
+      });
+    } finally {
+      setSavingFees(false);
     }
   }
 
@@ -275,21 +431,113 @@ export function AdminView() {
             v={`${(Number(config.graduationSol) / LAMPORTS_PER_SOL).toFixed(2)} SOL`}
           />
           <Row k="TOKENS LAUNCHED" v={config.tokensLaunched.toString()} />
+          <Row
+            k="NFT SALE FEE"
+            v={fees ? `${(fees.nftFeeBps / 100).toFixed(2)}%` : "not set"}
+            accent={fees !== null}
+          />
+          <Row
+            k="PLACEMENT / DAY"
+            v={
+              fees
+                ? `${(Number(fees.promoLamportsPerDay) / LAMPORTS_PER_SOL).toFixed(3)} SOL`
+                : "not set"
+            }
+          />
         </dl>
       ) : (
         <p className="mt-2 font-mono text-[11px] text-noise">Couldn&apos;t read Global.</p>
       )}
 
-      {/* Two facts the console can't act on but shouldn't hide: which of these
-          values are frozen, and that the most consequential action of all
-          deliberately isn't a button here. */}
-      <Notice tone="info" title="WHAT THIS PAGE CAN AND CAN'T CHANGE" className="mt-3 max-w-2xl">
-        Fees and the graduation threshold are written at <code>initialize</code> and have no
-        setter — changing them needs a program upgrade. Authority transfer is deliberately not a
-        button: the program requires the incoming wallet to sign too, so it runs from{" "}
+      {/* The one privileged action that deliberately isn't a button here. */}
+      <Notice tone="info" title="AUTHORITY TRANSFER IS NOT A BUTTON" className="mt-3 max-w-2xl">
+        The program requires the incoming wallet to sign as well, so a handover runs from{" "}
         <code>scripts/set-authority.ts</code> where both signatures can be collected. That
-        requirement is what stops authority being sent to a mistyped address nobody controls.
+        requirement is the thing stopping authority being sent to a mistyped address nobody
+        controls, and a one-click version here would only be able to weaken it.
       </Notice>
+
+      {!fees && (
+        <Notice tone="caution" title="THE NFT MARKET HAS NO FEE SCHEDULE YET" className="mt-2 max-w-2xl">
+          <code>FeeConfig</code> doesn&apos;t exist on this deployment, and the instructions that
+          charge it — buying an asset or a collection, buying a genesis unit, promoting a listing
+          — cannot run until it does. Saving below creates it.
+        </Notice>
+      )}
+
+      {/* ── economics ──────────────────────────────────────────── */}
+      <h2 className="mt-8 text-[13px] font-bold">Trading economics</h2>
+      <p className="mt-1 max-w-2xl text-[11px] leading-relaxed text-[#6B6B6B]">
+        Live values, editable. A change applies to the next trade on every token — no redeploy.
+        Anything left as it is gets sent as &ldquo;unchanged&rdquo; rather than rewritten, so a
+        stale reading of this page can&apos;t revert something you altered elsewhere.
+      </p>
+      <div className="mt-3 grid max-w-2xl gap-3 sm:grid-cols-3">
+        <Field
+          label="Protocol fee"
+          suffix="%"
+          value={feePct}
+          onChange={setFeePct}
+          hint={`0–${MAX_FEE_PCT}% of each trade`}
+        />
+        <Field
+          label="Creator share"
+          suffix="%"
+          value={sharePct}
+          onChange={setSharePct}
+          hint="of the fee, not of the trade"
+        />
+        <Field
+          label="Graduation"
+          suffix="SOL"
+          value={gradSol}
+          onChange={setGradSol}
+          hint="raised before the AMM"
+        />
+      </div>
+      <Notice tone="caution" title="LOWERING GRADUATION GRADUATES CURVES IMMEDIATELY" className="mt-2 max-w-2xl">
+        The threshold is read live on every buy, so any curve already past a new, lower line
+        migrates on its next trade. That is the point of it being tunable — but it is not
+        reversible for the curves it catches.
+      </Notice>
+      <button
+        onClick={() => void saveEconomics()}
+        disabled={savingConfig || !config}
+        className="mt-3 rounded-sm border border-signal/40 bg-signal/10 px-4 py-2 font-mono text-[11px] font-bold text-signal disabled:cursor-not-allowed disabled:opacity-40"
+      >
+        {savingConfig ? "SAVING…" : "SAVE ECONOMICS"}
+      </button>
+
+      {/* ── nft market ─────────────────────────────────────────── */}
+      <h2 className="mt-8 text-[13px] font-bold">NFT market</h2>
+      <p className="mt-1 max-w-2xl text-[11px] leading-relaxed text-[#6B6B6B]">
+        Priced apart from trading on purpose. A trading fee is charged over and over on the same
+        capital as it moves along a curve; a marketplace fee is charged once, when a piece changes
+        hands. They were one number only because they shared a field.
+      </p>
+      <div className="mt-3 grid max-w-2xl gap-3 sm:grid-cols-2">
+        <Field
+          label="Sale fee"
+          suffix="%"
+          value={nftFeePct}
+          onChange={setNftFeePct}
+          hint="charged on top of the sale price"
+        />
+        <Field
+          label="Promoted placement"
+          suffix="SOL / day"
+          value={promoSol}
+          onChange={setPromoSol}
+          hint="listing stays free; this buys visibility"
+        />
+      </div>
+      <button
+        onClick={() => void saveFees()}
+        disabled={savingFees}
+        className="mt-3 rounded-sm border border-signal/40 bg-signal/10 px-4 py-2 font-mono text-[11px] font-bold text-signal disabled:cursor-not-allowed disabled:opacity-40"
+      >
+        {savingFees ? "SAVING…" : fees ? "SAVE NFT FEES" : "CREATE FEE SCHEDULE"}
+      </button>
 
       {config && config.authority === config.treasury && (
         <Notice tone="caution" title="AUTHORITY AND TREASURY ARE THE SAME WALLET" className="mt-2 max-w-2xl">
@@ -478,6 +726,38 @@ export function AdminView() {
 
       <WalletConnectModal open={walletOpen} onClose={() => setWalletOpen(false)} />
     </Shell>
+  );
+}
+
+function Field({
+  label,
+  suffix,
+  value,
+  onChange,
+  hint,
+}: {
+  label: string;
+  suffix: string;
+  value: string;
+  onChange: (v: string) => void;
+  hint: string;
+}) {
+  return (
+    <div>
+      <label className="font-mono text-[10px] uppercase tracking-[0.12em] text-[#6B6B6B]">
+        {label}
+      </label>
+      <div className="mt-1 flex items-center gap-1.5 rounded-sm border border-white/10 bg-[#12181f] px-3 focus-within:border-signal/50">
+        <input
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          inputMode="decimal"
+          className="min-w-0 flex-1 bg-transparent py-2 font-mono text-[11px] outline-none placeholder:text-[#4b5563]"
+        />
+        <span className="shrink-0 font-mono text-[10px] text-[#6B6B6B]">{suffix}</span>
+      </div>
+      <p className="mt-1 font-mono text-[10px] text-[#4b5563]">{hint}</p>
+    </div>
   );
 }
 

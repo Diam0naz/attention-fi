@@ -5,7 +5,7 @@ import {
   auctionPda,
   convictionPda,
   curvePda,
-  globalPda,
+  feeConfigPda, globalPda,
   positionPda,
   revenuePda,
   revStakePda,
@@ -310,8 +310,31 @@ export async function fetchGlobal(program: Program<AttentionFi>) {
       feeBps: g.feeBps,
       creatorFeeShareBps: g.creatorFeeShareBps,
       graduationSol: BigInt(g.graduationSol.toString()),
+      virtualTokenReserves: BigInt(g.virtualTokenReserves.toString()),
       tokenDecimals: g.tokenDecimals,
       tokensLaunched: BigInt(g.tokensLaunched.toString()),
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The NFT market's fee schedule.
+ *
+ * Null when the account doesn't exist, which is a real state rather than an
+ * error: a protocol deployed before `FeeConfig` existed has none until the
+ * authority calls `set_fee_config`, and until then the instructions that
+ * charge these fees cannot run. Callers should say so rather than showing a
+ * zero, which would read as "free".
+ */
+export async function fetchFeeConfig(program: Program<AttentionFi>) {
+  try {
+    const f = await program.account.feeConfig.fetchNullable(feeConfigPda());
+    if (!f) return null;
+    return {
+      nftFeeBps: f.nftFeeBps,
+      promoLamportsPerDay: BigInt(f.promoLamportsPerDay.toString()),
     };
   } catch {
     return null;
