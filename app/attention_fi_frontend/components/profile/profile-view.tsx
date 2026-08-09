@@ -29,7 +29,7 @@ function usd(n: number): string {
 }
 
 export function ProfileView() {
-  const { connected, address, shortAddress, disconnect } = useWallet();
+  const { connected, address, shortAddress } = useWallet();
   const [walletOpen, setWalletOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [pfp, setPfp] = useState<string | null>(null);
@@ -164,7 +164,7 @@ export function ProfileView() {
 
   return (
     <div className="flex min-h-screen flex-col">
-      <TopBar shortAddress={shortAddress} onDisconnect={disconnect} />
+      <TopBar />
 
       <div className="mx-auto w-full max-w-4xl flex-1 px-5 py-7">
         {/* overview */}
@@ -378,7 +378,13 @@ export function ProfileView() {
   );
 }
 
-function TopBar({ shortAddress, onDisconnect }: { shortAddress?: string | null; onDisconnect?: () => void }) {
+/**
+ * Breadcrumb row only. The wallet address and Disconnect live in the global nav
+ * directly above; carrying a second copy here meant two controls for one piece
+ * of state, and on a phone the extra chip pushed the row wide enough to
+ * overflow horizontally.
+ */
+function TopBar() {
   return (
     <nav className="flex items-center gap-4 border-b border-white/[0.08] px-5 py-3">
       <Link href="/" className="inline-flex items-center gap-1.5 text-[#6B6B6B] hover:text-[#F5F4F0]">
@@ -393,14 +399,6 @@ function TopBar({ shortAddress, onDisconnect }: { shortAddress?: string | null; 
       >
         Discover
       </Link>
-      {shortAddress && (
-        <button
-          onClick={onDisconnect}
-          className="rounded-sm border border-white/10 px-2.5 py-1 font-mono text-[10px] text-[#6B6B6B] transition-colors hover:text-noise"
-        >
-          Disconnect
-        </button>
-      )}
     </nav>
   );
 }

@@ -60,7 +60,7 @@ const MAX_FEE_PCT = 10;
 const pct = (bps: number) => String(bps / 100);
 
 export function AdminView() {
-  const { connected, address, shortAddress, disconnect } = useWallet();
+  const { connected, address, shortAddress } = useWallet();
   const isAdmin = useIsAdmin();
   const readProgram = useReadonlyProgram();
   const signProgram = useProgram();
@@ -377,7 +377,7 @@ export function AdminView() {
 
   if (!isAdmin) {
     return (
-      <Shell shortAddress={shortAddress} onDisconnect={disconnect}>
+      <Shell>
         <Panel>
           <div className="text-[15px] font-bold">Not the protocol authority</div>
           <p className="mt-2 max-w-md text-[12px] leading-relaxed text-[#6B6B6B]">
@@ -394,7 +394,7 @@ export function AdminView() {
   }
 
   return (
-    <Shell shortAddress={shortAddress} onDisconnect={disconnect}>
+    <Shell>
       {tx && (
         <div className="mb-4">
           <TxStatus
@@ -782,15 +782,7 @@ function Panel({ children }: { children: React.ReactNode }) {
   );
 }
 
-function Shell({
-  children,
-  shortAddress,
-  onDisconnect,
-}: {
-  children: React.ReactNode;
-  shortAddress?: string | null;
-  onDisconnect?: () => void;
-}) {
+function Shell({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-screen flex-col">
       <nav className="flex items-center gap-3 border-b border-white/[0.08] px-5 py-3">
@@ -800,14 +792,7 @@ function Shell({
         </Link>
         <span className="text-[#4b5563]">/</span>
         <span className="font-mono text-[12px] text-signal">Admin</span>
-        {shortAddress && (
-          <button
-            onClick={onDisconnect}
-            className="ml-auto rounded-sm border border-white/10 px-2.5 py-1 font-mono text-[10px] text-[#6B6B6B] transition-colors hover:text-noise"
-          >
-            Disconnect
-          </button>
-        )}
+        {/* Address and Disconnect live in the global nav above. */}
       </nav>
       <div className="mx-auto w-full max-w-4xl flex-1 px-5 py-7">{children}</div>
       <Footer />

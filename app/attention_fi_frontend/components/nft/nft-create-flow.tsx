@@ -59,7 +59,7 @@ const STEPS = ["Type", "Configure", "Review", "Confirm"];
 const DURATIONS = ["6h", "12h", "24h", "48h"];
 
 export function NftCreateFlow() {
-  const { connected, address, shortAddress } = useWallet();
+  const { connected, address } = useWallet();
   const program = useProgram();
   // Tokens this wallet launched (client-only; localStorage) — the ones it can
   // issue genesis fee-share NFTs for, now that genesis is creator-gated on-chain.
@@ -358,7 +358,7 @@ export function NftCreateFlow() {
   }
 
   return (
-    <Shell shortAddress={shortAddress}>
+    <Shell>
       {/* progress */}
       <div className="flex gap-1">
         {STEPS.map((_, i) => (
@@ -1062,13 +1062,7 @@ export function NftCreateFlow() {
   );
 }
 
-function Shell({
-  children,
-  shortAddress,
-}: {
-  children: React.ReactNode;
-  shortAddress?: string | null;
-}) {
+function Shell({ children }: { children: React.ReactNode }) {
   return (
     <>
       <div className="pointer-events-none fixed inset-0 -z-10 opacity-80 [mask-image:radial-gradient(ellipse_at_center,#000_25%,transparent_85%)]">
@@ -1080,12 +1074,6 @@ function Shell({
             <ArrowLeft className="h-4 w-4" />
           </Link>
           <span className="text-[15px] font-bold">Create an NFT</span>
-          {shortAddress && (
-            <span className="ml-auto inline-flex items-center gap-1.5 rounded-sm border border-signal/40 bg-signal/[0.06] px-2.5 py-1 font-mono text-[10px] font-bold text-signal">
-              <span className="af-pulse-dot h-1.5 w-1.5 rounded-full bg-signal" />
-              {shortAddress}
-            </span>
-          )}
         </div>
         {/* top-aligned to match the token launch wizard; steps hold a min-height
             so a short step (Review) doesn't shrink sharply vs the others */}

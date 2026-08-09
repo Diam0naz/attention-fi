@@ -14,7 +14,7 @@ import { useOwnedNfts } from "@/components/nft/use-owned-nfts";
 import { useNftPortfolio } from "@/components/nft/use-nft-portfolio";
 
 export function NftView() {
-  const { connected, shortAddress, disconnect } = useWallet();
+  const { connected } = useWallet();
   const [walletOpen, setWalletOpen] = useState(false);
   const [selected, setSelected] = useState<NftCardData | null>(null);
 
@@ -128,7 +128,7 @@ export function NftView() {
 
   return (
     <div className="flex min-h-screen flex-col">
-      <TopBar shortAddress={shortAddress} onDisconnect={disconnect} />
+      <TopBar />
 
       <div className="mx-auto w-full max-w-4xl flex-1 px-5 py-7">
         <div className="flex items-start gap-4">
@@ -207,7 +207,8 @@ export function NftView() {
   );
 }
 
-function TopBar({ shortAddress, onDisconnect }: { shortAddress?: string | null; onDisconnect?: () => void }) {
+/** Breadcrumb only — the wallet chip and Disconnect belong to the global nav. */
+function TopBar() {
   return (
     <nav className="flex items-center gap-4 border-b border-white/[0.08] px-5 py-3">
       <Link href="/profile" className="inline-flex items-center gap-1.5 text-[#6B6B6B] hover:text-[#F5F4F0]">
@@ -216,14 +217,6 @@ function TopBar({ shortAddress, onDisconnect }: { shortAddress?: string | null; 
       </Link>
       <span className="text-[#4b5563]">/</span>
       <span className="font-mono text-[12px]">NFTs</span>
-      {shortAddress && (
-        <button
-          onClick={onDisconnect}
-          className="ml-auto rounded-sm border border-white/10 px-2.5 py-1 font-mono text-[10px] text-[#6B6B6B] transition-colors hover:text-noise"
-        >
-          Disconnect
-        </button>
-      )}
     </nav>
   );
 }

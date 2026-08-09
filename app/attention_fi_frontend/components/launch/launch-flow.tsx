@@ -375,19 +375,11 @@ export function LaunchFlow() {
           <ArrowLeft className="h-4 w-4" />
         </Link>
         <span className="text-[15px] font-bold">Launch a token</span>
-        {connected ? (
-          <span className="ml-auto inline-flex items-center gap-1.5 rounded-sm border border-signal/40 bg-signal/[0.06] px-2.5 py-1 font-mono text-[10px] font-bold text-signal">
-            <span className="h-1.5 w-1.5 rounded-full bg-signal af-pulse-dot" />
-            {shortAddress}
-          </span>
-        ) : (
-          <button
-            onClick={() => setWalletOpen(true)}
-            className="ml-auto rounded-sm bg-signal px-3 py-1 font-mono text-[10px] font-bold text-[#0A0A0A]"
-          >
-            Connect Wallet
-          </button>
-        )}
+        {/* No wallet chip here — the global nav shows the address one row up.
+            This page sits behind the connect gate, so it can only ever be read
+            by a connected wallet, and restating that pushed the row past the
+            viewport on a phone. Step 1 still offers Connect for the case where
+            a wallet drops mid-flow. */}
       </div>
       <div className="mt-4 flex gap-1">
         {STEPS.map((_, i) => (

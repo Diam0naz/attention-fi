@@ -99,7 +99,7 @@ const META: Record<Section, { title: string; icon: React.ReactNode }> = {
 };
 
 export function NftManage({ section }: { section: Section }) {
-  const { connected, address, shortAddress, disconnect } = useWallet();
+  const { connected, address, shortAddress } = useWallet();
   const [walletOpen, setWalletOpen] = useState(false);
   const [selected, setSelected] = useState<NftCardData | null>(null);
   const [tx, setTx] = useState<{
@@ -817,7 +817,7 @@ export function NftManage({ section }: { section: Section }) {
 
 
   return (
-    <Shell title={META[section].title} icon={META[section].icon} shortAddress={shortAddress} onDisconnect={disconnect}>
+    <Shell title={META[section].title} icon={META[section].icon}>
       {tx && (
         <div className="mb-4">
           <TxStatus
@@ -1658,14 +1658,10 @@ function Shell({
   children,
   title,
   icon,
-  shortAddress,
-  onDisconnect,
 }: {
   children: React.ReactNode;
   title: string;
   icon?: React.ReactNode;
-  shortAddress?: string | null;
-  onDisconnect?: () => void;
 }) {
   return (
     <div className="flex min-h-screen flex-col">
@@ -1679,11 +1675,9 @@ function Shell({
           {icon}
           {title}
         </span>
-        {shortAddress && (
-          <button onClick={onDisconnect} className="ml-auto rounded-sm border border-white/10 px-2.5 py-1 font-mono text-[10px] text-[#6B6B6B] transition-colors hover:text-noise">
-            Disconnect
-          </button>
-        )}
+        {/* Wallet address and Disconnect stay in the global nav — one copy of
+            one piece of state, and one fewer thing widening this row on a
+            phone. */}
       </nav>
       <div className="mx-auto w-full max-w-4xl flex-1 px-5 py-7">{children}</div>
       <Footer />
