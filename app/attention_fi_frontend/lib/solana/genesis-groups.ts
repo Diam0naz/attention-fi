@@ -1,9 +1,9 @@
-import type { Program } from "@anchor-lang/core";
+import { BN, type Program } from "@anchor-lang/core";
 import { PublicKey } from "@solana/web3.js";
 import bs58 from "bs58";
 import type { AttentionFi } from "@/lib/idl/attention_fi";
 import { decodeAsset } from "./nft-data";
-import { genesisAllocationPda } from "./program";
+import { genesisAllocationPda, genesisPoolPda } from "./program";
 
 const MPL_CORE_PROGRAM_ID = new PublicKey("CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d");
 /** mpl-core's `Key` discriminant for a plain asset account. */
@@ -113,4 +113,33 @@ export async function fetchAllocation(
   } catch {
     return 0;
   }
+}
+
+/**
+ * Pay lamports into a token's genesis fee pool, split pro-rata by share.
+ *
+ * Trades credit this pool automatically, so this is not how a genesis holder
+ * normally gets paid — it exists for revenue that never touched the curve. A
+ * creator earning off-platform can route a cut to the holders who bought a
+ * claim on their fee stream, which is otherwise unreachable: the promise on a
+ * genesis NFT is a share of the creator's earnings, and before this the only
+ * earnings it could reach were trading fees.
+ *
+ * Fails with `NoStakers` when the pool has no committed share — there is no
+ * correct way to divide a deposit among nobody.
+ */
+export async function depositGenesisFee(
+  program: Program<AttentionFi>,
+  depositor: PublicKey,
+  subjectMint: PublicKey,
+  lamports: bigint,
+): Promise<string> {
+  return program.methods
+    .depositGenesisFee(new BN(lamports.toString()))
+    .accountsPartial({
+      depositor,
+      pool: genesisPoolPda(subjectMint),
+      subjectMint,
+    })
+    .rpc();
 }

@@ -9,7 +9,7 @@ import { WalletConnectModal } from "@/components/wallet/wallet-connect-modal";
 import { TxStatus, type TxState } from "@/components/wallet/tx-status";
 import { useProgram, useReadonlyProgram } from "@/lib/solana/use-program";
 import { fetchGlobal, fetchRevenueDetail, type RevenueDetail } from "@/lib/solana/curve";
-import { buyRevenue, claimRevenue } from "@/lib/solana/trade";
+import { buyRevenue, claimRevenue, depositRevenue } from "@/lib/solana/trade";
 import { useSolBalance } from "@/lib/solana/use-sol-balance";
 import { explorerTx } from "@/lib/solana/config";
 import { RefreshButton } from "@/components/ui/refresh-button";
@@ -21,6 +21,8 @@ import { RefreshButton } from "@/components/ui/refresh-button";
  * allocation and there is no sell side — the return is the revenue stream, not
  * a price move. So the two actions are "buy shares" and "claim revenue".
  */
+
+const LAMPORTS_PER_SOL = 1_000_000_000;
 
 const POLL_MS = 8_000;
 
@@ -47,7 +49,8 @@ export function RevenuePanel({ mint, symbol }: { mint: string; symbol: string })
   const [tx, setTx] = useState<TxState | null>(null);
   const [txSig, setTxSig] = useState<string | null>(null);
   const [txErr, setTxErr] = useState<string | null>(null);
-  const [action, setAction] = useState<"buy" | "claim">("buy");
+  const [action, setAction] = useState<"buy" | "claim" | "deposit">("buy");
+  const [depositSol, setDepositSol] = useState("");
   const walletSol = useSolBalance();
 
   const mintKey = useMemo(() => (mint ? new PublicKey(mint) : null), [mint]);
@@ -80,20 +83,30 @@ export function RevenuePanel({ mint, symbol }: { mint: string; symbol: string })
     };
   }, [load]);
 
-  async function submit(kind: "buy" | "claim") {
+  async function submit(kind: "buy" | "claim" | "deposit") {
     if (!program || !address || !mintKey) return setWalletOpen(true);
     setAction(kind);
     setTxErr(null);
     setTx("pending");
     try {
       const signer = new PublicKey(address);
-      const sig =
-        kind === "buy"
-          ? await buyRevenue(program, signer, mintKey, Number(shares), decimals)
-          : await claimRevenue(program, signer, mintKey);
+      let sig: string;
+      if (kind === "buy") {
+        sig = await buyRevenue(program, signer, mintKey, Number(shares), decimals);
+      } else if (kind === "claim") {
+        sig = await claimRevenue(program, signer, mintKey);
+      } else {
+        sig = await depositRevenue(
+          program,
+          signer,
+          mintKey,
+          BigInt(Math.floor(Number(depositSol) * LAMPORTS_PER_SOL)),
+        );
+      }
       setTxSig(sig);
       setTx("confirmed");
       if (kind === "buy") setShares("");
+      if (kind === "deposit") setDepositSol("");
       setDetail(await load().catch(() => detail));
     } catch (e) {
       setTxErr(e instanceof Error ? e.message : "Transaction failed");
@@ -116,6 +129,20 @@ export function RevenuePanel({ mint, symbol }: { mint: string; symbol: string })
   const total = cost + fee;
   const soldOut = detail.remainingBaseUnits === 0n;
   const claimable = detail.stake?.claimableSol ?? 0;
+
+  // Creator-side deposit. `total_staked` is the divisor the program splits a
+  // deposit by, so at zero there is no correct answer and `deposit_revenue`
+  // refuses — checked here so the control explains itself instead of failing.
+  const isCreator = address !== null && address === detail.creator;
+  const noStakers = detail.totalStakedShares <= 0;
+  const depositAmount = Number(depositSol);
+  const validDeposit =
+    Number.isFinite(depositAmount) &&
+    depositAmount > 0 &&
+    !noStakers &&
+    (walletSol === null || depositAmount <= walletSol);
+  const depositPerShare =
+    validDeposit && detail.totalStakedShares > 0 ? depositAmount / detail.totalStakedShares : 0;
 
   // Price + fee, so a percentage of the balance buys shares the wallet can
   // actually pay for rather than tipping into "insufficient funds" at signing.
@@ -294,6 +321,52 @@ export function RevenuePanel({ mint, symbol }: { mint: string; symbol: string })
         Shares earn a pro-rata cut of revenue the creator deposits. There&apos;s no sell side —
         the return is the stream, not a price move.
       </p>
+
+      {/* The other half of the mechanism. Every buyer is told "the creator
+          deposits earnings over time"; until this existed, nothing in the app
+          could, so Claimable was structurally always zero. Shown only to the
+          creator: the instruction is permissionless, but paying into someone
+          else's pool is a donation, not a feature. */}
+      {isCreator && (
+        <div className="mt-4 rounded-sm border border-signal/25 bg-signal/[0.04] p-3">
+          <div className="font-mono text-[10px] font-bold tracking-[0.08em] text-signal">
+            DEPOSIT REVENUE
+          </div>
+          <p className="mt-1 text-[11px] leading-relaxed text-[#9a9a9a]">
+            Pay earnings into the pool. It splits pro-rata across every share sold, right now
+            — holders claim their cut whenever they like.
+          </p>
+          {noStakers ? (
+            <p className="mt-2 font-mono text-[10px] text-noise">
+              No shares sold yet. A deposit has nobody to split across, so the program refuses
+              it — sell at least one share first.
+            </p>
+          ) : (
+            <>
+              <input
+                inputMode="decimal"
+                value={depositSol}
+                onChange={(e) => setDepositSol(e.target.value.replace(/[^0-9.]/g, ""))}
+                placeholder="0.0"
+                className="mt-2 w-full rounded-sm border border-white/[0.08] bg-[#0A0A0A] px-3 py-2 font-mono text-[13px] outline-none focus:border-signal/50"
+              />
+              <div className="mt-1.5 flex justify-between font-mono text-[10px] text-[#6B6B6B]">
+                <span>Per share</span>
+                <span className="text-[#F5F4F0]">
+                  {depositPerShare > 0 ? `${depositPerShare.toFixed(8)} SOL` : "—"}
+                </span>
+              </div>
+              <button
+                onClick={() => void submit("deposit")}
+                disabled={!validDeposit || tx === "pending"}
+                className="mt-2 w-full rounded-sm border border-signal/40 bg-signal/10 py-2 font-mono text-[11px] font-bold text-signal disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {tx === "pending" && action === "deposit" ? "DEPOSITING…" : "DEPOSIT TO HOLDERS"}
+              </button>
+            </>
+          )}
+        </div>
+      )}
 
       {tx && (
         <div className="mt-3">

@@ -242,6 +242,27 @@ export const traderStatsPda = (owner: PublicKey): PublicKey =>
 export const perkPda = (asset: PublicKey): PublicKey =>
   PublicKey.findProgramAddressSync([enc.encode("perk"), asset.toBytes()], PROGRAM_ID)[0];
 
+/** A 1-of-1 asset's listing. */
+export const nftAuctionPda = (asset: PublicKey): PublicKey =>
+  PublicKey.findProgramAddressSync([enc.encode("nftauction"), asset.toBytes()], PROGRAM_ID)[0];
+
+/** A whole collection's listing. */
+export const collectionAuctionPda = (collection: PublicKey): PublicKey =>
+  PublicKey.findProgramAddressSync(
+    [enc.encode("colauction"), collection.toBytes()],
+    PROGRAM_ID,
+  )[0];
+
+/**
+ * Paid placement on a listing, keyed by the asset or collection it promotes.
+ *
+ * Derived here rather than left to Anchor because `promote_listing` takes the
+ * two auction accounts as optionals — exactly one is supplied, and Anchor does
+ * not resolve optional accounts on the caller's behalf.
+ */
+export const promotionPda = (subject: PublicKey): PublicKey =>
+  PublicKey.findProgramAddressSync([enc.encode("promo"), subject.toBytes()], PROGRAM_ID)[0];
+
 /** A token's fixed-price run of genesis fee-share NFTs. */
 export const genesisGroupPda = (subjectMint: PublicKey): PublicKey =>
   PublicKey.findProgramAddressSync([enc.encode("gengroup"), subjectMint.toBytes()], PROGRAM_ID)[0];

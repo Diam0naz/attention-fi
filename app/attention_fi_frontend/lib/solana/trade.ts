@@ -262,6 +262,38 @@ export async function buyRevenue(
     .rpc();
 }
 
+/**
+ * Pay revenue into the pool, split pro-rata across everyone holding shares.
+ *
+ * This is the other half of the mechanism, and it had no caller anywhere in the
+ * app: shares could be bought and revenue claimed, but nothing could put
+ * revenue in — so "Claimable" was structurally always zero while the panel told
+ * buyers "the creator deposits earnings over time".
+ *
+ * Permissionless on-chain (any wallet may top up a token's stream) but the UI
+ * only offers it to the creator, since paying into someone else's pool is a
+ * donation rather than a feature.
+ *
+ * Fails with `NoStakers` when nothing has been sold yet — `acc_increment`
+ * divides by `total_staked`, and there is genuinely no correct way to split a
+ * deposit across nobody. Callers should check before offering the control.
+ */
+export async function depositRevenue(
+  program: Program<AttentionFi>,
+  depositor: PublicKey,
+  mint: PublicKey,
+  lamports: bigint,
+): Promise<string> {
+  return program.methods
+    .depositRevenue(new BN(lamports.toString()))
+    .accountsPartial({
+      depositor,
+      revenue: revenuePda(mint),
+      mint,
+    })
+    .rpc();
+}
+
 /** Claim accrued revenue on a stake. */
 export async function claimRevenue(
   program: Program<AttentionFi>,

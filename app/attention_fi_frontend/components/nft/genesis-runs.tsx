@@ -11,13 +11,7 @@ import { useProgram, useReadonlyProgram } from "@/lib/solana/use-program";
 import { explorerTx } from "@/lib/solana/config";
 import { fetchFeeConfig, fetchGlobal, nftTotalCost } from "@/lib/solana/curve";
 import { handleToMint, launchedHandles, mintToToken } from "@/lib/solana/registry";
-import {
-  fetchAllocation,
-  fetchGenesisGroups,
-  fetchGroupUnits,
-  type GenesisGroupData,
-  type GroupUnit,
-} from "@/lib/solana/genesis-groups";
+import { depositGenesisFee, fetchAllocation, fetchGenesisGroups, fetchGroupUnits, type GenesisGroupData, type GroupUnit } from "@/lib/solana/genesis-groups";
 import { genesisAllocationPda, genesisNftPda } from "@/lib/solana/program";
 
 const LAMPORTS_PER_SOL = 1_000_000_000;
@@ -386,6 +380,7 @@ function RunCard({
   const signProgram = useProgram();
   const [units, setUnits] = useState<GroupUnit[] | null>(null);
   const [bought, setBought] = useState(0);
+  const [topUpSol, setTopUpSol] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
 
   const token = mintToToken(group.subjectMint);
@@ -493,6 +488,49 @@ function RunCard({
         state: "failed",
         title: "Mint failed",
         detail: e instanceof Error ? e.message : "Transaction failed",
+      });
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  /**
+   * Route off-platform earnings to the holders who bought a claim on them.
+   *
+   * Trades credit this pool automatically, so this isn't the usual path — it's
+   * for revenue that never touched the curve. Without it a genesis NFT's
+   * promise ("a cut of the creator's earnings") could only ever reach trading
+   * fees, which is narrower than what the unit is sold as.
+   */
+  async function topUp() {
+    if (!signProgram || !topUpSol) return;
+    const lamports = BigInt(Math.floor(Number(topUpSol) * 1_000_000_000));
+    if (lamports <= 0n) return;
+    setBusy("topup");
+    try {
+      const sig = await depositGenesisFee(
+        signProgram,
+        new PublicKey(address),
+        new PublicKey(group.subjectMint),
+        lamports,
+      );
+      onTx({
+        state: "confirmed",
+        title: `Paid ${topUpSol} SOL to holders`,
+        detail: `Split pro-rata across ${group.soldUnits} unit${group.soldUnits === 1 ? "" : "s"}`,
+        signature: short(sig),
+        explorerUrl: explorerTx(sig),
+      });
+      setTopUpSol("");
+      onDone();
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Transaction failed";
+      onTx({
+        state: "failed",
+        title: "Top-up failed",
+        detail: msg.includes("NoStakers")
+          ? "No units sold yet — a deposit has nobody to split across."
+          : msg,
       });
     } finally {
       setBusy(null);
@@ -615,6 +653,27 @@ function RunCard({
               <span className="font-mono text-[10px] text-[#6B6B6B]">
                 Reclaim the {remaining} unsold before closing.
               </span>
+            )}
+            {group.soldUnits > 0 && (
+              <div className="mt-1 flex w-full flex-wrap items-center gap-2 border-t border-white/[0.06] pt-2.5">
+                <span className="font-mono text-[10px] text-[#6B6B6B]">
+                  Pay holders directly
+                </span>
+                <input
+                  inputMode="decimal"
+                  value={topUpSol}
+                  onChange={(e) => setTopUpSol(e.target.value.replace(/[^0-9.]/g, ""))}
+                  placeholder="0.0"
+                  className="w-24 rounded-sm border border-white/[0.08] bg-[#0A0A0A] px-2 py-1 font-mono text-[11px] outline-none focus:border-signal/50"
+                />
+                <Action busy={busy === "topup"} onClick={() => void topUp()} disabled={!topUpSol}>
+                  TOP UP POOL
+                </Action>
+                <span className="font-mono text-[10px] text-[#4b5563]">
+                  Splits across {group.soldUnits} sold unit{group.soldUnits === 1 ? "" : "s"}.
+                  Trading fees already arrive automatically.
+                </span>
+              </div>
             )}
           </>
         ) : (

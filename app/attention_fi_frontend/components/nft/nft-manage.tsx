@@ -22,8 +22,10 @@ import { SkinPicker } from "@/components/nft/skin-picker";
 import { AssetSkinPicker } from "@/components/nft/asset-skin-picker";
 import { CollectionShelf } from "@/components/nft/collection-shelf";
 import { GenesisRuns } from "@/components/nft/genesis-runs";
+import { PromoteDialog } from "@/components/nft/promote-dialog";
 import { PerkProgress } from "@/components/nft/perk-progress";
 import { RefreshButton } from "@/components/ui/refresh-button";
+import { byPromotion, fetchPromotions, isPromoted, type Promotion } from "@/lib/solana/promotions";
 import { artworkUrl } from "@/lib/nft-artwork";
 import { mintToToken, syncRegistry } from "@/lib/solana/registry";
 import { Notice } from "@/components/ui/notice";
@@ -138,6 +140,12 @@ export function NftManage({ section }: { section: Section }) {
     assets: [],
   });
   const [listOpen, setListOpen] = useState(false);
+  const [promotions, setPromotions] = useState<Map<string, Promotion>>(() => new Map());
+  const [promoting, setPromoting] = useState<{
+    subject: string;
+    kind: "asset" | "collection";
+    name: string;
+  } | null>(null);
   // Same "null until read" discipline the collections list uses: an empty
   // wallet and an unread one are different claims. Stored as the key that was
   // read rather than a boolean, so "loaded" is derived during render — a
@@ -195,6 +203,9 @@ export function NftManage({ section }: { section: Section }) {
   if (section !== prevSection) {
     setPrevSection(section);
     if (section === "auctions") setAuctionsStatus("loading");
+    if (section === "auctions") {
+      void fetchPromotions(readProgram).then(setPromotions).catch(() => undefined);
+    }
   }
 
   // Real 1-of-1 auctions from the chain — only while this section is open.
@@ -811,7 +822,18 @@ export function NftManage({ section }: { section: Section }) {
         </div>
         {/* No auction cards render on this branch, so no buy can be pending
             here — the confirm modal lives with the connected view. */}
-        <WalletConnectModal open={walletOpen} onClose={() => setWalletOpen(false)} />
+        {promoting && (
+        <PromoteDialog
+          subject={promoting.subject}
+          kind={promoting.kind}
+          name={promoting.name}
+          onClose={() => setPromoting(null)}
+          onDone={() => {
+            void fetchPromotions(readProgram).then(setPromotions).catch(() => undefined);
+          }}
+        />
+      )}
+      <WalletConnectModal open={walletOpen} onClose={() => setWalletOpen(false)} />
       </Shell>
     );
   }
@@ -1371,12 +1393,25 @@ export function NftManage({ section }: { section: Section }) {
       {section === "auctions" && (() => {
         const live = auctions.filter((a) => !a.complete && !auctionEnded(a, now));
         const mine = address ? live.filter((a) => a.creator === address) : [];
-        const market = address ? live.filter((a) => a.creator !== address) : live;
+        // Paid placement finally does something. promote_listing has been
+        // callable since the market shipped and nothing read what it wrote —
+        // an operator could price placement in the admin console for a product
+        // that had no effect once bought.
+        const nowSec = Math.floor(now / 1000);
+        const market = byPromotion(
+          address ? live.filter((a) => a.creator !== address) : live,
+          (a) => a.asset,
+          promotions,
+          nowSec,
+        );
         // Expired-but-unsold listings still hold the asset in escrow. They used
         // to be filtered out with `live`, which hid the fact that the NFT was
         // stuck and gave no way to get it back.
-        const liveCollections = collectionAuctions.filter(
-          (c) => !c.complete && !listingEnded(c, now),
+        const liveCollections = byPromotion(
+          collectionAuctions.filter((c) => !c.complete && !listingEnded(c, now)),
+          (c) => c.collection,
+          promotions,
+          nowSec,
         );
         const expired = auctions.filter((a) => !a.complete && auctionEnded(a, now));
         const mineExpired = address ? expired.filter((a) => a.creator === address) : [];
@@ -1413,7 +1448,15 @@ export function NftManage({ section }: { section: Section }) {
             ) : (
               <div className="mt-3 grid gap-3 sm:grid-cols-3">
                 {mine.map((a) => (
-                  <AuctionCard key={a.asset} auction={a} now={now} mine onBuy={setConfirmBuy} />
+                  <AuctionCard
+                    key={a.asset}
+                    auction={a}
+                    now={now}
+                    mine
+                    onBuy={setConfirmBuy}
+                    promoted={isPromoted(promotions.get(a.asset), nowSec)}
+                    onPromote={() => setPromoting({ subject: a.asset, kind: "asset", name: a.name })}
+                  />
                 ))}
               </div>
             )}
@@ -1434,7 +1477,13 @@ export function NftManage({ section }: { section: Section }) {
             ) : (
               <div className="mt-3 grid gap-3 sm:grid-cols-3">
                 {market.map((a) => (
-                  <AuctionCard key={a.asset} auction={a} now={now} onBuy={setConfirmBuy} />
+                  <AuctionCard
+                    key={a.asset}
+                    auction={a}
+                    now={now}
+                    onBuy={setConfirmBuy}
+                    promoted={isPromoted(promotions.get(a.asset), nowSec)}
+                  />
                 ))}
               </div>
             )}
@@ -1456,6 +1505,17 @@ export function NftManage({ section }: { section: Section }) {
                       mine={c.creator === address}
                       onBuy={buyCollection}
                       onDelist={delistCollectionFromAuctions}
+                      promoted={isPromoted(promotions.get(c.collection), nowSec)}
+                      onPromote={
+                        c.creator === address
+                          ? () =>
+                              setPromoting({
+                                subject: c.collection,
+                                kind: "collection",
+                                name: c.name,
+                              })
+                          : undefined
+                      }
                     />
                   ))}
                 </div>
@@ -1581,6 +1641,8 @@ function AuctionCard({
   mine,
   onBuy,
   onReclaim,
+  promoted,
+  onPromote,
 }: {
   auction: NftAuctionData;
   now: number;
@@ -1588,6 +1650,10 @@ function AuctionCard({
   onBuy: (a: NftAuctionData) => void;
   /** Present only for ended listings, where buying is no longer possible. */
   onReclaim?: (a: NftAuctionData) => void;
+  /** Ranked above unpaid listings right now. */
+  promoted?: boolean;
+  /** Offered on your own listings only — promoting is a seller's decision. */
+  onPromote?: () => void;
 }) {
   const price = currentAuctionPrice(auction, now);
   const span = auction.startPrice - auction.floorPrice;
@@ -1631,6 +1697,14 @@ function AuctionCard({
           <span className="truncate font-mono text-[12px] font-bold">{auction.name}</span>
           <span className="shrink-0 font-mono text-[10px] text-[#6B6B6B]">by {short(auction.creator)}</span>
         </div>
+        {/* Labelled, not disguised. A listing ranked above others because
+            someone paid should say so — an unmarked paid position is an ad
+            pretending to be a ranking. */}
+        {promoted && (
+          <div className="mt-1.5 inline-flex items-center gap-1 rounded-sm border border-signal/40 bg-signal/[0.08] px-1.5 py-0.5 font-mono text-[9px] font-bold tracking-wide text-signal">
+            PROMOTED
+          </div>
+        )}
         <div className="mt-1.5 font-mono text-[18px] font-bold text-signal">{sol(price)} SOL</div>
         <div className="mt-1 h-1 overflow-hidden rounded-full bg-white/[0.06]">
           <div className="h-full rounded-full bg-signal/70" style={{ width: `${Math.max(4, pct)}%` }} />
@@ -1649,8 +1723,18 @@ function AuctionCard({
             {mine ? "RECLAIM ASSET" : "RETURN TO LISTER"}
           </button>
         ) : mine ? (
-          <div className="mt-3 w-full rounded-sm border border-white/10 py-2 text-center font-mono text-[11px] text-[#6B6B6B]">
-            LISTED BY YOU
+          <div className="mt-3 flex flex-col gap-1.5">
+            <div className="w-full rounded-sm border border-white/10 py-2 text-center font-mono text-[11px] text-[#6B6B6B]">
+              LISTED BY YOU
+            </div>
+            {onPromote && (
+              <button
+                onClick={onPromote}
+                className="w-full rounded-sm border border-signal/40 py-1.5 font-mono text-[10px] font-bold text-signal transition-colors hover:bg-signal/10"
+              >
+                {promoted ? "EXTEND PLACEMENT" : "PROMOTE THIS LISTING"}
+              </button>
+            )}
           </div>
         ) : (
           <button
@@ -1861,12 +1945,16 @@ function CollectionListingRow({
   mine,
   onBuy,
   onDelist,
+  promoted,
+  onPromote,
 }: {
   listing: CollectionAuctionData;
   now: number;
   mine: boolean;
   onBuy: (c: CollectionAuctionData) => void;
   onDelist: (c: CollectionAuctionData) => void;
+  promoted?: boolean;
+  onPromote?: (() => void) | undefined;
 }) {
   const price = collectionPrice(listing, now);
   const declining = listing.startPrice !== listing.floorPrice;
@@ -1879,7 +1967,14 @@ function CollectionListingRow({
         <Layers className="h-5 w-5 text-[#4b5563]" />
       </div>
       <div className="min-w-0 flex-1">
-        <div className="truncate text-[13px] font-bold">{listing.name}</div>
+        <div className="flex items-center gap-2">
+          <span className="truncate text-[13px] font-bold">{listing.name}</span>
+          {promoted && (
+            <span className="shrink-0 rounded-sm border border-signal/40 bg-signal/[0.08] px-1.5 py-0.5 font-mono text-[9px] font-bold tracking-wide text-signal">
+              PROMOTED
+            </span>
+          )}
+        </div>
         <div className="mt-0.5 font-mono text-[10px] text-[#6B6B6B]">
           {listing.size} {listing.size === 1 ? "piece" : "pieces"} · {short(listing.collection)}
         </div>
@@ -1897,12 +1992,22 @@ function CollectionListingRow({
         <div className="font-mono text-[18px] font-bold text-signal tabular-nums">{sol(price)}</div>
       </div>
       {mine ? (
-        <button
-          onClick={() => onDelist(listing)}
-          className="rounded-sm border border-noise/40 px-4 py-2 font-mono text-[11px] font-bold text-noise"
-        >
-          DELIST
-        </button>
+        <div className="flex flex-col gap-1.5">
+          <button
+            onClick={() => onDelist(listing)}
+            className="rounded-sm border border-noise/40 px-4 py-2 font-mono text-[11px] font-bold text-noise"
+          >
+            DELIST
+          </button>
+          {onPromote && (
+            <button
+              onClick={onPromote}
+              className="rounded-sm border border-signal/40 px-4 py-1.5 font-mono text-[10px] font-bold text-signal transition-colors hover:bg-signal/10"
+            >
+              {promoted ? "EXTEND" : "PROMOTE"}
+            </button>
+          )}
+        </div>
       ) : (
         <button
           onClick={() => onBuy(listing)}
