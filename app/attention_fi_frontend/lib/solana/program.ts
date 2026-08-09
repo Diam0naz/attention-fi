@@ -228,6 +228,21 @@ export const revStakePda = (mint: PublicKey, owner: PublicKey): PublicKey =>
 export const genesisPoolPda = (mint: PublicKey): PublicKey =>
   PublicKey.findProgramAddressSync([enc.encode("genpool"), mint.toBytes()], PROGRAM_ID)[0];
 
+/** A token's fixed-price run of genesis fee-share NFTs. */
+export const genesisGroupPda = (subjectMint: PublicKey): PublicKey =>
+  PublicKey.findProgramAddressSync([enc.encode("gengroup"), subjectMint.toBytes()], PROGRAM_ID)[0];
+
+/** How many units one wallet has taken from one token's run. */
+export const genesisAllocationPda = (subjectMint: PublicKey, buyer: PublicKey): PublicKey =>
+  PublicKey.findProgramAddressSync(
+    [enc.encode("genalloc"), subjectMint.toBytes(), buyer.toBytes()],
+    PROGRAM_ID,
+  )[0];
+
+/** The `GenesisNft` record backing one unit, keyed by its Core asset. */
+export const genesisNftPda = (asset: PublicKey): PublicKey =>
+  PublicKey.findProgramAddressSync([enc.encode("genesis"), asset.toBytes()], PROGRAM_ID)[0];
+
 /** Verification is keyed by the subject wallet, not the handle. */
 export const verificationPda = (subject: PublicKey): PublicKey =>
   PublicKey.findProgramAddressSync([enc.encode("verify"), subject.toBytes()], PROGRAM_ID)[0];

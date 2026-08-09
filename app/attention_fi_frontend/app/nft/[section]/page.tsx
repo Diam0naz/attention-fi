@@ -5,6 +5,7 @@ const SECTIONS = [
   "verification",
   "perk",
   "genesis",
+  "runs",
   "auctions",
   "collectibles",
   "collections",

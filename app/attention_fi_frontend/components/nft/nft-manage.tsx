@@ -4,7 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Keypair, PublicKey, Transaction } from "@solana/web3.js";
 import { BN } from "@anchor-lang/core";
-import { ArrowLeft, BadgeCheck, Boxes, Gavel, Gift, Layers, Loader2, Lock, Plus, Trash2, TrendingUp, X } from "lucide-react";
+import {
+  Rocket, ArrowLeft, BadgeCheck, Boxes, Gavel, Gift, Layers, Loader2, Lock, Plus, Trash2, TrendingUp, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useWallet } from "@/components/wallet/wallet-provider";
 import { WalletConnectModal } from "@/components/wallet/wallet-connect-modal";
@@ -20,6 +21,7 @@ import { DISCOUNT_PER_LEVEL_BPS, explorerTx, PROGRAM_ID } from "@/lib/solana/con
 import { SkinPicker } from "@/components/nft/skin-picker";
 import { AssetSkinPicker } from "@/components/nft/asset-skin-picker";
 import { CollectionShelf } from "@/components/nft/collection-shelf";
+import { GenesisRuns } from "@/components/nft/genesis-runs";
 import { RefreshButton } from "@/components/ui/refresh-button";
 import { artworkUrl } from "@/lib/nft-artwork";
 import { mintToToken, syncRegistry } from "@/lib/solana/registry";
@@ -76,6 +78,7 @@ export type Section =
   | "verification"
   | "perk"
   | "genesis"
+  | "runs"
   | "auctions"
   | "collectibles"
   | "collections";
@@ -89,6 +92,7 @@ const META: Record<Section, { title: string; icon: React.ReactNode }> = {
   verification: { title: "Verification", icon: <Lock className="h-4 w-4" /> },
   perk: { title: "Perk NFTs", icon: <TrendingUp className="h-4 w-4" /> },
   genesis: { title: "Genesis NFTs", icon: <Gift className="h-4 w-4" /> },
+  runs: { title: "Genesis runs", icon: <Rocket className="h-4 w-4" /> },
   auctions: { title: "1-of-1 Auctions", icon: <Gavel className="h-4 w-4" /> },
   collectibles: { title: "Collectibles", icon: <Boxes className="h-4 w-4" /> },
   collections: { title: "Collections", icon: <Layers className="h-4 w-4" /> },
@@ -1139,6 +1143,10 @@ export function NftManage({ section }: { section: Section }) {
         ))}
 
       {/* COLLECTIBLES — the wallet's loose assets, and the only place to burn one. */}
+      {/* GENESIS RUNS — both sides of a run live in one component, so the
+          creator's view and a buyer's view can't disagree about what's left. */}
+      {section === "runs" && address && <GenesisRuns address={address} />}
+
       {section === "collectibles" && (
         <div>
           <div className="flex items-center justify-between">

@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Boxes, ChevronRight, Gavel, Gift, Lock, TrendingUp, Layers } from "lucide-react";
+import {
+  Rocket, ArrowLeft, Boxes, ChevronRight, Gavel, Gift, Lock, TrendingUp, Layers } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useWallet } from "@/components/wallet/wallet-provider";
 import { WalletConnectModal } from "@/components/wallet/wallet-connect-modal";
@@ -90,6 +91,14 @@ export function NftView() {
       tag: "TRANSFERABLE",
       status: loadingPortfolio ? "Checking…" : genesisCount ? `${genesisCount} held` : "None held",
       ok: genesisCount > 0,
+    },
+    {
+      href: "/nft/runs",
+      icon: <Rocket className="h-4 w-4" />,
+      title: "Genesis runs",
+      tag: "FIXED PRICE",
+      status: "Open a run or buy a unit",
+      ok: false,
     },
     {
       href: "/nft/auctions",
