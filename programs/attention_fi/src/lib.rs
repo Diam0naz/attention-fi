@@ -285,6 +285,21 @@ pub mod attention_fi {
         mint_genesis_batch::mint_genesis_batch_handler(ctx, uri)
     }
 
+    /// Take unsold units back out of a genesis group's escrow. Without this a
+    /// run that never sold out stranded the creator's own NFTs permanently.
+    /// Units are passed as remaining accounts.
+    pub fn reclaim_genesis_units<'info>(
+        ctx: Context<'_, '_, '_, 'info, ReclaimGenesisUnits<'info>>,
+    ) -> Result<()> {
+        reclaim_genesis_units::reclaim_genesis_units_handler(ctx)
+    }
+
+    /// Delist a genesis group, returning the collection's update authority and
+    /// the group's rent to its creator. Requires an empty escrow.
+    pub fn close_genesis_group(ctx: Context<CloseGenesisGroup>) -> Result<()> {
+        close_genesis_group::close_genesis_group_handler(ctx)
+    }
+
     /// Buy one unit from a token's genesis group at the listed price, subject
     /// to the group's per-wallet cap.
     pub fn buy_genesis_unit(ctx: Context<BuyGenesisUnit>, max_price: u64) -> Result<()> {

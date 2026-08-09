@@ -186,6 +186,29 @@ pub struct GenesisBatchMintedEvent {
     pub timestamp: i64,
 }
 
+/// Emitted when a creator takes unsold units back out of a group's escrow.
+#[event]
+pub struct GenesisUnitsReclaimedEvent {
+    pub subject_mint: Pubkey,
+    pub creator: Pubkey,
+    /// Units returned by this call.
+    pub units: u16,
+    /// Units the group still holds, sold and unsold together.
+    pub minted_units: u16,
+    pub timestamp: i64,
+}
+
+/// Emitted when a group is delisted and its collection handed back.
+#[event]
+pub struct GenesisGroupClosedEvent {
+    pub subject_mint: Pubkey,
+    pub creator: Pubkey,
+    pub collection: Pubkey,
+    /// Units that found a buyer before it closed; they keep earning.
+    pub sold_units: u16,
+    pub timestamp: i64,
+}
+
 /// Emitted when a buyer takes one unit out of a group.
 #[event]
 pub struct GenesisUnitSoldEvent {

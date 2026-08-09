@@ -2028,3 +2028,319 @@ describe("attention_fi protocol config", () => {
       .rpc();
   });
 });
+
+describe("attention_fi genesis group — reclaim and close", () => {
+  anchor.setProvider(anchor.AnchorProvider.env());
+  const provider = anchor.getProvider() as anchor.AnchorProvider;
+  const program = anchor.workspace.attentionFi as Program<AttentionFi>;
+  const wallet = provider.wallet.publicKey;
+
+  const [globalPda] = PublicKey.findProgramAddressSync(
+    [Buffer.from("global")],
+    program.programId
+  );
+  const [feeConfigPda] = PublicKey.findProgramAddressSync(
+    [Buffer.from("feeconfig")],
+    program.programId
+  );
+
+  const PRICE = LAMPORTS_PER_SOL / 4;
+  const SHARE_BPS = 400;
+
+  const mintKp = Keypair.generate();
+  const collectionKp = Keypair.generate();
+  const subjectMint = mintKp.publicKey;
+  const [curvePda] = PublicKey.findProgramAddressSync(
+    [Buffer.from("curve"), subjectMint.toBuffer()],
+    program.programId
+  );
+  const [groupPda] = PublicKey.findProgramAddressSync(
+    [Buffer.from("gengroup"), subjectMint.toBuffer()],
+    program.programId
+  );
+  const [poolPda] = PublicKey.findProgramAddressSync(
+    [Buffer.from("genpool"), subjectMint.toBuffer()],
+    program.programId
+  );
+
+  let treasury: PublicKey;
+  const units: PublicKey[] = [];
+  const buyer = Keypair.generate();
+
+  /** The escrow's view of an asset: who owns it right now. */
+  async function ownerOf(asset: PublicKey): Promise<string> {
+    const info = await provider.connection.getAccountInfo(asset);
+    return new PublicKey(info!.data.subarray(1, 33)).toBase58();
+  }
+
+  before(async () => {
+    const existing = await program.account.global.fetchNullable(globalPda);
+    if (existing) {
+      treasury = existing.treasury;
+    } else {
+      treasury = Keypair.generate().publicKey;
+      await program.methods
+        .initialize()
+        .accountsStrict({
+          authority: wallet,
+          global: globalPda,
+          feeConfig: feeConfigPda,
+          treasury,
+          systemProgram: SystemProgram.programId,
+        })
+        .rpc();
+    }
+
+    await program.methods
+      .launchToken(
+        { emerging: {} },
+        { name: "Reclaim Subject", symbol: "RCL", uri: "https://attention.fi/r.json" }
+      )
+      .accountsStrict({
+        creator: wallet,
+        global: globalPda,
+        mint: subjectMint,
+        curve: curvePda,
+        vault: ata(curvePda, subjectMint),
+        metadata: PublicKey.findProgramAddressSync(
+          [
+            Buffer.from("metadata"),
+            TOKEN_METADATA_PROGRAM_ID.toBuffer(),
+            subjectMint.toBuffer(),
+          ],
+          TOKEN_METADATA_PROGRAM_ID
+        )[0],
+        tokenMetadataProgram: TOKEN_METADATA_PROGRAM_ID,
+        systemProgram: SystemProgram.programId,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+        rent: SYSVAR_RENT_PUBKEY,
+      })
+      .signers([mintKp])
+      .rpc();
+
+    await program.methods
+      .createCollection("Reclaim Run", "https://attention.fi/run.json")
+      .accountsStrict({
+        payer: wallet,
+        collection: collectionKp.publicKey,
+        mplCoreProgram: MPL_CORE_PROGRAM_ID,
+        systemProgram: SystemProgram.programId,
+      })
+      .signers([collectionKp])
+      .rpc();
+
+    // 3 units, one to a wallet; one will sell and two will be taken back.
+    await program.methods
+      .listGenesisGroup(3, SHARE_BPS, new anchor.BN(PRICE), 1)
+      .accountsStrict({
+        creator: wallet,
+        subjectMint,
+        curve: curvePda,
+        group: groupPda,
+        pool: poolPda,
+        collection: collectionKp.publicKey,
+        mplCoreProgram: MPL_CORE_PROGRAM_ID,
+        systemProgram: SystemProgram.programId,
+      })
+      .rpc();
+
+    const batch = [Keypair.generate(), Keypair.generate(), Keypair.generate()];
+    await program.methods
+      .mintGenesisBatch("https://attention.fi/unit.json")
+      .accountsStrict({
+        creator: wallet,
+        subjectMint,
+        group: groupPda,
+        collection: collectionKp.publicKey,
+        mplCoreProgram: MPL_CORE_PROGRAM_ID,
+        systemProgram: SystemProgram.programId,
+      })
+      .remainingAccounts(
+        batch.map((kp) => ({ pubkey: kp.publicKey, isSigner: true, isWritable: true }))
+      )
+      .preInstructions([
+        anchor.web3.ComputeBudgetProgram.setComputeUnitLimit({ units: 600_000 }),
+      ])
+      .signers(batch)
+      .rpc();
+    units.push(...batch.map((kp) => kp.publicKey));
+
+    const sig = await provider.connection.requestAirdrop(
+      buyer.publicKey,
+      2 * LAMPORTS_PER_SOL
+    );
+    await provider.connection.confirmTransaction(sig, "confirmed");
+
+    // One unit finds a buyer; the other two do not.
+    const tx = await program.methods
+      .buyGenesisUnit(new anchor.BN(PRICE))
+      .accountsStrict({
+        buyer: buyer.publicKey,
+        global: globalPda,
+        feeConfig: feeConfigPda,
+        treasury,
+        creator: wallet,
+        subjectMint,
+        group: groupPda,
+        collection: collectionKp.publicKey,
+        asset: units[0],
+        genesis: PublicKey.findProgramAddressSync(
+          [Buffer.from("genesis"), units[0].toBuffer()],
+          program.programId
+        )[0],
+        pool: poolPda,
+        allocation: PublicKey.findProgramAddressSync(
+          [Buffer.from("genalloc"), subjectMint.toBuffer(), buyer.publicKey.toBuffer()],
+          program.programId
+        )[0],
+        mplCoreProgram: MPL_CORE_PROGRAM_ID,
+        systemProgram: SystemProgram.programId,
+      })
+      .transaction();
+    await anchor.web3.sendAndConfirmTransaction(provider.connection, tx, [buyer], {
+      commitment: "confirmed",
+    });
+  });
+
+  it("refuses to close while units are still escrowed", async () => {
+    let threw = false;
+    try {
+      await program.methods
+        .closeGenesisGroup()
+        .accountsStrict({
+          creator: wallet,
+          subjectMint,
+          group: groupPda,
+          collection: collectionKp.publicKey,
+          mplCoreProgram: MPL_CORE_PROGRAM_ID,
+          systemProgram: SystemProgram.programId,
+        })
+        .rpc();
+    } catch (err) {
+      threw = true;
+      assert.include(String(err), "GenesisUnitsInEscrow");
+    }
+    assert.isTrue(
+      threw,
+      "closing with units inside would strand them under a PDA that no longer exists"
+    );
+  });
+
+  it("returns unsold units to the creator, and refuses to take a sold one", async () => {
+    // The sold unit belongs to its buyer — the count says two are reclaimable,
+    // but naming the sold asset must still fail.
+    let threw = false;
+    try {
+      await program.methods
+        .reclaimGenesisUnits()
+        .accountsStrict({
+          creator: wallet,
+          subjectMint,
+          group: groupPda,
+          collection: collectionKp.publicKey,
+          mplCoreProgram: MPL_CORE_PROGRAM_ID,
+          systemProgram: SystemProgram.programId,
+        })
+        .remainingAccounts([{ pubkey: units[0], isSigner: false, isWritable: true }])
+        .rpc();
+    } catch (err) {
+      threw = true;
+      assert.include(String(err), "AssetNotInGroup");
+    }
+    assert.isTrue(threw, "a sold unit is not the creator's to take back");
+
+    await program.methods
+      .reclaimGenesisUnits()
+      .accountsStrict({
+        creator: wallet,
+        subjectMint,
+        group: groupPda,
+        collection: collectionKp.publicKey,
+        mplCoreProgram: MPL_CORE_PROGRAM_ID,
+        systemProgram: SystemProgram.programId,
+      })
+      .remainingAccounts([
+        { pubkey: units[1], isSigner: false, isWritable: true },
+        { pubkey: units[2], isSigner: false, isWritable: true },
+      ])
+      .rpc();
+
+    assert.strictEqual(await ownerOf(units[1]), wallet.toBase58(), "unit came home");
+    assert.strictEqual(await ownerOf(units[2]), wallet.toBase58(), "and so did the other");
+    assert.strictEqual(
+      await ownerOf(units[0]),
+      buyer.publicKey.toBase58(),
+      "the sold one stayed with its buyer"
+    );
+
+    const group = await program.account.genesisGroup.fetch(groupPda);
+    assert.strictEqual(group.mintedUnits, 1, "only the sold unit still counts as minted");
+    assert.strictEqual(group.soldUnits, 1);
+
+    // Nothing left in escrow, so there is nothing left to take.
+    let empty = false;
+    try {
+      await program.methods
+        .reclaimGenesisUnits()
+        .accountsStrict({
+          creator: wallet,
+          subjectMint,
+          group: groupPda,
+          collection: collectionKp.publicKey,
+          mplCoreProgram: MPL_CORE_PROGRAM_ID,
+          systemProgram: SystemProgram.programId,
+        })
+        .remainingAccounts([{ pubkey: units[1], isSigner: false, isWritable: true }])
+        .rpc();
+    } catch (err) {
+      empty = true;
+      assert.include(String(err), "NoUnitsToReclaim");
+    }
+    assert.isTrue(empty, "an empty escrow reports itself rather than transferring");
+  });
+
+  it("closes the group, hands the collection back, and stops the run", async () => {
+    const rentBefore = await provider.connection.getBalance(wallet);
+
+    await program.methods
+      .closeGenesisGroup()
+      .accountsStrict({
+        creator: wallet,
+        subjectMint,
+        group: groupPda,
+        collection: collectionKp.publicKey,
+        mplCoreProgram: MPL_CORE_PROGRAM_ID,
+        systemProgram: SystemProgram.programId,
+      })
+      .rpc();
+
+    assert.isNull(
+      await program.account.genesisGroup.fetchNullable(groupPda),
+      "the group account is gone, so there is nothing left to buy from"
+    );
+    assert.isTrue(
+      (await provider.connection.getBalance(wallet)) > rentBefore,
+      "its rent came back (net of the fee)"
+    );
+
+    // The collection answers to its creator again.
+    const collectionAcc = await provider.connection.getAccountInfo(collectionKp.publicKey);
+    assert.strictEqual(
+      new PublicKey(collectionAcc!.data.subarray(1, 33)).toBase58(),
+      wallet.toBase58(),
+      "update authority returned to the creator"
+    );
+
+    // The sold unit keeps its claim on the fee stream.
+    const genesis = await program.account.genesisNft.fetch(
+      PublicKey.findProgramAddressSync(
+        [Buffer.from("genesis"), units[0].toBuffer()],
+        program.programId
+      )[0]
+    );
+    assert.strictEqual(genesis.shareBps, SHARE_BPS, "a closed run doesn't revoke what it sold");
+    const pool = await program.account.genesisPool.fetch(poolPda);
+    assert.strictEqual(pool.totalShareBps.toString(), String(SHARE_BPS));
+  });
+});

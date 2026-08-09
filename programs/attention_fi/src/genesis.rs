@@ -108,6 +108,28 @@ pub fn record_allocation(units: u16, cap: u16) -> Result<u16> {
     Ok(units)
 }
 
+/// New `minted_units` after the creator takes `batch` unsold units back.
+///
+/// Only what is still in escrow can be reclaimed — `minted - sold` — and the
+/// count comes down rather than a separate tally going up, so `sold <= minted`
+/// keeps meaning "every unit that exists is either escrowed or sold". Letting
+/// the count stand would leave a group that reads as part-full forever and
+/// would let `record_sale` promise units the escrow no longer holds.
+pub fn record_reclaim(minted: u16, sold: u16, batch: usize) -> Result<u16> {
+    require!(
+        batch > 0 && batch <= MAX_GENESIS_BATCH,
+        AttentionError::InvalidGenesisBatch
+    );
+    let batch = u16::try_from(batch).map_err(|_| AttentionError::InvalidGenesisBatch)?;
+    let escrowed = minted
+        .checked_sub(sold)
+        .ok_or(AttentionError::MathOverflow)?;
+    require!(batch <= escrowed, AttentionError::NoUnitsToReclaim);
+    minted
+        .checked_sub(batch)
+        .ok_or_else(|| AttentionError::MathOverflow.into())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -184,6 +206,36 @@ mod tests {
         assert_eq!(record_sale(0, 3).unwrap(), 1);
         assert_eq!(record_sale(2, 3).unwrap(), 3);
         assert!(record_sale(3, 3).is_err());
+    }
+
+    #[test]
+    fn a_creator_can_only_take_back_what_is_still_escrowed() {
+        // 5 minted, 2 sold: three are still in escrow.
+        assert_eq!(record_reclaim(5, 2, 3).unwrap(), 2);
+        assert!(
+            record_reclaim(5, 2, 4).is_err(),
+            "a sold unit belongs to its buyer, not the creator"
+        );
+        // Nothing left to take.
+        assert!(record_reclaim(2, 2, 1).is_err());
+    }
+
+    #[test]
+    fn reclaiming_leaves_the_sold_count_still_reachable() {
+        // The invariant every other function leans on: after a reclaim, minted
+        // must not drop below what has already been sold.
+        for sold in 0..=5u16 {
+            let escrowed = 5 - sold;
+            if escrowed == 0 {
+                continue;
+            }
+            let minted = record_reclaim(5, sold, usize::from(escrowed)).unwrap();
+            assert_eq!(minted, sold, "everything unsold went back");
+            assert!(
+                record_sale(sold, minted).is_err(),
+                "and nothing is left to sell"
+            );
+        }
     }
 
     #[test]

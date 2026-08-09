@@ -2038,6 +2038,83 @@ export type AttentionFi = {
       "args": []
     },
     {
+      "name": "closeGenesisGroup",
+      "docs": [
+        "Delist a genesis group, returning the collection's update authority and",
+        "the group's rent to its creator. Requires an empty escrow."
+      ],
+      "discriminator": [
+        98,
+        142,
+        48,
+        163,
+        27,
+        128,
+        232,
+        121
+      ],
+      "accounts": [
+        {
+          "name": "creator",
+          "docs": [
+            "The group's creator; receives the collection authority and the rent."
+          ],
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "group"
+          ]
+        },
+        {
+          "name": "subjectMint",
+          "relations": [
+            "group"
+          ]
+        },
+        {
+          "name": "group",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  101,
+                  110,
+                  103,
+                  114,
+                  111,
+                  117,
+                  112
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "subjectMint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "collection",
+          "writable": true,
+          "relations": [
+            "group"
+          ]
+        },
+        {
+          "name": "mplCoreProgram",
+          "address": "CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d"
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "createCollection",
       "docs": [
         "Create a Core collection whose update authority stays with the payer."
@@ -4667,6 +4744,84 @@ export type AttentionFi = {
       "args": []
     },
     {
+      "name": "reclaimGenesisUnits",
+      "docs": [
+        "Take unsold units back out of a genesis group's escrow. Without this a",
+        "run that never sold out stranded the creator's own NFTs permanently.",
+        "Units are passed as remaining accounts."
+      ],
+      "discriminator": [
+        32,
+        85,
+        214,
+        49,
+        26,
+        218,
+        235,
+        232
+      ],
+      "accounts": [
+        {
+          "name": "creator",
+          "docs": [
+            "The group's creator, and the only wallet its escrow answers to."
+          ],
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "group"
+          ]
+        },
+        {
+          "name": "subjectMint",
+          "relations": [
+            "group"
+          ]
+        },
+        {
+          "name": "group",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  101,
+                  110,
+                  103,
+                  114,
+                  111,
+                  117,
+                  112
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "subjectMint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "collection",
+          "writable": true,
+          "relations": [
+            "group"
+          ]
+        },
+        {
+          "name": "mplCoreProgram",
+          "address": "CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d"
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "reclaimNftAuction",
       "docs": [
         "Return an unsold 1-of-1 to its lister once the auction window closes.",
@@ -7036,6 +7191,19 @@ export type AttentionFi = {
       ]
     },
     {
+      "name": "genesisGroupClosedEvent",
+      "discriminator": [
+        59,
+        254,
+        96,
+        52,
+        199,
+        75,
+        162,
+        213
+      ]
+    },
+    {
       "name": "genesisGroupListedEvent",
       "discriminator": [
         141,
@@ -7059,6 +7227,19 @@ export type AttentionFi = {
         31,
         113,
         147
+      ]
+    },
+    {
+      "name": "genesisUnitsReclaimedEvent",
+      "discriminator": [
+        212,
+        159,
+        116,
+        254,
+        251,
+        86,
+        188,
+        94
       ]
     },
     {
@@ -7318,6 +7499,16 @@ export type AttentionFi = {
       "code": 6032,
       "name": "invalidConfig",
       "msg": "Config value is outside the range the protocol accepts"
+    },
+    {
+      "code": 6033,
+      "name": "noUnitsToReclaim",
+      "msg": "No unsold units left in the group's escrow to reclaim"
+    },
+    {
+      "code": 6034,
+      "name": "genesisUnitsInEscrow",
+      "msg": "Reclaim the group's unsold units before closing it"
     }
   ],
   "types": [
@@ -8150,6 +8341,40 @@ export type AttentionFi = {
       }
     },
     {
+      "name": "genesisGroupClosedEvent",
+      "docs": [
+        "Emitted when a group is delisted and its collection handed back."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "subjectMint",
+            "type": "pubkey"
+          },
+          {
+            "name": "creator",
+            "type": "pubkey"
+          },
+          {
+            "name": "collection",
+            "type": "pubkey"
+          },
+          {
+            "name": "soldUnits",
+            "docs": [
+              "Units that found a buyer before it closed; they keep earning."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
       "name": "genesisGroupListedEvent",
       "docs": [
         "Emitted when a token opens a fixed-price run of genesis fee-share NFTs."
@@ -8337,6 +8562,43 @@ export type AttentionFi = {
             "name": "soldUnits",
             "docs": [
               "Units sold from the group after this sale."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "genesisUnitsReclaimedEvent",
+      "docs": [
+        "Emitted when a creator takes unsold units back out of a group's escrow."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "subjectMint",
+            "type": "pubkey"
+          },
+          {
+            "name": "creator",
+            "type": "pubkey"
+          },
+          {
+            "name": "units",
+            "docs": [
+              "Units returned by this call."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "mintedUnits",
+            "docs": [
+              "Units the group still holds, sold and unsold together."
             ],
             "type": "u16"
           },

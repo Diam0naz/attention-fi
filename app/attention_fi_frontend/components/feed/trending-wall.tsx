@@ -12,7 +12,13 @@ const byMindshare = (a: Token, b: Token) => b.mindshare - a.mindshare;
 
 /** Live "video wall": a large featured tile + four interlocking tiles, ordered
  *  by mindshare, with ticking numbers, pulse dots and a light sheen. */
-export function TrendingWall() {
+/**
+ * `bare` drops the page-width wrapper and the "See all" link, for embedding
+ * inside a page that already provides its own container — on /discover the
+ * link would point at the page you are on, and the wrapper would double its
+ * padding.
+ */
+export function TrendingWall({ bare = false }: { bare?: boolean } = {}) {
   const { tokens: indexed } = useTokenIndex();
   const [tokens, setTokens] = useState<IndexedToken[]>(() => [...indexed].sort(byMindshare).slice(0, 5));
 
@@ -45,7 +51,7 @@ export function TrendingWall() {
   const max = featured.mindshare || 1;
 
   return (
-    <section className="mx-auto mt-10 w-full max-w-5xl px-5">
+    <section className={bare ? "mt-6 w-full" : "mx-auto mt-10 w-full max-w-5xl px-5"}>
       <div className="mb-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <span className="text-[15px] font-bold">🔥 Trending</span>
@@ -54,9 +60,11 @@ export function TrendingWall() {
             LIVE
           </span>
         </div>
-        <Link href="/discover" className="font-mono text-[10px] text-[#6B6B6B] transition-colors hover:text-signal">
-          See all →
-        </Link>
+        {!bare && (
+          <Link href="/discover" className="font-mono text-[10px] text-[#6B6B6B] transition-colors hover:text-signal">
+            See all →
+          </Link>
+        )}
       </div>
 
       <div className="grid grid-cols-2 gap-3 auto-rows-[124px] sm:grid-cols-4">

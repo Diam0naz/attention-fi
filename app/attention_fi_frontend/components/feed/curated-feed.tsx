@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { VERTICALS, verticalSlug, type Token, type Vertical } from "@/lib/mock-data";
 import { useTokenIndex } from "@/lib/token-index";
 import { Avatar } from "@/components/feed/avatar";
+import { TrendingWall } from "@/components/feed/trending-wall";
 import { Footer } from "@/components/feed/footer";
 
 function blurb(t: Token): string {
@@ -56,16 +57,31 @@ export function CuratedFeed() {
   const [query, setQuery] = useState("");
 
   const editor = indexed[0]!; // rank 1 = editor's pick
-  const q = query.trim().toLowerCase();
+  // Handles are matched without their @ or spacing, so "gogo sensei" finds
+  // @gogosensei — nobody searching for a token types its handle the way the
+  // registry stores it.
+  const q = query.trim().toLowerCase().replace(/^@/, "").replace(/\s+/g, "");
 
-  // Tokens grouped per vertical (excluding the editor's pick), honoring search.
+  // Tokens grouped per vertical, honoring search.
   const shelves = useMemo(() => {
     const verticals = VERTICALS.filter((v) => v !== "All" && (filter === "All" || filter === v));
+    // The editor's pick is drawn in full above, so the default view leaves it
+    // out of the shelves rather than showing the same token twice. Narrowing
+    // changes that: rank 1 is whatever has the largest market cap, so a freshly
+    // launched token is often exactly the one being searched for, and dropping
+    // it meant the search that should have found it returned nothing under
+    // every pill and every combination.
+    const narrowed = q !== "" || filter !== "All";
     return verticals
       .map((v) => ({
         vertical: v,
         tokens: indexed.filter(
-          (t) => t.vertical === v && t.handle !== editor.handle && (!q || t.handle.includes(q) || t.name.toLowerCase().includes(q)),
+          (t) =>
+            t.vertical === v &&
+            (narrowed || t.handle !== editor.handle) &&
+            (!q ||
+              t.handle.toLowerCase().includes(q) ||
+              t.name.toLowerCase().replace(/\s+/g, "").includes(q)),
         ),
       }))
       .filter((s) => s.tokens.length > 0);
@@ -76,6 +92,11 @@ export function CuratedFeed() {
       <div className="mx-auto w-full max-w-5xl flex-1 px-5 py-6">
         <h1 className="text-[20px] font-bold">Discover</h1>
         <p className="mt-1 text-[13px] text-[#6B6B6B]">Browse tradeable attention by vertical, curated by mindshare velocity.</p>
+
+        {/* What's moving right now, above the filters rather than below them:
+            the wall ranks by live mindshare across everything, so sitting it
+            under a vertical pill would suggest it had been filtered too. */}
+        <TrendingWall bare />
 
         {/* search + pill filters */}
         <div className="mt-4 flex flex-col gap-3">

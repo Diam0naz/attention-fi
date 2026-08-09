@@ -71,4 +71,8 @@ pub enum AttentionError {
     AssetNotInGroup,
     #[msg("Config value is outside the range the protocol accepts")]
     InvalidConfig,
+    #[msg("No unsold units left in the group's escrow to reclaim")]
+    NoUnitsToReclaim,
+    #[msg("Reclaim the group's unsold units before closing it")]
+    GenesisUnitsInEscrow,
 }
