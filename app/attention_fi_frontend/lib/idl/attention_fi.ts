@@ -809,6 +809,30 @@ export type AttentionFi = {
           }
         },
         {
+          "name": "feeConfig",
+          "docs": [
+            "The NFT market's own fee, which is not the curve's trading fee."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  101,
+                  101,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
           "name": "treasury",
           "writable": true
         },
@@ -1176,6 +1200,220 @@ export type AttentionFi = {
       ]
     },
     {
+      "name": "buyGenesisUnit",
+      "docs": [
+        "Buy one unit from a token's genesis group at the listed price, subject",
+        "to the group's per-wallet cap."
+      ],
+      "discriminator": [
+        215,
+        123,
+        178,
+        252,
+        228,
+        149,
+        190,
+        38
+      ],
+      "accounts": [
+        {
+          "name": "buyer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "global",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  108,
+                  111,
+                  98,
+                  97,
+                  108
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "feeConfig",
+          "docs": [
+            "A genesis unit is an NFT sale, so it is charged the NFT market's fee."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  101,
+                  101,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "treasury",
+          "writable": true
+        },
+        {
+          "name": "creator",
+          "writable": true
+        },
+        {
+          "name": "subjectMint",
+          "relations": [
+            "group"
+          ]
+        },
+        {
+          "name": "group",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  101,
+                  110,
+                  103,
+                  114,
+                  111,
+                  117,
+                  112
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "subjectMint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "collection",
+          "writable": true,
+          "relations": [
+            "group"
+          ]
+        },
+        {
+          "name": "asset",
+          "docs": [
+            "group's escrow and a member of its collection."
+          ],
+          "writable": true
+        },
+        {
+          "name": "genesis",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  101,
+                  110,
+                  101,
+                  115,
+                  105,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "asset"
+              }
+            ]
+          }
+        },
+        {
+          "name": "pool",
+          "docs": [
+            "Created by `list_genesis_group`, so it always exists by the time a unit",
+            "can be bought."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  101,
+                  110,
+                  112,
+                  111,
+                  111,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "subjectMint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "allocation",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  101,
+                  110,
+                  97,
+                  108,
+                  108,
+                  111,
+                  99
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "subjectMint"
+              },
+              {
+                "kind": "account",
+                "path": "buyer"
+              }
+            ]
+          }
+        },
+        {
+          "name": "mplCoreProgram",
+          "address": "CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d"
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "maxPrice",
+          "type": "u64"
+        }
+      ]
+    },
+    {
       "name": "buyNft",
       "docs": [
         "Buy the 1-of-1 NFT at the current descending price; transfers it to the buyer."
@@ -1209,6 +1447,30 @@ export type AttentionFi = {
                   98,
                   97,
                   108
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "feeConfig",
+          "docs": [
+            "The NFT market's own fee, which is not the curve's trading fee."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  101,
+                  101,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
                 ]
               }
             ]
@@ -2366,6 +2628,33 @@ export type AttentionFi = {
           }
         },
         {
+          "name": "feeConfig",
+          "docs": [
+            "The NFT market's fee schedule. Created here so a new deployment is",
+            "complete in one call; a protocol deployed before this account existed",
+            "gets one from `set_fee_config` instead."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  101,
+                  101,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
           "name": "treasury",
           "docs": [
             "never be routed into a program-controlled account."
@@ -2542,6 +2831,17 @@ export type AttentionFi = {
           }
         },
         {
+          "name": "metadata",
+          "docs": [
+            "handler and validated by the Token Metadata program against `mint`."
+          ],
+          "writable": true
+        },
+        {
+          "name": "tokenMetadataProgram",
+          "address": "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s"
+        },
+        {
           "name": "systemProgram",
           "address": "11111111111111111111111111111111"
         },
@@ -2574,6 +2874,14 @@ export type AttentionFi = {
         {
           "name": "earlyExitPenaltyBps",
           "type": "u16"
+        },
+        {
+          "name": "metadata",
+          "type": {
+            "defined": {
+              "name": "tokenMetadataArgs"
+            }
+          }
         }
       ]
     },
@@ -2744,6 +3052,17 @@ export type AttentionFi = {
           }
         },
         {
+          "name": "metadata",
+          "docs": [
+            "handler and validated by the Token Metadata program against `mint`."
+          ],
+          "writable": true
+        },
+        {
+          "name": "tokenMetadataProgram",
+          "address": "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s"
+        },
+        {
           "name": "systemProgram",
           "address": "11111111111111111111111111111111"
         },
@@ -2760,7 +3079,16 @@ export type AttentionFi = {
           "address": "SysvarRent111111111111111111111111111111111"
         }
       ],
-      "args": []
+      "args": [
+        {
+          "name": "metadata",
+          "type": {
+            "defined": {
+              "name": "tokenMetadataArgs"
+            }
+          }
+        }
+      ]
     },
     {
       "name": "launchRevenue",
@@ -2923,6 +3251,17 @@ export type AttentionFi = {
           }
         },
         {
+          "name": "metadata",
+          "docs": [
+            "handler and validated by the Token Metadata program against `mint`."
+          ],
+          "writable": true
+        },
+        {
+          "name": "tokenMetadataProgram",
+          "address": "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s"
+        },
+        {
           "name": "systemProgram",
           "address": "11111111111111111111111111111111"
         },
@@ -2951,6 +3290,14 @@ export type AttentionFi = {
         {
           "name": "sharePrice",
           "type": "u64"
+        },
+        {
+          "name": "metadata",
+          "type": {
+            "defined": {
+              "name": "tokenMetadataArgs"
+            }
+          }
         }
       ]
     },
@@ -3119,6 +3466,17 @@ export type AttentionFi = {
           }
         },
         {
+          "name": "metadata",
+          "docs": [
+            "validated by the Token Metadata program against `mint`."
+          ],
+          "writable": true
+        },
+        {
+          "name": "tokenMetadataProgram",
+          "address": "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s"
+        },
+        {
           "name": "systemProgram",
           "address": "11111111111111111111111111111111"
         },
@@ -3141,6 +3499,14 @@ export type AttentionFi = {
           "type": {
             "defined": {
               "name": "mindshareTier"
+            }
+          }
+        },
+        {
+          "name": "metadata",
+          "type": {
+            "defined": {
+              "name": "tokenMetadataArgs"
             }
           }
         }
@@ -3353,6 +3719,151 @@ export type AttentionFi = {
         {
           "name": "duration",
           "type": "i64"
+        }
+      ]
+    },
+    {
+      "name": "listGenesisGroup",
+      "docs": [
+        "Open a fixed-price run of genesis fee-share NFTs for a token, escrowing",
+        "the collection's update authority so the declared size is binding."
+      ],
+      "discriminator": [
+        192,
+        107,
+        126,
+        114,
+        121,
+        152,
+        38,
+        201
+      ],
+      "accounts": [
+        {
+          "name": "creator",
+          "docs": [
+            "The subject token's creator — the only wallet that can sell a claim on",
+            "its fee stream."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "subjectMint"
+        },
+        {
+          "name": "curve",
+          "docs": [
+            "The subject token's bonding curve — gates issuance to its creator."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  117,
+                  114,
+                  118,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "subjectMint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "group",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  101,
+                  110,
+                  103,
+                  114,
+                  111,
+                  117,
+                  112
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "subjectMint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "pool",
+          "docs": [
+            "Created here if the token has never issued a genesis NFT, so the group",
+            "can be checked against — and later credited to — the same pool one-off",
+            "`mint_genesis` NFTs use. A token has one fee stream, not one per",
+            "issuance route."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  101,
+                  110,
+                  112,
+                  111,
+                  111,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "subjectMint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "collection",
+          "docs": [
+            "change unless `creator` is its current update authority, which is the",
+            "same guarantee a constraint here would give without decoding Core's",
+            "layout."
+          ],
+          "writable": true
+        },
+        {
+          "name": "mplCoreProgram",
+          "address": "CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d"
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "totalUnits",
+          "type": "u16"
+        },
+        {
+          "name": "shareBps",
+          "type": "u16"
+        },
+        {
+          "name": "price",
+          "type": "u64"
+        },
+        {
+          "name": "perWalletCap",
+          "type": "u16"
         }
       ]
     },
@@ -3655,6 +4166,91 @@ export type AttentionFi = {
       ]
     },
     {
+      "name": "mintGenesisBatch",
+      "docs": [
+        "Mint units into a listed genesis group — one Core asset per unit, held",
+        "in escrow until bought. Assets are passed as remaining accounts."
+      ],
+      "discriminator": [
+        74,
+        20,
+        223,
+        228,
+        24,
+        196,
+        121,
+        233
+      ],
+      "accounts": [
+        {
+          "name": "creator",
+          "docs": [
+            "The group's creator, funding the assets."
+          ],
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "group"
+          ]
+        },
+        {
+          "name": "subjectMint",
+          "relations": [
+            "group"
+          ]
+        },
+        {
+          "name": "group",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  101,
+                  110,
+                  103,
+                  114,
+                  111,
+                  117,
+                  112
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "subjectMint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "collection",
+          "docs": [
+            "Its update authority is the group PDA, which signs the mints below."
+          ],
+          "writable": true,
+          "relations": [
+            "group"
+          ]
+        },
+        {
+          "name": "mplCoreProgram",
+          "address": "CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d"
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "uri",
+          "type": "string"
+        }
+      ]
+    },
+    {
       "name": "mintNft",
       "docs": [
         "Mint a plain Core NFT (collectible with an optional image), standalone",
@@ -3866,6 +4462,30 @@ export type AttentionFi = {
                   98,
                   97,
                   108
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "feeConfig",
+          "docs": [
+            "Holds the daily price, so placement can be repriced without a redeploy."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  101,
+                  101,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
                 ]
               }
             ]
@@ -4854,6 +5474,88 @@ export type AttentionFi = {
       "args": []
     },
     {
+      "name": "setFeeConfig",
+      "docs": [
+        "Set the NFT market's fee schedule — its sale fee and the daily price of",
+        "promoted placement — creating the account on first call."
+      ],
+      "discriminator": [
+        221,
+        222,
+        52,
+        206,
+        114,
+        198,
+        64,
+        91
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "global",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  108,
+                  111,
+                  98,
+                  97,
+                  108
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "feeConfig",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  101,
+                  101,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "nftFeeBps",
+          "type": {
+            "option": "u16"
+          }
+        },
+        {
+          "name": "promoLamportsPerDay",
+          "type": {
+            "option": "u64"
+          }
+        }
+      ]
+    },
+    {
       "name": "setIssuer",
       "docs": [
         "Set or rotate the dedicated key authorized to sign SAS attestations",
@@ -5162,6 +5864,17 @@ export type AttentionFi = {
           }
         },
         {
+          "name": "metadata",
+          "docs": [
+            "handler and validated by the Token Metadata program against `mint`."
+          ],
+          "writable": true
+        },
+        {
+          "name": "tokenMetadataProgram",
+          "address": "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s"
+        },
+        {
           "name": "systemProgram",
           "address": "11111111111111111111111111111111"
         },
@@ -5198,6 +5911,14 @@ export type AttentionFi = {
         {
           "name": "duration",
           "type": "i64"
+        },
+        {
+          "name": "metadata",
+          "type": {
+            "defined": {
+              "name": "tokenMetadataArgs"
+            }
+          }
         }
       ]
     },
@@ -5675,6 +6396,74 @@ export type AttentionFi = {
       ]
     },
     {
+      "name": "updateConfig",
+      "docs": [
+        "Retune the protocol's trading economics without a redeploy. Each",
+        "argument is optional; omitting one leaves that value untouched."
+      ],
+      "discriminator": [
+        29,
+        158,
+        252,
+        191,
+        10,
+        83,
+        219,
+        99
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "signer": true
+        },
+        {
+          "name": "global",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  108,
+                  111,
+                  98,
+                  97,
+                  108
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "feeBps",
+          "type": {
+            "option": "u16"
+          }
+        },
+        {
+          "name": "creatorFeeShareBps",
+          "type": {
+            "option": "u16"
+          }
+        },
+        {
+          "name": "graduationSol",
+          "type": {
+            "option": "u64"
+          }
+        },
+        {
+          "name": "virtualTokenReserves",
+          "type": {
+            "option": "u64"
+          }
+        }
+      ]
+    },
+    {
       "name": "updateMindshare",
       "docs": [
         "Refresh a token's on-chain mindshare snapshot from the Switchboard feed",
@@ -5946,6 +6735,45 @@ export type AttentionFi = {
       ]
     },
     {
+      "name": "feeConfig",
+      "discriminator": [
+        143,
+        52,
+        146,
+        187,
+        219,
+        123,
+        76,
+        155
+      ]
+    },
+    {
+      "name": "genesisAllocation",
+      "discriminator": [
+        55,
+        2,
+        39,
+        218,
+        33,
+        76,
+        217,
+        186
+      ]
+    },
+    {
+      "name": "genesisGroup",
+      "discriminator": [
+        33,
+        74,
+        243,
+        51,
+        94,
+        167,
+        214,
+        120
+      ]
+    },
+    {
       "name": "genesisNft",
       "discriminator": [
         57,
@@ -6156,6 +6984,19 @@ export type AttentionFi = {
       ]
     },
     {
+      "name": "configUpdatedEvent",
+      "discriminator": [
+        245,
+        158,
+        129,
+        99,
+        60,
+        100,
+        214,
+        220
+      ]
+    },
+    {
       "name": "creatorClaimEvent",
       "discriminator": [
         232,
@@ -6166,6 +7007,58 @@ export type AttentionFi = {
         5,
         142,
         9
+      ]
+    },
+    {
+      "name": "feeConfigUpdatedEvent",
+      "discriminator": [
+        139,
+        188,
+        235,
+        116,
+        222,
+        55,
+        95,
+        201
+      ]
+    },
+    {
+      "name": "genesisBatchMintedEvent",
+      "discriminator": [
+        208,
+        59,
+        33,
+        110,
+        14,
+        22,
+        63,
+        202
+      ]
+    },
+    {
+      "name": "genesisGroupListedEvent",
+      "discriminator": [
+        141,
+        212,
+        97,
+        151,
+        107,
+        238,
+        93,
+        133
+      ]
+    },
+    {
+      "name": "genesisUnitSoldEvent",
+      "discriminator": [
+        41,
+        18,
+        97,
+        30,
+        126,
+        31,
+        113,
+        147
       ]
     },
     {
@@ -6390,6 +7283,41 @@ export type AttentionFi = {
       "code": 6025,
       "name": "invalidPerkLevel",
       "msg": "Perk level must be between 1 and MAX_PERK_LEVEL"
+    },
+    {
+      "code": 6026,
+      "name": "invalidTokenMetadata",
+      "msg": "Token name, symbol or URI is empty or exceeds the Metaplex limit"
+    },
+    {
+      "code": 6027,
+      "name": "invalidGenesisGroup",
+      "msg": "Genesis group size, share, price or per-wallet cap is invalid"
+    },
+    {
+      "code": 6028,
+      "name": "genesisGroupFull",
+      "msg": "Genesis group already holds every unit it declared"
+    },
+    {
+      "code": 6029,
+      "name": "invalidGenesisBatch",
+      "msg": "Genesis batch is empty or exceeds the per-call limit"
+    },
+    {
+      "code": 6030,
+      "name": "walletCapReached",
+      "msg": "Wallet already holds its maximum units of this genesis group"
+    },
+    {
+      "code": 6031,
+      "name": "assetNotInGroup",
+      "msg": "That asset is not a unit of this genesis group"
+    },
+    {
+      "code": 6032,
+      "name": "invalidConfig",
+      "msg": "Config value is outside the range the protocol accepts"
     }
   ],
   "types": [
@@ -6735,6 +7663,45 @@ export type AttentionFi = {
       }
     },
     {
+      "name": "configUpdatedEvent",
+      "docs": [
+        "Emitted when the protocol's trading economics are retuned.",
+        "",
+        "Every field is the value in force *after* the call, supplied or not, so an",
+        "indexer reading one event knows the whole configuration rather than a diff",
+        "it has to replay from genesis to interpret."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "feeBps",
+            "type": "u16"
+          },
+          {
+            "name": "creatorFeeShareBps",
+            "type": "u16"
+          },
+          {
+            "name": "graduationSol",
+            "type": "u64"
+          },
+          {
+            "name": "virtualTokenReserves",
+            "type": "u64"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
       "name": "convictionCurve",
       "docs": [
         "Per-token conviction curve. Prices identically to the bonding curve",
@@ -6955,6 +7922,282 @@ export type AttentionFi = {
       }
     },
     {
+      "name": "feeConfig",
+      "docs": [
+        "The NFT market's own fee schedule, tunable without a redeploy.",
+        "",
+        "Lives beside `Global` rather than inside it because `Global` is already",
+        "on-chain at a fixed length (see `FEECONFIG_SEED`), and it holds the NFT",
+        "numbers specifically: a trading fee and a marketplace fee answer different",
+        "questions and were never the same number, they were just stored as one.",
+        "",
+        "Required by the instructions that charge it, never optional. An optional",
+        "override would let a buyer omit the account and pay the old, lower number —",
+        "the opposite of the perk discount, where omitting it only costs the caller."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "nftFeeBps",
+            "docs": [
+              "Fee on an NFT or collection sale, in bps of the sale price."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "promoLamportsPerDay",
+            "docs": [
+              "Cost of one day of promoted placement, lamports."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "feeConfigUpdatedEvent",
+      "docs": [
+        "Emitted when the NFT market's fee schedule changes."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "nftFeeBps",
+            "type": "u16"
+          },
+          {
+            "name": "promoLamportsPerDay",
+            "type": "u64"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "genesisAllocation",
+      "docs": [
+        "How many units one wallet has taken from one token's genesis group.",
+        "",
+        "Keyed by (subject mint, buyer) rather than counted on the buyer's NFTs: the",
+        "units are transferable, so a buyer who sold theirs on would otherwise be",
+        "free to come back and buy the cap again. What the cap limits is how much of",
+        "the run one wallet may take from the group, which is a fact about purchases,",
+        "not about current holdings."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "subjectMint",
+            "type": "pubkey"
+          },
+          {
+            "name": "buyer",
+            "type": "pubkey"
+          },
+          {
+            "name": "units",
+            "docs": [
+              "Units bought from this group, ever."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "genesisBatchMintedEvent",
+      "docs": [
+        "Emitted when units are minted into a group's collection."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "subjectMint",
+            "type": "pubkey"
+          },
+          {
+            "name": "collection",
+            "type": "pubkey"
+          },
+          {
+            "name": "units",
+            "docs": [
+              "Units created by this call."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "mintedUnits",
+            "docs": [
+              "Running total minted, out of `total_units`."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "genesisGroup",
+      "docs": [
+        "A token's fixed-price run of genesis fee-share NFTs. One PDA per subject mint.",
+        "",
+        "Where `mint_genesis` issues one NFT to a named recipient on terms the creator",
+        "negotiated off-chain, a group is a public offer: N identical units, a fixed",
+        "price, one collection, and a cap on how many any single wallet may take.",
+        "",
+        "The PDA is the collection's update authority for the group's whole life,",
+        "which is what makes `total_units` mean anything. If the creator kept it they",
+        "could mint extra units into the same collection at any time, and every",
+        "existing holder's share of the fee stream would quietly shrink — the buyer",
+        "would have no way to tell a five-unit run from a five-hundred-unit one. With",
+        "the authority escrowed here, the only path to a new unit is",
+        "`mint_genesis_batch`, which counts."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "subjectMint",
+            "docs": [
+              "The token whose fee stream every unit shares."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "creator",
+            "docs": [
+              "Seller of the units, and the collection's authority on a reclaim."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "collection",
+            "docs": [
+              "Core collection holding the units; its update authority is escrowed here."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "price",
+            "docs": [
+              "Fixed price per unit, lamports. Protocol fee is charged on top."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "shareBps",
+            "docs": [
+              "Slice of the creator's fee stream each unit carries, in bps."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "totalUnits",
+            "docs": [
+              "Units this group will ever contain."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "mintedUnits",
+            "docs": [
+              "Units minted into the collection so far (<= `total_units`)."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "soldUnits",
+            "docs": [
+              "Units sold so far (<= `minted_units`)."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "perWalletCap",
+            "docs": [
+              "Most units one wallet may buy."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "genesisGroupListedEvent",
+      "docs": [
+        "Emitted when a token opens a fixed-price run of genesis fee-share NFTs."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "subjectMint",
+            "type": "pubkey"
+          },
+          {
+            "name": "creator",
+            "type": "pubkey"
+          },
+          {
+            "name": "collection",
+            "type": "pubkey"
+          },
+          {
+            "name": "totalUnits",
+            "docs": [
+              "Units the run will ever contain — the denominator a buyer's share is",
+              "judged against, and the number the escrowed collection authority makes",
+              "binding."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "shareBps",
+            "type": "u16"
+          },
+          {
+            "name": "price",
+            "type": "u64"
+          },
+          {
+            "name": "perWalletCap",
+            "type": "u16"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
       "name": "genesisNft",
       "docs": [
         "A fee-share genesis NFT: a transferable Metaplex Core asset minted to an",
@@ -7051,6 +8294,55 @@ export type AttentionFi = {
           {
             "name": "bump",
             "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "genesisUnitSoldEvent",
+      "docs": [
+        "Emitted when a buyer takes one unit out of a group."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "subjectMint",
+            "type": "pubkey"
+          },
+          {
+            "name": "asset",
+            "type": "pubkey"
+          },
+          {
+            "name": "buyer",
+            "type": "pubkey"
+          },
+          {
+            "name": "price",
+            "type": "u64"
+          },
+          {
+            "name": "fee",
+            "docs": [
+              "Protocol fee charged on top of `price`."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "shareBps",
+            "type": "u16"
+          },
+          {
+            "name": "soldUnits",
+            "docs": [
+              "Units sold from the group after this sale."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
           }
         ]
       }
@@ -7756,6 +9048,34 @@ export type AttentionFi = {
           {
             "name": "bump",
             "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "tokenMetadataArgs",
+      "docs": [
+        "A launched token's name, symbol and metadata URI.",
+        "",
+        "One argument rather than three loose strings: they are meaningless apart,",
+        "every launch instruction needs all of them, and passing them separately put",
+        "two of those instructions over clippy's argument limit. Grouping also means",
+        "a future field arrives without changing five signatures again."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "name",
+            "type": "string"
+          },
+          {
+            "name": "symbol",
+            "type": "string"
+          },
+          {
+            "name": "uri",
+            "type": "string"
           }
         ]
       }

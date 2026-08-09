@@ -60,7 +60,7 @@ function usd(n: number): string {
 export function TokenDetailTerminal({ token: tokenProp }: { token: TokenDetail }) {
   // Mock now, upgraded to live on-chain curve state when the token is deployed.
   const { token, source, refresh } = useLiveTokenDetail(tokenProp);
-  const { connected, address, shortAddress, disconnect } = useWallet();
+  const { connected, address } = useWallet();
   const program = useProgram();
   const solBalance = useSolBalance();
   const solUsdRate = useSolUsd();
@@ -230,27 +230,11 @@ export function TokenDetailTerminal({ token: tokenProp }: { token: TokenDetail }
           <span className="hidden font-mono text-[10px] text-[#6B6B6B] sm:inline">
             SOL/USD ${solUsdRate.toFixed(2)}
           </span>
-          {connected ? (
-            <div className="flex items-center gap-1.5 rounded-sm border border-signal/40 bg-signal/[0.06] px-1 py-0.5">
-              <span className="inline-flex items-center gap-1.5 px-2 py-1 font-mono text-[11px] font-bold text-signal">
-                <span className="h-1.5 w-1.5 rounded-full bg-signal af-pulse-dot" />
-                {shortAddress}
-              </span>
-              <button
-                onClick={disconnect}
-                className="rounded-sm px-2 py-1 font-mono text-[10px] text-[#6B6B6B] transition-colors hover:bg-white/10 hover:text-noise"
-              >
-                Disconnect
-              </button>
-            </div>
-          ) : (
-            <button
-              onClick={() => setWalletOpen(true)}
-              className="rounded-sm bg-signal px-3.5 py-1.5 font-mono text-[11px] font-bold tracking-wide text-[#0A0A0A]"
-            >
-              Connect Wallet
-            </button>
-          )}
+          {/* No wallet control here. The global nav carries the address and the
+              disconnect menu one row above, and repeating them put two copies
+              of the same state on screen — which on a phone pushed this row
+              wide enough to overflow. The trade panel still opens the connect
+              modal on demand, so nothing is lost by not restating it. */}
         </div>
       </nav>
 
@@ -710,6 +694,7 @@ export function TokenDetailTerminal({ token: tokenProp }: { token: TokenDetail }
             {tx && (
               <div className="mt-3">
                 <TxStatus
+                  onDismiss={() => setTx(null)}
                   state={tx}
                   title={
                     tx === "pending"

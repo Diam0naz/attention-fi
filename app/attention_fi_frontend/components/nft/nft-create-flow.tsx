@@ -961,6 +961,7 @@ export function NftCreateFlow() {
             {tx ? (
               <div className="mt-4">
                 <TxStatus
+                  onDismiss={() => setTx(null)}
                   state={tx}
                   title={
                     tx === "pending"

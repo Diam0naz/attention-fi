@@ -344,6 +344,7 @@ export function ConvictionPanel({ mint, symbol }: { mint: string; symbol: string
       {tx && (
         <div className="mt-3">
           <TxStatus
+            onDismiss={() => setTx(null)}
             state={tx}
             title={
               tx === "pending"

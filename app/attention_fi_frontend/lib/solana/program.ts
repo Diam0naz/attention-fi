@@ -1,5 +1,14 @@
 import { AnchorProvider, Program } from "@anchor-lang/core";
-import { Connection, PublicKey, type Transaction, type VersionedTransaction } from "@solana/web3.js";
+import {
+  Connection,
+  PublicKey,
+  type Commitment,
+  type RpcResponseAndContext,
+  type SignatureResult,
+  type Transaction,
+  type TransactionConfirmationStrategy,
+  type VersionedTransaction,
+} from "@solana/web3.js";
 import idlJson from "@/lib/idl/attention_fi.json";
 import type { AttentionFi } from "@/lib/idl/attention_fi";
 import { INDEXER_RPC_ENDPOINT, PROGRAM_ID, RPC_ENDPOINT, USE_RPC_PROXY } from "./config";
@@ -16,11 +25,100 @@ let cached: Connection | null = null;
 export function getConnection(): Connection {
   // Fail fast on 429s instead of web3.js's internal retry loop spamming the
   // console — callers poll anyway, so the next wave picks up the data.
-  cached ??= new Connection(browserEndpoint(), {
-    commitment: "confirmed",
-    disableRetryOnRateLimit: true,
-  });
+  if (!cached) {
+    cached = new Connection(browserEndpoint(), {
+      commitment: "confirmed",
+      disableRetryOnRateLimit: true,
+    });
+    installPolledConfirmation(cached);
+  }
   return cached;
+}
+
+/**
+ * Confirm transactions by polling signature status instead of subscribing.
+ *
+ * web3.js confirms over a websocket, and it derives that websocket's URL from
+ * the HTTP one by swapping the scheme and adding one to the port. Reads go
+ * through `/api/rpc` so the provider key never reaches the browser, and there
+ * is nothing listening on the origin's port + 1 — so `onSignature` never fired,
+ * every confirmation ran out its 30-second timer, and the UI reported
+ * "Transaction was not confirmed in 30.00 seconds" for transactions that had
+ * already landed. Users were told their burn or delist had failed while the
+ * explorer showed it succeeded, which is the one kind of wrong a wallet UI
+ * cannot be: it invites people to retry an action that already happened.
+ *
+ * Patching the connection rather than the provider covers every caller —
+ * Anchor's `.rpc()` reaches `confirmTransaction` through
+ * `sendAndConfirmRawTransaction`, and the Switchboard feed path calls it
+ * directly.
+ *
+ * Polling costs a handful of extra reads per transaction and works through the
+ * proxy exactly as every other read does. The alternative — pointing the socket
+ * at a public cluster endpoint — would confirm against a node other than the
+ * one that accepted the transaction, on infrastructure with its own rate limits.
+ */
+function installPolledConfirmation(connection: Connection): void {
+  const confirm = async (
+    strategy: TransactionConfirmationStrategy | string,
+    commitment: Commitment = "confirmed",
+  ): Promise<RpcResponseAndContext<SignatureResult>> => {
+    const signature = typeof strategy === "string" ? strategy : strategy.signature;
+    // Present on the blockhash strategy Anchor uses; absent on the bare-signature
+    // form, where the deadline below is the only bound.
+    const lastValidBlockHeight =
+      typeof strategy === "string" ? undefined : (strategy as { lastValidBlockHeight?: number })
+          .lastValidBlockHeight;
+
+    const deadline = Date.now() + CONFIRM_TIMEOUT_MS;
+    for (;;) {
+      const statuses = await connection.getSignatureStatuses([signature]);
+      const status = statuses.value[0];
+      if (status && (status.err !== null || reached(status.confirmationStatus, commitment))) {
+        return { context: statuses.context, value: { err: status.err } };
+      }
+
+      // A dropped transaction is the one case worth distinguishing: once its
+      // blockhash can no longer be replayed the signature will never appear, so
+      // saying so is honest rather than a guess about a timeout.
+      if (lastValidBlockHeight !== undefined) {
+        const height = await connection.getBlockHeight(commitment);
+        if (height > lastValidBlockHeight) {
+          throw new Error(
+            `Transaction ${signature} expired before it was confirmed — it was not processed.`,
+          );
+        }
+      }
+
+      if (Date.now() > deadline) {
+        throw new Error(
+          `Transaction ${signature} was not confirmed in ${CONFIRM_TIMEOUT_MS / 1000}s. ` +
+            `It may still land — check the signature before retrying.`,
+        );
+      }
+      await new Promise((resolve) => setTimeout(resolve, CONFIRM_POLL_MS));
+    }
+  };
+
+  // web3.js types the method through several overloads; the runtime only ever
+  // calls the two shapes handled above.
+  connection.confirmTransaction = confirm as Connection["confirmTransaction"];
+}
+
+/** How long to wait for a signature before giving up on it. */
+const CONFIRM_TIMEOUT_MS = 90_000;
+/** Gap between status reads while waiting. */
+const CONFIRM_POLL_MS = 700;
+
+/** Commitment levels in ascending order of certainty. */
+const COMMITMENT_RANK: Record<string, number> = { processed: 0, confirmed: 1, finalized: 2 };
+
+/** Whether a status has reached the commitment the caller asked for. */
+function reached(status: string | null | undefined, wanted: Commitment): boolean {
+  if (!status) return false;
+  const have = COMMITMENT_RANK[status];
+  const need = COMMITMENT_RANK[wanted] ?? COMMITMENT_RANK.confirmed;
+  return have !== undefined && need !== undefined && have >= need;
 }
 
 /**
@@ -137,6 +235,25 @@ export const verificationPda = (subject: PublicKey): PublicKey =>
 /** Singleton PDA holding the dedicated SAS attestation issuer key. */
 export const issuerConfigPda = (): PublicKey =>
   PublicKey.findProgramAddressSync([enc.encode("issuer")], PROGRAM_ID)[0];
+
+const TOKEN_METADATA_PROGRAM_ID = new PublicKey("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s");
+
+/**
+ * The Metaplex metadata account for a launched mint.
+ *
+ * Every launch instruction writes real token metadata now, and this is the one
+ * account Anchor cannot derive for us: it belongs to the Token Metadata
+ * program, so the IDL carries no seeds for it and the client has to supply it.
+ */
+export const metadataPda = (mint: PublicKey): PublicKey =>
+  PublicKey.findProgramAddressSync(
+    [enc.encode("metadata"), TOKEN_METADATA_PROGRAM_ID.toBytes(), mint.toBytes()],
+    TOKEN_METADATA_PROGRAM_ID,
+  )[0];
+
+/** The NFT market's fee schedule — a singleton, so its seed is constant. */
+export const feeConfigPda = (): PublicKey =>
+  PublicKey.findProgramAddressSync([enc.encode("feeconfig")], PROGRAM_ID)[0];
 
 const TOKEN_PROGRAM_ID = new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
 const ASSOCIATED_TOKEN_PROGRAM_ID = new PublicKey("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");

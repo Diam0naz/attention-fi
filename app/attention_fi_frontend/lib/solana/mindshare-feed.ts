@@ -15,6 +15,7 @@ import { PublicKey } from "@solana/web3.js";
 import type { AnchorProvider, Program } from "@anchor-lang/core";
 import type { AttentionFi } from "@/lib/idl/attention_fi";
 import type { AnchorWalletLike } from "./program";
+import { metadataPda } from "./program";
 
 /** The configured mindshare feed, or null when the live-mindshare path is off. */
 export function mindshareFeedPubkey(): PublicKey | null {
@@ -41,6 +42,7 @@ export function mindshareFeedEnabled(): boolean {
 export async function launchFromFeed(
   program: Program<AttentionFi>,
   mint: Keypair,
+  metadata: { name: string; symbol: string; uri: string },
 ): Promise<string> {
   const feed = mindshareFeedPubkey();
   if (!feed) throw new Error("Live-mindshare launch is not configured (NEXT_PUBLIC_MINDSHARE_FEED).");
@@ -52,8 +54,13 @@ export async function launchFromFeed(
 
   // The launch instruction reads the feed; it must come *after* the refresh.
   const launchIx = await program.methods
-    .launchFromFeed()
-    .accounts({ creator, mint: mint.publicKey, feed })
+    .launchFromFeed(metadata)
+    .accounts({
+      creator,
+      mint: mint.publicKey,
+      feed,
+      metadata: metadataPda(mint.publicKey),
+    })
     .instruction();
 
   // Fresh signed oracle update (Ed25519 verify + feed write). numSuccess < 1

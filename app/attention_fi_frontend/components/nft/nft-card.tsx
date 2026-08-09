@@ -44,6 +44,10 @@ export type NftCardData =
       /** The subject's mint, used to identify the token when `subject` can't
        *  be resolved — see getNftVisual. */
       subjectMint?: string;
+      /** Set when the NFT has been filed into an mpl-core collection. A
+       *  fee-share NFT can be collected like any other asset, and without this
+       *  the card gave no sign that it had been. */
+      collection?: { name: string; size: number };
     }
   | {
       kind: "custom";

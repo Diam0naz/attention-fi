@@ -34,6 +34,7 @@ import {
   collectionPrice,
   fetchCollectionAuctions,
   fetchCollections,
+  fetchCollectableNfts,
   fetchListableNfts,
   fetchNftAuctions,
   fetchPerkGrant,
@@ -158,6 +159,13 @@ export function NftManage({ section }: { section: Section }) {
   const [reclaimingAll, setReclaimingAll] = useState(false);
   const [skinBusy, setSkinBusy] = useState(false);
   const listableAssets = address && listable.owner === address ? listable.assets : [];
+  // What the collection shelf may offer to file away. Wider than `listable`:
+  // that pool also feeds burning, where a genesis NFT must never appear.
+  const [collectable, setCollectable] = useState<{ owner: string; assets: OwnedAsset[] }>({
+    owner: "",
+    assets: [],
+  });
+  const collectableAssets = address && collectable.owner === address ? collectable.assets : [];
   // Collections this wallet is the update authority for.
   const [collections, setCollections] = useState<CollectionData[]>([]);
   // null until the first read lands: an empty array and "not read yet"
@@ -345,20 +353,40 @@ export function NftManage({ section }: { section: Section }) {
     }
   }
 
+  /**
+   * The protocol treasury, fetched if it isn't already in hand.
+   *
+   * Every instruction that charges a fee has to pass it: it lives in a field on
+   * `global` rather than in a PDA seed, so Anchor cannot derive it and refuses
+   * the call with "Account `treasury` not provided". The state above is only
+   * filled by the auctions tab's loader, so anything bought from another tab
+   * has to go and get it.
+   */
+  async function resolveTreasury(): Promise<PublicKey | null> {
+    if (treasury) return new PublicKey(treasury);
+    const global = await fetchGlobal(readProgram).catch(() => null);
+    if (!global?.treasury) return null;
+    setTreasury(global.treasury);
+    return new PublicKey(global.treasury);
+  }
+
   async function buyNow(a: NftAuctionData) {
     if (!signProgram || !address) return setWalletOpen(true);
-    if (!treasury) return;
     const price = currentAuctionPrice(a, now);
     // Price only falls before the auction ends, so a small cushion above the
     // client-observed price absorbs clock drift without ever overpaying.
     const maxPrice = (price * 102n) / 100n;
     setTx({ state: "pending", title: "Buying asset…", detail: short(a.asset) });
     try {
+      // Fetched rather than read straight from state: a button that silently
+      // does nothing because a loader hasn't run yet reads as a broken app.
+      const treasuryKey = await resolveTreasury();
+      if (!treasuryKey) throw new Error("Couldn't read the protocol treasury.");
       const sig = await signProgram.methods
         .buyNft(new BN(maxPrice.toString()))
         .accountsPartial({
           buyer: new PublicKey(address),
-          treasury: new PublicKey(treasury),
+          treasury: treasuryKey,
           creator: new PublicKey(a.creator),
           asset: new PublicKey(a.asset),
         })
@@ -384,9 +412,14 @@ export function NftManage({ section }: { section: Section }) {
     if ((section !== "auctions" && section !== "collections") || !address) return;
     let cancelled = false;
     void (async () => {
-      const list = await fetchCollections(readProgram, new PublicKey(address)).catch(() => []);
+      const owner = new PublicKey(address);
+      const [list, movable] = await Promise.all([
+        fetchCollections(readProgram, owner).catch(() => []),
+        fetchCollectableNfts(readProgram, owner).catch(() => []),
+      ]);
       if (!cancelled) {
         setCollections(list);
+        setCollectable({ owner: address, assets: movable });
         setCollectionsLoaded(true);
       }
     })();
@@ -499,12 +532,15 @@ export function NftManage({ section }: { section: Section }) {
     if (!signProgram || !address) return setWalletOpen(true);
     setTx({ state: "pending", title: "Buying collection…", detail: c.name });
     try {
+      const treasuryKey = await resolveTreasury();
+      if (!treasuryKey) throw new Error("Couldn't read the protocol treasury.");
       const price = collectionPrice(c, Date.now());
       const maxPrice = (price * 102n) / 100n;
       const sig = await signProgram.methods
         .buyCollection(new BN(maxPrice.toString()))
         .accountsPartial({
           buyer: new PublicKey(address),
+          treasury: treasuryKey,
           creator: new PublicKey(c.creator),
           collection: new PublicKey(c.collection),
         })
@@ -762,11 +798,12 @@ export function NftManage({ section }: { section: Section }) {
       {tx && (
         <div className="mb-4">
           <TxStatus
+            onDismiss={() => setTx(null)}
             state={tx.state}
             title={tx.title}
             detail={tx.detail}
-            signature={tx.signature ?? "4xРq…9nP2"}
-            explorerUrl={tx.explorerUrl ?? "#"}
+            signature={tx.signature}
+            explorerUrl={tx.explorerUrl}
           />
         </div>
       )}
@@ -1241,7 +1278,7 @@ export function NftManage({ section }: { section: Section }) {
                   key={c.address}
                   collection={c}
                   owner={address}
-                  candidates={listableAssets}
+                  candidates={collectableAssets}
                   ownedCollections={collections.map((x) => x.address)}
                   listing={collectionAuctions.find((a) => a.collection === c.address) ?? null}
                   // Sizes come from the collection account, so a move has to

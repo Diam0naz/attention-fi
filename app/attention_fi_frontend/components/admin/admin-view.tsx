@@ -242,6 +242,7 @@ export function AdminView() {
       {tx && (
         <div className="mb-4">
           <TxStatus
+            onDismiss={() => setTx(null)}
             state={tx.state}
             title={tx.title}
             detail={tx.detail}

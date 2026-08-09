@@ -406,7 +406,13 @@ async function fetchStandaloneAssets(
 async function fetchProgramNfts(
   program: Program<AttentionFi>,
   ownerStr: string,
-): Promise<{ cards: NftCardData[]; tracked: Set<string> }> {
+): Promise<{
+  cards: NftCardData[];
+  tracked: Set<string>;
+  /** Genesis cards paired with their Core asset, so a caller can enrich them
+   *  from the asset account without re-reading every PDA. */
+  genesisAssets: { card: NftCardData; asset: PublicKey }[];
+}> {
   const [genesis, perks, verifications] = await Promise.all([
     program.account.genesisNft.all(),
     program.account.perkNft.all(),
@@ -415,6 +421,7 @@ async function fetchProgramNfts(
 
   const cards: NftCardData[] = [];
   const tracked = new Set<string>();
+  const genesisAssets: { card: NftCardData; asset: PublicKey }[] = [];
   for (const v of verifications) {
     if (v.account.subject.toBase58() === ownerStr) {
       cards.push({ kind: "verification", handle: v.account.handle });
@@ -429,11 +436,17 @@ async function fetchProgramNfts(
   }
   for (const g of genesis) {
     if (g.account.owner.toBase58() === ownerStr) {
-      cards.push({ kind: "genesis", shareBps: g.account.shareBps, id: short(g.account.asset.toBase58()) });
+      const card: NftCardData = {
+        kind: "genesis",
+        shareBps: g.account.shareBps,
+        id: short(g.account.asset.toBase58()),
+      };
+      cards.push(card);
+      genesisAssets.push({ card, asset: g.account.asset });
       tracked.add(g.account.asset.toBase58());
     }
   }
-  return { cards, tracked };
+  return { cards, tracked, genesisAssets };
 }
 
 /**
@@ -472,18 +485,41 @@ export async function fetchCollectionMeta(
 }
 
 export async function fetchOwnedNfts(program: Program<AttentionFi>, owner: PublicKey): Promise<NftCardData[]> {
-  const { cards, tracked } = await fetchProgramNfts(program, owner.toBase58());
+  const { cards, tracked, genesisAssets } = await fetchProgramNfts(program, owner.toBase58());
   // Skins live off-chain, so the grid rendered every card in its default
   // palette no matter what the holder was wearing. Applied here rather than in
   // each caller, so every surface showing a collection agrees.
   await applySkins(cards, owner.toBase58());
   const standalone = await fetchStandaloneAssets(program, owner, tracked).catch(() => []);
+
+  // A genesis NFT can be filed into a collection like anything else, but its
+  // PDA doesn't record that — only the Core asset does. Without this read the
+  // card stayed silent about membership, so filing one looked like it hadn't
+  // worked.
+  const genesisCollections = new Map<NftCardData, string>();
+  if (genesisAssets.length > 0) {
+    const infos = await program.provider.connection
+      .getMultipleAccountsInfo(genesisAssets.map((g) => g.asset))
+      .catch(() => []);
+    for (const [i, info] of infos.entries()) {
+      if (!info) continue;
+      const decoded = decodeAsset(info.data);
+      const entry = genesisAssets[i];
+      if (decoded?.collection && entry) genesisCollections.set(entry.card, decoded.collection);
+    }
+  }
+
   // Membership is worth showing on the card, and the size lives on the
   // collection account rather than the asset.
-  const meta = await fetchCollectionMeta(
-    program,
-    standalone.flatMap((a) => (a.collection ? [a.collection] : [])),
-  ).catch(() => new Map<string, { name: string; size: number }>());
+  const meta = await fetchCollectionMeta(program, [
+    ...standalone.flatMap((a) => (a.collection ? [a.collection] : [])),
+    ...genesisCollections.values(),
+  ]).catch(() => new Map<string, { name: string; size: number }>());
+
+  for (const [card, address] of genesisCollections) {
+    const collection = meta.get(address);
+    if (collection && card.kind === "genesis") card.collection = collection;
+  }
 
   return [
     ...cards,
@@ -680,6 +716,63 @@ export async function fetchListableNfts(
 ): Promise<OwnedAsset[]> {
   const { tracked } = await fetchProgramNfts(program, owner.toBase58());
   return fetchStandaloneAssets(program, owner, tracked);
+}
+
+/**
+ * Assets a wallet may gather into one of its collections.
+ *
+ * Wider than [`fetchListableNfts`] on purpose, and the difference matters.
+ * That pool feeds listing and burning, where a genesis NFT must never appear —
+ * burning one destroys a live claim on a token's fee stream. Collecting one
+ * destroys nothing: membership is an `UpdateV2` that moves an asset into a set
+ * and can be undone by `remove_from_collection`.
+ *
+ * Excluding genesis from both meant a creator who had minted fee-share NFTs
+ * for their own token could see them in the grid but never file them anywhere
+ * — the collection shelf simply had nothing to offer, which reads as the
+ * feature being broken rather than the asset being protected.
+ *
+ * Perk and verification NFTs are left out because they cannot move regardless:
+ * Core authorises the update against the asset's update authority, and theirs
+ * is a program PDA. Offering them would only produce a failure at submit.
+ */
+export async function fetchCollectableNfts(
+  program: Program<AttentionFi>,
+  owner: PublicKey,
+): Promise<OwnedAsset[]> {
+  const ownerStr = owner.toBase58();
+  const genesis = await program.account.genesisNft
+    .all()
+    .then((all) => all.filter((g) => g.account.owner.toBase58() === ownerStr))
+    .catch(() => []);
+
+  const genesisAssets = genesis.map((g) => g.account.asset);
+  const { tracked } = await fetchProgramNfts(program, ownerStr);
+  const standalone = await fetchStandaloneAssets(program, owner, tracked);
+
+  if (genesisAssets.length === 0) return standalone;
+
+  // Read the Core accounts directly: the PDA knows the claim, only the asset
+  // knows its name, art and which collection it currently sits in.
+  const infos = await program.provider.connection
+    .getMultipleAccountsInfo(genesisAssets)
+    .catch(() => []);
+
+  const collectable: OwnedAsset[] = [];
+  for (const [i, info] of infos.entries()) {
+    if (!info) continue;
+    const decoded = decodeAsset(info.data);
+    if (!decoded) continue;
+    const address = genesisAssets[i]!.toBase58();
+    collectable.push({
+      asset: address,
+      name: decoded.name || short(address),
+      uri: decoded.uri || undefined,
+      collection: decoded.collection,
+      updateAuthority: decoded.updateAuthority,
+    });
+  }
+  return [...standalone, ...collectable];
 }
 
 /**

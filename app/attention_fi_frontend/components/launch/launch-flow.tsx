@@ -12,6 +12,7 @@ import { PageBackground } from "@/components/reactbits/page-background";
 import { Keypair, PublicKey } from "@solana/web3.js";
 import { BN } from "@anchor-lang/core";
 import { useProgram } from "@/lib/solana/use-program";
+import { metadataPda } from "@/lib/solana/program";
 import { useQueryClient } from "@tanstack/react-query";
 import { nftPortfolioKey } from "@/components/nft/use-nft-portfolio";
 import { registerToken, syncRegistry } from "@/lib/solana/registry";
@@ -220,33 +221,55 @@ export function LaunchFlow() {
       const creator = new PublicKey(address);
       const tierArg = TIER_ARG[t.tier] as never;
       const price = pricePerTokenLamports(t.tier);
+      // Written to the token's Metaplex metadata, so a wallet or explorer that
+      // has never heard of AttentionFi still shows a name rather than an
+      // address. The program bounds these at 32/10/200 characters.
+      //
+      // `uri` is deliberately empty: the launch image is a data: URI held in
+      // the browser registry, which is both far past the on-chain limit and the
+      // wrong kind of thing — Metaplex wants a URL to a JSON document. Hosting
+      // that document is the follow-up; an empty uri is valid meanwhile and
+      // leaves the name and symbol correct.
+      const metadataArg = { name: name.slice(0, 32), symbol: ticker.slice(0, 10), uri: "" };
+      const metadata = metadataPda(mint.publicKey);
       let sig: string;
       if (mech === "bonding") {
         // When a Switchboard mindshare feed is configured, seed the tier from
         // the on-chain oracle (decentralized) rather than the keeper tier arg.
         sig = mindshareFeedEnabled()
-          ? await launchFromFeed(program, mint)
+          ? await launchFromFeed(program, mint, metadataArg)
           : await program.methods
-              .launchToken(tierArg)
-              .accounts({ creator, mint: mint.publicKey })
+              .launchToken(tierArg, metadataArg)
+              .accounts({ creator, mint: mint.publicKey, metadata })
               .signers([mint])
               .rpc();
       } else if (mech === "dutch") {
         sig = await program.methods
-          .startAuction(tierArg, new BN(price * 3), new BN(price), new BN(DEFAULT_AUCTION_DURATION_S))
-          .accounts({ creator, mint: mint.publicKey })
+          .startAuction(
+            tierArg,
+            new BN(price * 3),
+            new BN(price),
+            new BN(DEFAULT_AUCTION_DURATION_S),
+            metadataArg,
+          )
+          .accounts({ creator, mint: mint.publicKey, metadata })
           .signers([mint])
           .rpc();
       } else if (mech === "conviction") {
         sig = await program.methods
-          .launchConviction(tierArg, new BN(DEFAULT_LOCK_PERIOD_S), DEFAULT_EARLY_EXIT_PENALTY_BPS)
-          .accounts({ creator, mint: mint.publicKey })
+          .launchConviction(
+            tierArg,
+            new BN(DEFAULT_LOCK_PERIOD_S),
+            DEFAULT_EARLY_EXIT_PENALTY_BPS,
+            metadataArg,
+          )
+          .accounts({ creator, mint: mint.publicKey, metadata })
           .signers([mint])
           .rpc();
       } else {
         sig = await program.methods
-          .launchRevenue(tierArg, new BN(price))
-          .accounts({ creator, mint: mint.publicKey })
+          .launchRevenue(tierArg, new BN(price), metadataArg)
+          .accounts({ creator, mint: mint.publicKey, metadata })
           .signers([mint])
           .rpc();
       }
@@ -608,6 +631,7 @@ export function LaunchFlow() {
             {tx ? (
               <div className="mt-4">
                 <TxStatus
+                  onDismiss={() => setTx(null)}
                   state={tx}
                   title={
                     tx === "pending" ? "Launching…" : tx === "failed" ? "Launch failed" : "Token launched"
