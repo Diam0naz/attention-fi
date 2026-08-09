@@ -8,6 +8,7 @@ import { type TokenDetail } from "@/lib/mock-data";
 import { X_URL } from "@/lib/config";
 import { PriceChart } from "@/components/token/price-chart";
 import { MindshareView } from "@/components/token/mindshare-view";
+import { OnchainMindshare } from "@/components/token/onchain-mindshare";
 import { Avatar } from "@/components/feed/avatar";
 import { Footer } from "@/components/feed/footer";
 import { WalletConnectModal } from "@/components/wallet/wallet-connect-modal";
@@ -331,7 +332,12 @@ export function TokenDetailTerminal({ token: tokenProp }: { token: TokenDetail }
           </div>
 
           {view === "mindshare" && (
-            <div className="mt-4">
+            <div className="mt-4 flex flex-col gap-4">
+              {/* What the chain knows, beside what the app measures. They
+                  disagree by design — the app's figure is live, the chain's was
+                  written by whoever last cranked the oracle — and only the
+                  latter is something the protocol could act on. */}
+              <OnchainMindshare mint={handleToMint(token.handle)?.toBase58() ?? null} />
               <MindshareView token={token} />
             </div>
           )}

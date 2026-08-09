@@ -253,6 +253,10 @@ export const perkPda = (asset: PublicKey): PublicKey =>
 export const guardiansPda = (): PublicKey =>
   PublicKey.findProgramAddressSync([enc.encode("guardians")], PROGRAM_ID)[0];
 
+/** A token's on-chain mindshare snapshot, written by `update_mindshare`. */
+export const mindsharePda = (mint: PublicKey): PublicKey =>
+  PublicKey.findProgramAddressSync([enc.encode("mindshare"), mint.toBytes()], PROGRAM_ID)[0];
+
 /** A 1-of-1 asset's listing. */
 export const nftAuctionPda = (asset: PublicKey): PublicKey =>
   PublicKey.findProgramAddressSync([enc.encode("nftauction"), asset.toBytes()], PROGRAM_ID)[0];

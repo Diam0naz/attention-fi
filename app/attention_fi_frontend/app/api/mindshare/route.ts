@@ -16,6 +16,7 @@ import {
   newestAgeForHandle,
 } from "@/lib/mindshare-db";
 import { allTokens, tokenDbConfigured } from "@/lib/token-db";
+import { TWAP_WINDOW_SEC, timeWeightedMindshare, windowCoverage } from "@/lib/mindshare-twap";
 
 export const dynamic = "force-dynamic";
 
@@ -61,23 +62,42 @@ function downsample(values: number[], n: number): number[] {
 async function deltaAndSpark(
   handle: string,
   current: number,
-): Promise<{ delta24h: number; sparkline: number[] }> {
+): Promise<{
+  delta24h: number;
+  sparkline: number[];
+  /** Time-weighted mindshare over the trailing 24h — what the oracle reads. */
+  mindshare24h: number;
+  /** 0..1 of the window the history actually covers. */
+  coverage24h: number;
+}> {
   const now = Math.floor(Date.now() / 1000);
   let sparkline: number[] = [];
   let past: number | null = null;
+  let twap: number | null = null;
+  let coverage = 0;
   if (mindshareDbConfigured()) {
     try {
-      const hist = await getHistory(handle, now - 24 * HOUR, now);
+      const hist = await getHistory(handle, now - TWAP_WINDOW_SEC, now);
       if (hist.length >= 8) sparkline = downsample(hist.map((p) => p.mindshare), 24);
-      past = await getValueAround(handle, now - 24 * HOUR);
+      // The average rides on the query the sparkline already needed. Carrying
+      // the live reading in as the newest point matters: history is written on
+      // a five-minute throttle, so without it the last few minutes — exactly
+      // the window a spike would be timed into — would be missing.
+      twap = timeWeightedMindshare([...hist, { time: now, mindshare: current }], now);
+      coverage = windowCoverage(hist, now);
+      past = await getValueAround(handle, now - TWAP_WINDOW_SEC);
     } catch {
       // fall through to synthetic
     }
   }
   if (sparkline.length < 8) sparkline = syntheticSpark(handle);
-  if (past === null) past = engineMindshare(handle, Date.now() - 24 * HOUR * 1000);
+  if (past === null) past = engineMindshare(handle, Date.now() - TWAP_WINDOW_SEC * 1000);
   const delta24h = past > 0 ? Math.round(((current - past) / past) * 1000) / 10 : 0;
-  return { delta24h, sparkline };
+  // No history is not an excuse to publish an unaveraged number as if it were
+  // averaged — but it is also not a reason to publish nothing, since a new
+  // handle would then be unlaunchable. Spot is returned with coverage 0 so the
+  // consumer can see exactly how much smoothing it is getting.
+  return { delta24h, sparkline, mindshare24h: twap ?? current, coverage24h: coverage };
 }
 
 /**
@@ -143,10 +163,26 @@ export async function GET(req: NextRequest) {
     );
     const rank = rankOf(handle, mindshare, all, valueOf);
     const vertical = curatedVertical(handle);
-    const { delta24h, sparkline } = await deltaAndSpark(handle, mindshare);
+    const { delta24h, sparkline, mindshare24h, coverage24h } = await deltaAndSpark(
+      handle,
+      mindshare,
+    );
     const ageSec = mindshareDbConfigured() ? await newestAgeForHandle(handle).catch(() => null) : null;
     await writeIfStale({ handle, mindshare, rank, vertical, source, ageSec });
-    return NextResponse.json({ handle, mindshare, source, rank, delta24h, sparkline, vertical });
+    // `mindshare24h` is the field the Switchboard job parses. It is deliberately
+    // first-class rather than a debug extra: the oracle must never read `mindshare`,
+    // which is spot and therefore timeable against a launch.
+    return NextResponse.json({
+      handle,
+      mindshare,
+      mindshare24h,
+      coverage24h,
+      source,
+      rank,
+      delta24h,
+      sparkline,
+      vertical,
+    });
   }
 
   // Leaderboard → one row per known handle, ranked. Deltas from the engine to
