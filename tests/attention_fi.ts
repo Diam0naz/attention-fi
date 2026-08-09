@@ -134,6 +134,7 @@ describe("attention_fi bonding curve", () => {
         vault,
         buyerTokenAccount: buyerAta,
         perk: null,
+        traderStats: null,
         systemProgram: SystemProgram.programId,
         tokenProgram: TOKEN_PROGRAM_ID,
         associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
@@ -174,6 +175,7 @@ describe("attention_fi bonding curve", () => {
         vault,
         sellerTokenAccount: buyerAta,
         perk: null,
+        traderStats: null,
         tokenProgram: TOKEN_PROGRAM_ID,
       })
       .rpc();
@@ -1231,6 +1233,7 @@ describe("attention_fi AMM graduation", () => {
         vault: curveVault,
         buyerTokenAccount: walletAta,
         perk: null,
+        traderStats: null,
         systemProgram: SystemProgram.programId,
         tokenProgram: TOKEN_PROGRAM_ID,
         associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
@@ -1283,6 +1286,7 @@ describe("attention_fi AMM graduation", () => {
         poolVault,
         traderTokenAccount: walletAta,
         perk: null,
+        traderStats: null,
         systemProgram: SystemProgram.programId,
         tokenProgram: TOKEN_PROGRAM_ID,
         associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
@@ -1309,6 +1313,7 @@ describe("attention_fi AMM graduation", () => {
         poolVault,
         traderTokenAccount: walletAta,
         perk: null,
+        traderStats: null,
         systemProgram: SystemProgram.programId,
         tokenProgram: TOKEN_PROGRAM_ID,
         associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
@@ -1416,6 +1421,7 @@ describe("attention_fi creator fees (SAS-gated claim)", () => {
         vault,
         buyerTokenAccount: walletAta,
         perk: null,
+        traderStats: null,
         systemProgram: SystemProgram.programId,
         tokenProgram: TOKEN_PROGRAM_ID,
         associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
@@ -1841,6 +1847,7 @@ describe("attention_fi protocol config", () => {
         vault,
         buyerTokenAccount: buyerAta,
         perk: null,
+        traderStats: null,
         genesisPool: genesisPoolPda(subjectMint, program.programId),
         systemProgram: SystemProgram.programId,
         tokenProgram: TOKEN_PROGRAM_ID,
@@ -2602,6 +2609,7 @@ describe("attention_fi security fixes", () => {
         vault: ata(curvePda, subjectMint),
         buyerTokenAccount: ata(wallet, subjectMint),
         perk: null,
+        traderStats: null,
         genesisPool: poolPda,
         systemProgram: SystemProgram.programId,
         tokenProgram: TOKEN_PROGRAM_ID,
@@ -2659,5 +2667,316 @@ describe("attention_fi security fixes", () => {
       assert.include(String(err), "InvalidConfig");
     }
     assert.isTrue(threw, "an unbounded daily price is what made a pending promotion unsafe");
+  });
+});
+
+/**
+ * Perks you earn rather than perks you're given.
+ *
+ * PERK_LEVEL_ACTIVITY_LAMPORTS described this ladder from the beginning and
+ * nothing referenced it: claim_perk needed an admin-issued PerkGrant and
+ * level_up needed the authority's signature. These cases drive the whole path
+ * with a wallet that has no relationship to the protocol authority at all.
+ */
+describe("attention_fi earned perks", () => {
+  anchor.setProvider(anchor.AnchorProvider.env());
+  const provider = anchor.getProvider() as anchor.AnchorProvider;
+  const program = anchor.workspace.attentionFi as Program<AttentionFi>;
+  const wallet = provider.wallet.publicKey;
+
+  const [globalPda] = PublicKey.findProgramAddressSync(
+    [Buffer.from("global")],
+    program.programId
+  );
+  const [feeConfigPda] = PublicKey.findProgramAddressSync(
+    [Buffer.from("feeconfig")],
+    program.programId
+  );
+
+  const mintKp = Keypair.generate();
+  const mint = mintKp.publicKey;
+  const [curvePda] = PublicKey.findProgramAddressSync(
+    [Buffer.from("curve"), mint.toBuffer()],
+    program.programId
+  );
+  const genesisPool = genesisPoolPda(mint, program.programId);
+
+  // Deliberately not the provider wallet: the point is that a wallet with no
+  // privileges can climb the ladder alone.
+  const trader = Keypair.generate();
+  const [statsPda] = PublicKey.findProgramAddressSync(
+    [Buffer.from("trader"), trader.publicKey.toBuffer()],
+    program.programId
+  );
+  const [perkAuthPda] = PublicKey.findProgramAddressSync(
+    [Buffer.from("perkauth")],
+    program.programId
+  );
+
+  let treasury: PublicKey;
+  let perkAsset: PublicKey;
+  let perkPda: PublicKey;
+
+  /** Buy `sol` SOL of the token as `trader`, crediting their activity. */
+  async function buy(sol: number, withStats = true) {
+    const tx = await program.methods
+      .buy(new anchor.BN(sol * LAMPORTS_PER_SOL), new anchor.BN(0))
+      .accountsPartial({
+        buyer: trader.publicKey,
+        treasury,
+        curve: curvePda,
+        mint,
+        vault: ata(curvePda, mint),
+        buyerTokenAccount: ata(trader.publicKey, mint),
+        perk: null,
+        genesisPool,
+        traderStats: withStats ? statsPda : null,
+      })
+      .transaction();
+    await anchor.web3.sendAndConfirmTransaction(
+      provider.connection,
+      tx,
+      [trader],
+      {
+        commitment: "confirmed",
+      }
+    );
+  }
+
+  const score = async () => {
+    const s = await program.account.traderStats.fetch(statsPda);
+    return s.volumeLamports.toNumber() + s.depositsLamports.toNumber() * 2;
+  };
+
+  before(async () => {
+    const existing = await program.account.global.fetchNullable(globalPda);
+    if (existing) {
+      treasury = existing.treasury;
+    } else {
+      treasury = Keypair.generate().publicKey;
+      await program.methods
+        .initialize()
+        .accountsStrict({
+          authority: wallet,
+          global: globalPda,
+          feeConfig: feeConfigPda,
+          treasury,
+          systemProgram: SystemProgram.programId,
+        })
+        .rpc();
+    }
+
+    const sig = await provider.connection.requestAirdrop(
+      trader.publicKey,
+      50 * LAMPORTS_PER_SOL
+    );
+    await provider.connection.confirmTransaction(sig, "confirmed");
+
+    await program.methods
+      .launchToken(
+        { emerging: {} },
+        { name: "Earned", symbol: "EARN", uri: "https://attention.fi/e.json" }
+      )
+      .accountsStrict({
+        creator: wallet,
+        global: globalPda,
+        mint,
+        curve: curvePda,
+        vault: ata(curvePda, mint),
+        metadata: PublicKey.findProgramAddressSync(
+          [
+            Buffer.from("metadata"),
+            TOKEN_METADATA_PROGRAM_ID.toBuffer(),
+            mint.toBuffer(),
+          ],
+          TOKEN_METADATA_PROGRAM_ID
+        )[0],
+        tokenMetadataProgram: TOKEN_METADATA_PROGRAM_ID,
+        systemProgram: SystemProgram.programId,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+        rent: SYSVAR_RENT_PUBKEY,
+      })
+      .signers([mintKp])
+      .rpc();
+  });
+
+  it("lets a trader open their own activity record", async () => {
+    const tx = await program.methods
+      .openTraderStats()
+      .accountsPartial({ owner: trader.publicKey, stats: statsPda })
+      .transaction();
+    await anchor.web3.sendAndConfirmTransaction(
+      provider.connection,
+      tx,
+      [trader],
+      {
+        commitment: "confirmed",
+      }
+    );
+
+    const stats = await program.account.traderStats.fetch(statsPda);
+    assert.equal(stats.owner.toBase58(), trader.publicKey.toBase58());
+    assert.equal(stats.volumeLamports.toNumber(), 0, "starts from zero");
+  });
+
+  it("refuses a perk before the first threshold is cleared", async () => {
+    await buy(0.5);
+    assert.isBelow(
+      await score(),
+      LAMPORTS_PER_SOL,
+      "half a SOL is short of rung 1"
+    );
+
+    const asset = Keypair.generate();
+    try {
+      const tx = await program.methods
+        .claimEarnedPerk("https://attention.fi/p.json")
+        .accountsPartial({
+          recipient: trader.publicKey,
+          stats: statsPda,
+          perkAuthority: perkAuthPda,
+          asset: asset.publicKey,
+          mplCoreProgram: MPL_CORE_PROGRAM_ID,
+        })
+        .transaction();
+      await anchor.web3.sendAndConfirmTransaction(
+        provider.connection,
+        tx,
+        [trader, asset],
+        {
+          commitment: "confirmed",
+        }
+      );
+      assert.fail("claimed a perk without the activity for it");
+    } catch (e) {
+      assert.include(String(e), "InsufficientActivity");
+    }
+  });
+
+  it("mints a perk on the trader's own volume, with no grant and no authority", async () => {
+    await buy(1);
+    assert.isAtLeast(await score(), LAMPORTS_PER_SOL);
+
+    const asset = Keypair.generate();
+    perkAsset = asset.publicKey;
+    [perkPda] = PublicKey.findProgramAddressSync(
+      [Buffer.from("perk"), perkAsset.toBuffer()],
+      program.programId
+    );
+
+    const tx = await program.methods
+      .claimEarnedPerk("https://attention.fi/p.json")
+      .accountsPartial({
+        recipient: trader.publicKey,
+        stats: statsPda,
+        perkAuthority: perkAuthPda,
+        perk: perkPda,
+        asset: perkAsset,
+        mplCoreProgram: MPL_CORE_PROGRAM_ID,
+      })
+      .transaction();
+    await anchor.web3.sendAndConfirmTransaction(
+      provider.connection,
+      tx,
+      [trader, asset],
+      {
+        commitment: "confirmed",
+      }
+    );
+
+    const perk = await program.account.perkNft.fetch(perkPda);
+    assert.equal(perk.owner.toBase58(), trader.publicKey.toBase58());
+    assert.equal(perk.level, 1, "level 1 is what ~1.5 SOL of volume earns");
+    assert.equal(perk.discountBps, 1000);
+  });
+
+  it("refuses a level-up until the next rung's activity is there", async () => {
+    assert.isBelow(await score(), 5 * LAMPORTS_PER_SOL, "level 2 needs 5 SOL");
+    try {
+      const tx = await program.methods
+        .levelUp()
+        .accountsPartial({
+          owner: trader.publicKey,
+          stats: statsPda,
+          perkAuthority: perkAuthPda,
+          perk: perkPda,
+          asset: perkAsset,
+          mplCoreProgram: MPL_CORE_PROGRAM_ID,
+        })
+        .transaction();
+      await anchor.web3.sendAndConfirmTransaction(
+        provider.connection,
+        tx,
+        [trader],
+        {
+          commitment: "confirmed",
+        }
+      );
+      assert.fail("levelled up without the activity for it");
+    } catch (e) {
+      assert.include(String(e), "InsufficientActivity");
+    }
+  });
+
+  it("levels up once the trading is there — no authority signature anywhere", async () => {
+    await buy(4);
+    assert.isAtLeast(await score(), 5 * LAMPORTS_PER_SOL);
+
+    const tx = await program.methods
+      .levelUp()
+      .accountsPartial({
+        owner: trader.publicKey,
+        stats: statsPda,
+        perkAuthority: perkAuthPda,
+        perk: perkPda,
+        asset: perkAsset,
+        mplCoreProgram: MPL_CORE_PROGRAM_ID,
+      })
+      .transaction();
+    await anchor.web3.sendAndConfirmTransaction(
+      provider.connection,
+      tx,
+      [trader],
+      {
+        commitment: "confirmed",
+      }
+    );
+
+    const perk = await program.account.perkNft.fetch(perkPda);
+    assert.equal(perk.level, 2);
+    assert.equal(perk.discountBps, 2000, "20% off the fee at level 2");
+  });
+
+  it("will not let one wallet level up another's perk", async () => {
+    // The provider wallet is the protocol authority, which used to be exactly
+    // who could do this. It now has no more standing than anyone else.
+    try {
+      await program.methods
+        .levelUp()
+        .accountsPartial({
+          owner: wallet,
+          stats: statsPda,
+          perkAuthority: perkAuthPda,
+          perk: perkPda,
+          asset: perkAsset,
+          mplCoreProgram: MPL_CORE_PROGRAM_ID,
+        })
+        .rpc();
+      assert.fail("the authority levelled up somebody else's perk");
+    } catch (e) {
+      // Fails on the seeds (the authority's own stats PDA) or on the owner
+      // constraint — either way it does not go through.
+      assert.match(
+        String(e),
+        /ConstraintSeeds|Unauthorized|AccountNotInitialized/
+      );
+    }
+  });
+
+  it("keeps trading working for a client that never passes the account", async () => {
+    const before = await score();
+    await buy(0.25, false);
+    assert.equal(await score(), before, "no accrual, but the trade landed");
   });
 });

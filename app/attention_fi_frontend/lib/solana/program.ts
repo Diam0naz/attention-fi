@@ -220,13 +220,27 @@ export const revStakePda = (mint: PublicKey, owner: PublicKey): PublicKey =>
 /**
  * Fee pool shared by a token's genesis NFT holders.
  *
- * Only exists once a token has minted at least one genesis NFT, so callers
- * must check before passing it — the trading instructions take it as an
- * optional account, and supplying an address for an account that was never
- * created fails the whole trade.
+ * Always passed, never probed. The trading instructions take this as a required
+ * account and read from the chain whether it exists, so an address for a pool
+ * that was never created is fine — that emptiness is the answer.
  */
 export const genesisPoolPda = (mint: PublicKey): PublicKey =>
   PublicKey.findProgramAddressSync([enc.encode("genpool"), mint.toBytes()], PROGRAM_ID)[0];
+
+/**
+ * A wallet's cumulative trading activity, which perk levels are gated on.
+ *
+ * Genuinely optional on the trading instructions, and unlike the genesis pool
+ * it must be checked before being passed: Anchor deserialises an `Option`
+ * account when one is supplied, so handing it the address of an account nobody
+ * has opened fails the trade. Opened once via `openTraderStats`.
+ */
+export const traderStatsPda = (owner: PublicKey): PublicKey =>
+  PublicKey.findProgramAddressSync([enc.encode("trader"), owner.toBytes()], PROGRAM_ID)[0];
+
+/** The record backing one perk NFT, keyed by its Core asset. */
+export const perkPda = (asset: PublicKey): PublicKey =>
+  PublicKey.findProgramAddressSync([enc.encode("perk"), asset.toBytes()], PROGRAM_ID)[0];
 
 /** A token's fixed-price run of genesis fee-share NFTs. */
 export const genesisGroupPda = (subjectMint: PublicKey): PublicKey =>

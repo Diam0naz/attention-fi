@@ -713,6 +713,37 @@ export type AttentionFi = {
           }
         },
         {
+          "name": "traderStats",
+          "docs": [
+            "Optional cumulative-activity record for the buyer, credited with this",
+            "trade's SOL. Optional for the reason set out in `perks::record_activity`:",
+            "leaving it out forfeits progress toward your own fee discount and costs",
+            "nobody else anything. A TS caller still has to name it",
+            "(`traderStats: null`), as it already does for `perk`."
+          ],
+          "writable": true,
+          "optional": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  97,
+                  100,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "buyer"
+              }
+            ]
+          }
+        },
+        {
           "name": "genesisPool",
           "docs": [
             "The token's genesis fee pool.",
@@ -937,6 +968,36 @@ export type AttentionFi = {
         {
           "name": "treasury",
           "writable": true
+        },
+        {
+          "name": "traderStats",
+          "docs": [
+            "Optional cumulative-activity record for the buyer. Capital committed",
+            "here counts as a *deposit* rather than volume — `activity_score` weights",
+            "deposits double, because locking money up is a stronger signal than a",
+            "trade that can be reversed in the next block."
+          ],
+          "writable": true,
+          "optional": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  97,
+                  100,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "buyer"
+              }
+            ]
+          }
         },
         {
           "name": "curve",
@@ -1586,6 +1647,36 @@ export type AttentionFi = {
           "writable": true
         },
         {
+          "name": "traderStats",
+          "docs": [
+            "Optional cumulative-activity record for the buyer. Capital committed",
+            "here counts as a *deposit* rather than volume — `activity_score` weights",
+            "deposits double, because locking money up is a stronger signal than a",
+            "trade that can be reversed in the next block."
+          ],
+          "writable": true,
+          "optional": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  97,
+                  100,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "buyer"
+              }
+            ]
+          }
+        },
+        {
           "name": "revenue",
           "writable": true,
           "pda": {
@@ -1738,6 +1829,126 @@ export type AttentionFi = {
         }
       ],
       "args": []
+    },
+    {
+      "name": "claimEarnedPerk",
+      "docs": [
+        "Mint your own perk once your trading clears the first activity",
+        "threshold, at the level that activity has already earned. No grant, no",
+        "authority signature."
+      ],
+      "discriminator": [
+        185,
+        83,
+        225,
+        105,
+        211,
+        193,
+        105,
+        144
+      ],
+      "accounts": [
+        {
+          "name": "recipient",
+          "docs": [
+            "The trader claiming their own perk. Signs and funds the asset."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "stats",
+          "docs": [
+            "Cumulative activity, and the whole basis for the claim. Pinned by seeds",
+            "to the signer, so a wallet can't present someone else's volume."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  97,
+                  100,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "recipient"
+              }
+            ]
+          }
+        },
+        {
+          "name": "perkAuthority",
+          "docs": [
+            "program can level the NFT up later. Validated by seeds."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  101,
+                  114,
+                  107,
+                  97,
+                  117,
+                  116,
+                  104
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "perk",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  101,
+                  114,
+                  107
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "asset"
+              }
+            ]
+          }
+        },
+        {
+          "name": "asset",
+          "docs": [
+            "The new Core asset (client-generated keypair, signs its creation)."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "mplCoreProgram",
+          "address": "CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d"
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "uri",
+          "type": "string"
+        }
+      ]
     },
     {
       "name": "claimGenesisFee",
@@ -3601,7 +3812,8 @@ export type AttentionFi = {
       "name": "levelUp",
       "docs": [
         "Level up a perk NFT: rewrites its on-chain Attributes and raises its fee",
-        "discount (program-controlled via the perk authority PDA)."
+        "discount (program-controlled via the perk authority PDA). Signed by the",
+        "holder and gated on their own cumulative activity, not by the authority."
       ],
       "discriminator": [
         128,
@@ -3615,27 +3827,36 @@ export type AttentionFi = {
       ],
       "accounts": [
         {
-          "name": "authority",
+          "name": "owner",
           "docs": [
-            "Protocol keeper triggering the level-up (e.g. on volume milestones)."
+            "The perk's owner. Signs for their own level-up and pays for it."
           ],
           "writable": true,
           "signer": true
         },
         {
-          "name": "global",
+          "name": "stats",
+          "docs": [
+            "The owner's cumulative trading activity — the whole basis for the",
+            "level-up. Pinned by seeds to the signer, so one wallet cannot present",
+            "another's volume."
+          ],
           "pda": {
             "seeds": [
               {
                 "kind": "const",
                 "value": [
-                  103,
-                  108,
-                  111,
-                  98,
+                  116,
+                  114,
                   97,
-                  108
+                  100,
+                  101,
+                  114
                 ]
+              },
+              {
+                "kind": "account",
+                "path": "owner"
               }
             ]
           }
@@ -4511,6 +4732,58 @@ export type AttentionFi = {
       ]
     },
     {
+      "name": "openTraderStats",
+      "docs": [
+        "Open the account recording a wallet's cumulative trading activity.",
+        "Permissionless and self-funded; perk levels are gated on what it holds."
+      ],
+      "discriminator": [
+        205,
+        87,
+        242,
+        29,
+        162,
+        210,
+        153,
+        239
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "stats",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  97,
+                  100,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "owner"
+              }
+            ]
+          }
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "promoteListing",
       "docs": [
         "Buy promoted placement for a live listing, asset or collection.",
@@ -5229,6 +5502,37 @@ export type AttentionFi = {
                 "kind": "account",
                 "path": "perk.asset",
                 "account": "perkNft"
+              }
+            ]
+          }
+        },
+        {
+          "name": "traderStats",
+          "docs": [
+            "Optional cumulative-activity record for the seller, credited with this",
+            "trade's SOL. Optional for the reason set out in `perks::record_activity`:",
+            "leaving it out forfeits progress toward your own fee discount and costs",
+            "nobody else anything. A TS caller still has to name it",
+            "(`traderStats: null`), as it already does for `perk`."
+          ],
+          "writable": true,
+          "optional": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  97,
+                  100,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "seller"
               }
             ]
           }
@@ -6507,6 +6811,37 @@ export type AttentionFi = {
           }
         },
         {
+          "name": "traderStats",
+          "docs": [
+            "Optional cumulative-activity record for the trader, credited with the",
+            "SOL side of this swap. Optional for the reason set out in",
+            "`perks::record_activity`: leaving it out forfeits progress toward your",
+            "own fee discount and costs nobody else anything. A TS caller still has to",
+            "name it (`traderStats: null`), as it already does for `perk`."
+          ],
+          "writable": true,
+          "optional": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  97,
+                  100,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "trader"
+              }
+            ]
+          }
+        },
+        {
           "name": "genesisPool",
           "docs": [
             "The token's genesis fee pool.",
@@ -7087,6 +7422,19 @@ export type AttentionFi = {
         219,
         48,
         110
+      ]
+    },
+    {
+      "name": "traderStats",
+      "discriminator": [
+        16,
+        37,
+        94,
+        234,
+        65,
+        84,
+        250,
+        101
       ]
     },
     {
@@ -9433,6 +9781,43 @@ export type AttentionFi = {
           {
             "name": "timestamp",
             "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "traderStats",
+      "docs": [
+        "Cumulative trading activity for one wallet, across every mechanism —",
+        "what perk level-ups are gated on. One per wallet, created on a trader's",
+        "first buy/sell/deposit and updated on every one after."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "volumeLamports",
+            "docs": [
+              "Cumulative SOL moved across buys and sells, all mechanisms (lamports)."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "depositsLamports",
+            "docs": [
+              "Cumulative SOL locked via conviction buys or revenue-share purchases —",
+              "counted separately from (and in addition to) volume_lamports since",
+              "committing capital is a stronger signal than a single trade."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
           }
         ]
       }

@@ -1,9 +1,56 @@
 //! Shared helpers for the Metaplex Core NFT layer.
 
 use crate::constants::{DISCOUNT_PER_LEVEL_BPS, LAMPORTS_PER_SOL, MAX_PERK_LEVEL};
-use anchor_lang::prelude::AccountInfo;
-use mpl_core::types::{Attribute, Attributes, PluginType};
+use anchor_lang::prelude::*;
+use mpl_core::instructions::CreateV2CpiBuilder;
+use mpl_core::types::{
+    Attribute, Attributes, DataState, PermanentFreezeDelegate, Plugin, PluginAuthorityPair,
+    PluginType,
+};
 use mpl_core::{fetch_collection_plugin, fetch_plugins};
+
+/// Mint one perk asset at `level`, owned by `owner` and paid for by them.
+///
+/// Shared by both claim routes — the granted one and the earned one. They mint
+/// the same thing, and a perk whose plugin set depended on how it was obtained
+/// would be a perk that behaves differently depending on its provenance.
+///
+/// Frozen on creation so the discount can't be sold to a higher-volume wallet,
+/// with Attributes owned by the program's PDA so the holder can't rewrite their
+/// own level. Both properties are what make the discount safe to price off.
+pub fn mint_perk_asset<'info>(
+    mpl_core_program: &AccountInfo<'info>,
+    asset: &AccountInfo<'info>,
+    owner: &AccountInfo<'info>,
+    perk_authority: &AccountInfo<'info>,
+    system_program: &AccountInfo<'info>,
+    level: u8,
+    uri: String,
+) -> Result<()> {
+    let plugins = vec![
+        PluginAuthorityPair {
+            plugin: Plugin::PermanentFreezeDelegate(PermanentFreezeDelegate { frozen: true }),
+            authority: None,
+        },
+        PluginAuthorityPair {
+            plugin: Plugin::Attributes(perk_attributes(level)),
+            authority: None,
+        },
+    ];
+
+    CreateV2CpiBuilder::new(mpl_core_program)
+        .asset(asset)
+        .payer(owner)
+        .owner(Some(owner))
+        .update_authority(Some(perk_authority))
+        .system_program(system_program)
+        .data_state(DataState::AccountState)
+        .name("AttentionFi Perk".to_string())
+        .uri(uri)
+        .plugins(plugins)
+        .invoke()?;
+    Ok(())
+}
 
 /// 100% in basis points.
 const BPS_DENOMINATOR: u16 = 10_000;

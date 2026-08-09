@@ -3,13 +3,14 @@ use anchor_lang::system_program;
 use anchor_spl::associated_token::AssociatedToken;
 use anchor_spl::token::{self, Mint, Token, TokenAccount, Transfer};
 
-use crate::constants::{CURVE_SEED, GENPOOL_SEED, GLOBAL_SEED, PERK_SEED};
+use crate::constants::{CURVE_SEED, GENPOOL_SEED, GLOBAL_SEED, PERK_SEED, TRADER_SEED};
 use crate::curve::{buy_quote, split_creator_fee};
 use crate::error::AttentionError;
 use crate::events::{GraduateEvent, TradeEvent};
 use crate::nft::{discounted_fee_bps, perk_discount_bps};
+use crate::perks;
 use crate::revenue::{credit_genesis_pool, genesis_share_bps, split_genesis_fee};
-use crate::state::{BondingCurve, Global, PerkNft};
+use crate::state::{BondingCurve, Global, PerkNft, TraderStats};
 
 #[derive(Accounts)]
 pub struct Buy<'info> {
@@ -51,6 +52,18 @@ pub struct Buy<'info> {
         constraint = perk.owner == buyer.key() @ AttentionError::Unauthorized,
     )]
     pub perk: Option<Account<'info, PerkNft>>,
+
+    /// Optional cumulative-activity record for the buyer, credited with this
+    /// trade's SOL. Optional for the reason set out in `perks::record_activity`:
+    /// leaving it out forfeits progress toward your own fee discount and costs
+    /// nobody else anything. A TS caller still has to name it
+    /// (`traderStats: null`), as it already does for `perk`.
+    #[account(
+        mut,
+        seeds = [TRADER_SEED, buyer.key().as_ref()],
+        bump = trader_stats.bump,
+    )]
+    pub trader_stats: Option<Account<'info, TraderStats>>,
 
     /// The token's genesis fee pool.
     ///
@@ -223,6 +236,15 @@ pub fn buy_handler<'info>(
             timestamp: now,
         });
     }
+
+    // Credit this trade's volume toward the trader's perk level. Skipped
+    // silently when the account isn't supplied — see `perks::record_activity`.
+    perks::record_activity(
+        ctx.accounts.trader_stats.as_deref_mut(),
+        buyer_key,
+        sol_amount,
+        0,
+    )?;
 
     Ok(())
 }

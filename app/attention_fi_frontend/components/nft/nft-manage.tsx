@@ -22,6 +22,7 @@ import { SkinPicker } from "@/components/nft/skin-picker";
 import { AssetSkinPicker } from "@/components/nft/asset-skin-picker";
 import { CollectionShelf } from "@/components/nft/collection-shelf";
 import { GenesisRuns } from "@/components/nft/genesis-runs";
+import { PerkProgress } from "@/components/nft/perk-progress";
 import { RefreshButton } from "@/components/ui/refresh-button";
 import { artworkUrl } from "@/lib/nft-artwork";
 import { mintToToken, syncRegistry } from "@/lib/solana/registry";
@@ -1002,13 +1003,19 @@ export function NftManage({ section }: { section: Section }) {
                 </div>
                 <div className="mt-1.5 flex justify-between font-mono text-[10px] text-[#6B6B6B]">
                   <span>Level {level} of {MAX_LEVEL}</span>
-                  <span>{(MAX_LEVEL - level) * 1}% more available</span>
+                  {/* DISCOUNT_PER_LEVEL_BPS is 1000 — a tenth of the fee per
+                      level, not a hundredth. This line said "1% more" and
+                      understated the perk by a factor of ten. */}
+                  <span>
+                    {((MAX_LEVEL - level) * DISCOUNT_PER_LEVEL_BPS) / 100}% more available
+                  </span>
                 </div>
               </div>
 
               <p className="mt-4 border-t border-white/[0.06] pt-3 text-[11px] leading-relaxed text-[#6B6B6B]">
-                Levels are granted by the protocol as you complete tasks — they can&apos;t be
-                bought or self-minted, which is why a perk is worth holding.
+                Levels are earned by trading. Once your cumulative activity clears the next
+                threshold you level yourself up — the protocol can&apos;t withhold it and
+                doesn&apos;t sign for it.
               </p>
 
               {address && portfolio?.perk && (
@@ -1046,29 +1053,33 @@ export function NftManage({ section }: { section: Section }) {
         ) : (
           <div className="rounded-sm border border-white/[0.08] bg-[#0f1620] p-6">
             <TrendingUp className="h-6 w-6 text-signal" />
-            <div className="mt-3 text-[14px] font-bold">Perks are earned, not minted</div>
+            <div className="mt-3 text-[14px] font-bold">Perks are earned by trading</div>
             <p className="mt-1 max-w-lg text-[12px] leading-relaxed text-[#6B6B6B]">
-              A perk cuts the protocol fee on every trade you make — +1% per level, capped at{" "}
-              {MAX_LEVEL}%. Because that discount costs the protocol real revenue, perks are
-              granted for completing tasks rather than sold: the on-chain instruction only
-              accepts the protocol authority as signer, so nobody can mint themselves one.
+              A perk cuts the protocol fee on every trade you make — a tenth of the fee per
+              level, up to half of it at level {MAX_LEVEL}. Nobody issues it: the thresholds
+              are on-chain, your trading is counted on-chain, and the program mints the perk
+              when the numbers say you&apos;ve earned it.
             </p>
             <p className="mt-3 max-w-lg text-[12px] leading-relaxed text-[#6B6B6B]">
-              Once granted, a perk is soulbound to your wallet and its discount is stored in
-              on-chain Attributes only the program can rewrite.
+              A perk is soulbound to your wallet once minted, and its discount lives in
+              on-chain Attributes only the program can rewrite — so it can&apos;t be edited,
+              and it can&apos;t be sold to a bigger wallet.
             </p>
-            <div className="mt-4 flex flex-wrap gap-2">
-              {PERK_TIER_NAMES.map((name, i) => (
-                <div
-                  key={name}
-                  className="rounded-sm border border-white/10 px-2.5 py-1.5 font-mono text-[10px] text-[#6B6B6B]"
-                >
-                  <span className="text-[#F5F4F0]">{name}</span> · {i + 1}% off
-                </div>
-              ))}
-            </div>
           </div>
         ))}
+
+      {/* The ladder itself: activity, thresholds, and the buttons that climb
+          them. Shown whether or not a perk is already held, because the same
+          numbers answer "can I claim one" and "can I level the one I have". */}
+      {section === "perk" && address && portfolioStatus !== "loading" && (
+        <div className="mt-4">
+          <PerkProgress
+            address={address}
+            perk={portfolio?.perk ? { level: portfolio.perk.level, asset: portfolio.perk.asset } : null}
+            onChanged={refreshPortfolio}
+          />
+        </div>
+      )}
 
       {/* GENESIS */}
       {section === "genesis" &&

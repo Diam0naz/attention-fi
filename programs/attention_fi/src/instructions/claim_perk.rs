@@ -1,18 +1,16 @@
 use anchor_lang::prelude::*;
-use mpl_core::instructions::CreateV2CpiBuilder;
-use mpl_core::types::{DataState, PermanentFreezeDelegate, Plugin, PluginAuthorityPair};
 
 use crate::constants::{PERKGRANT_SEED, PERK_AUTH_SEED, PERK_SEED};
-use crate::nft::{perk_attributes, perk_discount_bps};
+use crate::nft::{mint_perk_asset, perk_discount_bps};
 use crate::state::{PerkGrant, PerkNft};
 
 /// Claim a perk the protocol has already authorised via `grant_perk`.
 ///
 /// The claimant signs and pays here, so awarding perks costs the protocol only
-/// the small grant record rather than a full Core asset per recipient. Minting
-/// is still not open: without a matching `PerkGrant` there is no account to
-/// close and the instruction cannot run, so a wallet can't mint itself a
-/// discount.
+/// the small grant record rather than a full Core asset per recipient. This
+/// route needs a matching `PerkGrant`, so it can't mint a wallet a discount it
+/// wasn't given — a wallet earning one on its own volume goes through
+/// `claim_earned_perk` instead.
 #[derive(Accounts)]
 pub struct ClaimPerk<'info> {
     /// The granted wallet. Signs and funds its own asset.
@@ -63,31 +61,15 @@ pub struct ClaimPerk<'info> {
 pub fn claim_perk_handler(ctx: Context<ClaimPerk>, uri: String) -> Result<()> {
     let level = ctx.accounts.grant.level;
 
-    // Same plugin set as mint_perk: frozen so the discount can't be sold to a
-    // higher-volume wallet, and Attributes owned by the program's PDA so the
-    // holder can't rewrite their own discount.
-    let plugins = vec![
-        PluginAuthorityPair {
-            plugin: Plugin::PermanentFreezeDelegate(PermanentFreezeDelegate { frozen: true }),
-            authority: None,
-        },
-        PluginAuthorityPair {
-            plugin: Plugin::Attributes(perk_attributes(level)),
-            authority: None,
-        },
-    ];
-
-    CreateV2CpiBuilder::new(&ctx.accounts.mpl_core_program.to_account_info())
-        .asset(&ctx.accounts.asset.to_account_info())
-        .payer(&ctx.accounts.recipient.to_account_info())
-        .owner(Some(&ctx.accounts.recipient.to_account_info()))
-        .update_authority(Some(&ctx.accounts.perk_authority.to_account_info()))
-        .system_program(&ctx.accounts.system_program.to_account_info())
-        .data_state(DataState::AccountState)
-        .name("AttentionFi Perk".to_string())
-        .uri(uri)
-        .plugins(plugins)
-        .invoke()?;
+    mint_perk_asset(
+        &ctx.accounts.mpl_core_program.to_account_info(),
+        &ctx.accounts.asset.to_account_info(),
+        &ctx.accounts.recipient.to_account_info(),
+        &ctx.accounts.perk_authority.to_account_info(),
+        &ctx.accounts.system_program.to_account_info(),
+        level,
+        uri,
+    )?;
 
     let perk = &mut ctx.accounts.perk;
     perk.asset = ctx.accounts.asset.key();

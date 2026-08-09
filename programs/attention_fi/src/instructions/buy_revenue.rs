@@ -2,10 +2,11 @@ use anchor_lang::prelude::*;
 use anchor_lang::system_program;
 
 use crate::auction::auction_quote;
-use crate::constants::{GLOBAL_SEED, REVENUE_SEED, REVSTAKE_SEED};
+use crate::constants::{GLOBAL_SEED, REVENUE_SEED, REVSTAKE_SEED, TRADER_SEED};
 use crate::error::AttentionError;
+use crate::perks;
 use crate::revenue::{accrued, pending};
-use crate::state::{Global, RevenueShare, RevenueStake};
+use crate::state::{Global, RevenueShare, RevenueStake, TraderStats};
 
 #[derive(Accounts)]
 pub struct BuyRevenue<'info> {
@@ -19,6 +20,17 @@ pub struct BuyRevenue<'info> {
     /// purchase payment + fee (creator-raise routing is a later refinement).
     #[account(mut, address = global.treasury)]
     pub treasury: UncheckedAccount<'info>,
+
+    /// Optional cumulative-activity record for the buyer. Capital committed
+    /// here counts as a *deposit* rather than volume — `activity_score` weights
+    /// deposits double, because locking money up is a stronger signal than a
+    /// trade that can be reversed in the next block.
+    #[account(
+        mut,
+        seeds = [TRADER_SEED, buyer.key().as_ref()],
+        bump = trader_stats.bump,
+    )]
+    pub trader_stats: Option<Account<'info, TraderStats>>,
 
     #[account(
         mut,
@@ -106,6 +118,15 @@ pub fn buy_revenue_handler(ctx: Context<BuyRevenue>, amount: u64) -> Result<()> 
         .total_staked
         .checked_add(amount)
         .ok_or(AttentionError::MathOverflow)?;
+
+    // Credit this trade's committed capital toward the trader's perk level. Skipped
+    // silently when the account isn't supplied — see `perks::record_activity`.
+    perks::record_activity(
+        ctx.accounts.trader_stats.as_deref_mut(),
+        ctx.accounts.buyer.key(),
+        0,
+        total_due,
+    )?;
 
     Ok(())
 }

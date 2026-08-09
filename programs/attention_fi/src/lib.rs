@@ -12,6 +12,7 @@ pub mod metadata;
 pub mod nft;
 pub mod oracle;
 pub mod oracle_feed;
+pub mod perks;
 pub mod revenue;
 pub mod state;
 
@@ -254,8 +255,22 @@ pub mod attention_fi {
         claim_perk::claim_perk_handler(ctx, uri)
     }
 
+    /// Open the account recording a wallet's cumulative trading activity.
+    /// Permissionless and self-funded; perk levels are gated on what it holds.
+    pub fn open_trader_stats(ctx: Context<OpenTraderStats>) -> Result<()> {
+        open_trader_stats::open_trader_stats_handler(ctx)
+    }
+
+    /// Mint your own perk once your trading clears the first activity
+    /// threshold, at the level that activity has already earned. No grant, no
+    /// authority signature.
+    pub fn claim_earned_perk(ctx: Context<ClaimEarnedPerk>, uri: String) -> Result<()> {
+        claim_earned_perk::claim_earned_perk_handler(ctx, uri)
+    }
+
     /// Level up a perk NFT: rewrites its on-chain Attributes and raises its fee
-    /// discount (program-controlled via the perk authority PDA).
+    /// discount (program-controlled via the perk authority PDA). Signed by the
+    /// holder and gated on their own cumulative activity, not by the authority.
     pub fn level_up(ctx: Context<LevelUp>) -> Result<()> {
         level_up::level_up_handler(ctx)
     }

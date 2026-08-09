@@ -10,7 +10,8 @@ import {
   spotPriceSol,
   type CurveState,
 } from "./curve";
-import { ata, curvePda, genesisPoolPda, globalPda } from "./program";
+import { hasTraderStats } from "./perks";
+import { ata, curvePda, genesisPoolPda, globalPda, traderStatsPda } from "./program";
 
 /**
  * Where a token actually trades right now.
@@ -186,10 +187,16 @@ export async function tradeOnVenue(
   decimals: number,
   slippageBps = 100,
 ): Promise<string> {
-  const [global, venue] = await Promise.all([
+  const [global, venue, keepsStats] = await Promise.all([
     program.account.global.fetch(globalPda()),
     resolveVenue(program, mint),
+    hasTraderStats(program, trader),
   ]);
+  // Unlike the genesis pool, this one really is probed — Anchor deserialises an
+  // Option account when it's supplied, so passing the address of a record the
+  // trader never opened would fail the trade rather than reading as "none".
+  // Null costs them nothing but progress toward their own fee discount.
+  const traderStats = keepsStats ? traderStatsPda(trader) : null;
   // Always passed, never probed. The program reads whether the pool exists from
   // the account itself, because an omittable pool let any trade route the
   // genesis holders' slice back to the creator for free.
@@ -223,6 +230,7 @@ export async function tradeOnVenue(
       side === "buy",
       global.treasury,
       genesisPool,
+      traderStats,
     );
   }
 
@@ -241,6 +249,7 @@ export async function tradeOnVenue(
         buyerTokenAccount: ata(trader, mint),
         perk: null,
         genesisPool,
+        traderStats,
       })
       .rpc();
   }
@@ -258,6 +267,7 @@ export async function tradeOnVenue(
       sellerTokenAccount: ata(trader, mint),
       perk: null,
       genesisPool,
+      traderStats,
     })
     .rpc();
 }
@@ -272,6 +282,7 @@ function swapOnPoolTx(
   isBuy: boolean,
   treasury: PublicKey,
   genesisPool: PublicKey,
+  traderStats: PublicKey | null,
 ): Promise<string> {
   const pool = poolPda(mint);
   return program.methods
@@ -290,6 +301,7 @@ function swapOnPoolTx(
       // wallet without a perk still trades.
       perk: null,
       genesisPool,
+      traderStats,
     })
     .rpc();
 }

@@ -4,13 +4,14 @@ use anchor_spl::associated_token::AssociatedToken;
 use anchor_spl::token::{self, Mint, Token, TokenAccount, Transfer};
 
 use crate::amm::swap_quote;
-use crate::constants::{AMM_SEED, CURVE_SEED, GENPOOL_SEED, GLOBAL_SEED, PERK_SEED};
+use crate::constants::{AMM_SEED, CURVE_SEED, GENPOOL_SEED, GLOBAL_SEED, PERK_SEED, TRADER_SEED};
 use crate::curve::{mul_div, split_creator_fee};
 use crate::error::AttentionError;
 use crate::events::AmmSwapEvent;
 use crate::nft::{discounted_fee_bps, perk_discount_bps};
+use crate::perks;
 use crate::revenue::{credit_genesis_pool, genesis_share_bps, split_genesis_fee};
-use crate::state::{AmmPool, BondingCurve, Global, PerkNft};
+use crate::state::{AmmPool, BondingCurve, Global, PerkNft, TraderStats};
 
 #[derive(Accounts)]
 pub struct Swap<'info> {
@@ -67,6 +68,18 @@ pub struct Swap<'info> {
         constraint = perk.owner == trader.key() @ AttentionError::Unauthorized,
     )]
     pub perk: Option<Box<Account<'info, PerkNft>>>,
+
+    /// Optional cumulative-activity record for the trader, credited with the
+    /// SOL side of this swap. Optional for the reason set out in
+    /// `perks::record_activity`: leaving it out forfeits progress toward your
+    /// own fee discount and costs nobody else anything. A TS caller still has to
+    /// name it (`traderStats: null`), as it already does for `perk`.
+    #[account(
+        mut,
+        seeds = [TRADER_SEED, trader.key().as_ref()],
+        bump = trader_stats.bump,
+    )]
+    pub trader_stats: Option<Box<Account<'info, TraderStats>>>,
 
     /// The token's genesis fee pool.
     ///
@@ -142,6 +155,11 @@ pub fn swap_handler<'info>(
     );
 
     let now = Clock::get()?.unix_timestamp;
+
+    // SOL the trader received on a sell, read after the branch for the activity
+    // credit. Declared here because `sol_out` is computed inside the else arm
+    // and the credit is taken once, for both directions, at the end.
+    let mut sol_side_out = 0u64;
 
     if is_buy {
         // Fee off the input first, then price the remainder — `buy_quote`'s
@@ -274,6 +292,7 @@ pub fn swap_handler<'info>(
         let fee = mul_div(u128::from(gross), u128::from(fee_bps), 10_000)?;
         let fee = u64::try_from(fee).map_err(|_| AttentionError::MathOverflow)?;
         let sol_out = gross.checked_sub(fee).ok_or(AttentionError::MathOverflow)?;
+        sol_side_out = sol_out;
         require!(sol_out > 0, AttentionError::ZeroAmount);
         require!(sol_out >= min_amount_out, AttentionError::SlippageExceeded);
 
@@ -355,6 +374,23 @@ pub fn swap_handler<'info>(
             timestamp: now,
         });
     }
+
+    // Credit the SOL side of the swap toward the trader's perk level, whichever
+    // direction it went: on a buy that's what they spent, on a sell what they
+    // received. Measuring the token side instead would make a wallet's score
+    // depend on which token it happened to trade, since token amounts aren't
+    // comparable across mints. Skipped silently when the account isn't
+    // supplied — see `perks::record_activity`.
+    let sol_moved = if is_buy { amount_in } else { sol_side_out };
+    perks::record_activity(
+        ctx.accounts
+            .trader_stats
+            .as_deref_mut()
+            .map(|stats| &mut **stats),
+        trader_key,
+        sol_moved,
+        0,
+    )?;
 
     Ok(())
 }

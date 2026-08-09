@@ -3,10 +3,11 @@ use anchor_lang::system_program;
 use anchor_spl::associated_token::AssociatedToken;
 use anchor_spl::token::{self, Mint, Token, TokenAccount, Transfer};
 
-use crate::constants::{CONVICTION_SEED, GLOBAL_SEED, POSITION_SEED};
+use crate::constants::{CONVICTION_SEED, GLOBAL_SEED, POSITION_SEED, TRADER_SEED};
 use crate::curve::buy_quote;
 use crate::error::AttentionError;
-use crate::state::{ConvictionCurve, ConvictionPosition, Global};
+use crate::perks;
+use crate::state::{ConvictionCurve, ConvictionPosition, Global, TraderStats};
 
 #[derive(Accounts)]
 pub struct BuyConviction<'info> {
@@ -19,6 +20,17 @@ pub struct BuyConviction<'info> {
     /// CHECK: must equal the treasury recorded in Global.
     #[account(mut, address = global.treasury)]
     pub treasury: UncheckedAccount<'info>,
+
+    /// Optional cumulative-activity record for the buyer. Capital committed
+    /// here counts as a *deposit* rather than volume — `activity_score` weights
+    /// deposits double, because locking money up is a stronger signal than a
+    /// trade that can be reversed in the next block.
+    #[account(
+        mut,
+        seeds = [TRADER_SEED, buyer.key().as_ref()],
+        bump = trader_stats.bump,
+    )]
+    pub trader_stats: Option<Account<'info, TraderStats>>,
 
     #[account(
         mut,
@@ -153,6 +165,15 @@ pub fn buy_conviction_handler(
         .checked_add(lock_period)
         .ok_or(AttentionError::MathOverflow)?;
     position.bump = ctx.bumps.position;
+
+    // Credit this trade's committed capital toward the trader's perk level. Skipped
+    // silently when the account isn't supplied — see `perks::record_activity`.
+    perks::record_activity(
+        ctx.accounts.trader_stats.as_deref_mut(),
+        ctx.accounts.buyer.key(),
+        0,
+        sol_amount,
+    )?;
 
     Ok(())
 }
