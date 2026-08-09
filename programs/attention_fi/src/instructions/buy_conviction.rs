@@ -3,9 +3,10 @@ use anchor_lang::system_program;
 use anchor_spl::associated_token::AssociatedToken;
 use anchor_spl::token::{self, Mint, Token, TokenAccount, Transfer};
 
-use crate::constants::{CONVICTION_SEED, GLOBAL_SEED, POSITION_SEED, TRADER_SEED};
+use crate::constants::{CONVICTION_SEED, GLOBAL_SEED, GUARDIANS_SEED, POSITION_SEED, TRADER_SEED};
 use crate::curve::buy_quote;
 use crate::error::AttentionError;
+use crate::guardians;
 use crate::perks;
 use crate::state::{ConvictionCurve, ConvictionPosition, Global, TraderStats};
 
@@ -62,6 +63,17 @@ pub struct BuyConviction<'info> {
     )]
     pub position: Account<'info, ConvictionPosition>,
 
+    /// The emergency stop.
+    ///
+    /// Required, never optional: an optional stop is not a stop — omitting it
+    /// would help the caller, which is exactly the shape that made the genesis
+    /// pool exploitable. Unchecked because an empty account is the legitimate
+    /// "no guardian set installed yet" state rather than an error.
+    ///
+    /// CHECK: seeds pin the address; `guardians::require_live` validates it.
+    #[account(seeds = [GUARDIANS_SEED], bump)]
+    pub guardians: UncheckedAccount<'info>,
+
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,
     pub associated_token_program: Program<'info, AssociatedToken>,
@@ -72,6 +84,9 @@ pub fn buy_conviction_handler(
     sol_amount: u64,
     min_tokens_out: u64,
 ) -> Result<()> {
+    // Refuses while a guardian has pulled the stop.
+    guardians::require_live(&ctx.accounts.guardians.to_account_info())?;
+
     require!(sol_amount > 0, AttentionError::ZeroAmount);
     require!(!ctx.accounts.curve.complete, AttentionError::CurveComplete);
 

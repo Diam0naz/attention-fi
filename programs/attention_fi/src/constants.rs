@@ -133,3 +133,14 @@ pub const PROMO_LAMPORTS_PER_DAY: u64 = LAMPORTS_PER_SOL / 100;
 /// Not a cap on total promotion — calls stack — but a bound on how much can be
 /// spent by one fat-fingered number.
 pub const MAX_PROMO_DAYS: u16 = 90;
+
+/// Most guardians the emergency pause will hold.
+///
+/// Fixed rather than a `Vec` so `Guardians` has one length forever: the account
+/// is read by every gated instruction on the hot path, and a growable set would
+/// mean its size — and therefore its rent and its deserialisation cost —
+/// changed under a rotation.
+pub const MAX_GUARDIANS: usize = 5;
+
+/// Singleton PDA holding the guardian set and the pause flag.
+pub const GUARDIANS_SEED: &[u8] = b"guardians";

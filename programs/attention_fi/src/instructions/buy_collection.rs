@@ -7,9 +7,10 @@ use mpl_core::instructions::{
 use mpl_core::types::{Plugin, PluginAuthority};
 
 use crate::auction::{current_price, is_perpetual};
-use crate::constants::{COLLECTIONAUCTION_SEED, FEECONFIG_SEED, GLOBAL_SEED};
+use crate::constants::{COLLECTIONAUCTION_SEED, FEECONFIG_SEED, GLOBAL_SEED, GUARDIANS_SEED};
 use crate::error::AttentionError;
 use crate::events::{CollectionAuctionEvent, NFT_SOLD};
+use crate::guardians;
 use crate::nft::{collection_has_attributes, last_sale_attributes};
 use crate::state::{CollectionAuction, FeeConfig, Global};
 
@@ -60,10 +61,24 @@ pub struct BuyCollection<'info> {
     #[account(address = mpl_core::ID)]
     pub mpl_core_program: UncheckedAccount<'info>,
 
+    /// The emergency stop.
+    ///
+    /// Required, never optional: an optional stop is not a stop — omitting it
+    /// would help the caller, which is exactly the shape that made the genesis
+    /// pool exploitable. Unchecked because an empty account is the legitimate
+    /// "no guardian set installed yet" state rather than an error.
+    ///
+    /// CHECK: seeds pin the address; `guardians::require_live` validates it.
+    #[account(seeds = [GUARDIANS_SEED], bump)]
+    pub guardians: UncheckedAccount<'info>,
+
     pub system_program: Program<'info, System>,
 }
 
 pub fn buy_collection_handler(ctx: Context<BuyCollection>, max_total: u64) -> Result<()> {
+    // Refuses while a guardian has pulled the stop.
+    guardians::require_live(&ctx.accounts.guardians.to_account_info())?;
+
     require!(!ctx.accounts.auction.complete, AttentionError::SoldOut);
 
     let auction = &ctx.accounts.auction;

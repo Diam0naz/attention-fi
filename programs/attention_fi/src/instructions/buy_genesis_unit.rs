@@ -9,10 +9,12 @@ use mpl_core::types::UpdateAuthority;
 
 use crate::constants::{
     FEECONFIG_SEED, GENALLOC_SEED, GENESIS_SEED, GENGROUP_SEED, GENPOOL_SEED, GLOBAL_SEED,
+    GUARDIANS_SEED,
 };
 use crate::error::AttentionError;
 use crate::events::GenesisUnitSoldEvent;
 use crate::genesis::{record_allocation, record_sale};
+use crate::guardians;
 use crate::revenue::accrued;
 use crate::state::{FeeConfig, GenesisAllocation, GenesisGroup, GenesisNft, GenesisPool, Global};
 
@@ -103,10 +105,24 @@ pub struct BuyGenesisUnit<'info> {
     #[account(address = mpl_core::ID)]
     pub mpl_core_program: UncheckedAccount<'info>,
 
+    /// The emergency stop.
+    ///
+    /// Required, never optional: an optional stop is not a stop — omitting it
+    /// would help the caller, which is exactly the shape that made the genesis
+    /// pool exploitable. Unchecked because an empty account is the legitimate
+    /// "no guardian set installed yet" state rather than an error.
+    ///
+    /// CHECK: seeds pin the address; `guardians::require_live` validates it.
+    #[account(seeds = [GUARDIANS_SEED], bump)]
+    pub guardians: UncheckedAccount<'info>,
+
     pub system_program: Program<'info, System>,
 }
 
 pub fn buy_genesis_unit_handler(ctx: Context<BuyGenesisUnit>, max_total: u64) -> Result<()> {
+    // Refuses while a guardian has pulled the stop.
+    guardians::require_live(&ctx.accounts.guardians.to_account_info())?;
+
     let price = ctx.accounts.group.price;
 
     let sold_units = record_sale(

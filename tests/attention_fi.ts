@@ -47,6 +47,11 @@ function genesisPoolPda(mint: PublicKey, programId: PublicKey): PublicKey {
  */
 const NFT_FEE_BPS = 250;
 
+/** The emergency stop. Empty until `set_guardians` installs a set. */
+function guardiansPda(programId: PublicKey): PublicKey {
+  return PublicKey.findProgramAddressSync([Buffer.from("guardians")], programId)[0];
+}
+
 /** The protocol's fee schedule, created alongside Global by `initialize`. */
 function feeConfigPda(programId: PublicKey): PublicKey {
   return PublicKey.findProgramAddressSync([Buffer.from("feeconfig")], programId)[0];
@@ -180,6 +185,7 @@ describe("attention_fi bonding curve", () => {
         tokenProgram: TOKEN_PROGRAM_ID,
         associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
         genesisPool: genesisPoolPda(mintKp.publicKey, program.programId),
+        guardians: guardiansPda(program.programId),
       })
       .rpc();
 
@@ -220,6 +226,7 @@ describe("attention_fi bonding curve", () => {
         traderStats: null,
         tokenProgram: TOKEN_PROGRAM_ID,
         genesisPool: genesisPoolPda(mintKp.publicKey, program.programId),
+        guardians: guardiansPda(program.programId),
       })
       .rpc();
 
@@ -338,6 +345,7 @@ describe("attention_fi dutch auction", () => {
           tokenProgram: TOKEN_PROGRAM_ID,
           associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
           ...metadataAccounts(mintKp.publicKey),
+          guardians: guardiansPda(program.programId),
         })
         .rpc();
     } catch (err) {
@@ -381,6 +389,7 @@ describe("attention_fi dutch auction", () => {
         systemProgram: SystemProgram.programId,
         tokenProgram: TOKEN_PROGRAM_ID,
         associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+        guardians: guardiansPda(program.programId),
       })
       .rpc();
 
@@ -478,6 +487,7 @@ describe("attention_fi conviction curve", () => {
         associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
         ...metadataAccounts(mintKp.publicKey),
         traderStats: null,
+        guardians: guardiansPda(program.programId),
       })
       .rpc();
 
@@ -497,6 +507,7 @@ describe("attention_fi conviction curve", () => {
         sellerTokenAccount: holderAta,
         position: positionPda,
         tokenProgram: TOKEN_PROGRAM_ID,
+        guardians: guardiansPda(program.programId),
       })
       .rpc();
     const treasuryAfter = await provider.connection.getBalance(treasury);
@@ -625,6 +636,7 @@ describe("attention_fi revenue share", () => {
         systemProgram: SystemProgram.programId,
         ...metadataAccounts(mintKp.publicKey),
         traderStats: null,
+        guardians: guardiansPda(program.programId),
       })
       .rpc();
 
@@ -639,6 +651,7 @@ describe("attention_fi revenue share", () => {
         position: stake2,
         systemProgram: SystemProgram.programId,
         traderStats: null,
+        guardians: guardiansPda(program.programId),
       })
       .signers([holder2])
       .rpc();
@@ -1135,6 +1148,7 @@ describe("attention_fi NFT-as-asset auction", () => {
         mplCoreProgram: MPL_CORE_PROGRAM_ID,
         systemProgram: SystemProgram.programId,
         feeConfig: feeConfigPda(program.programId),
+        guardians: guardiansPda(program.programId),
       })
       .signers([buyer])
       .rpc();
@@ -1250,6 +1264,7 @@ describe("attention_fi perk fee discount", () => {
         associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
         genesisPool: genesisPoolPda(mintKp.publicKey, program.programId),
         traderStats: null,
+        guardians: guardiansPda(program.programId),
       })
       .rpc();
     return (await provider.connection.getBalance(treasury)) - before;
@@ -1358,6 +1373,7 @@ describe("attention_fi AMM graduation", () => {
         tokenProgram: TOKEN_PROGRAM_ID,
         associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
         genesisPool: genesisPoolPda(mintKp.publicKey, program.programId),
+        guardians: guardiansPda(program.programId),
       })
       .rpc();
 
@@ -1380,6 +1396,7 @@ describe("attention_fi AMM graduation", () => {
         tokenProgram: TOKEN_PROGRAM_ID,
         associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
         rent: SYSVAR_RENT_PUBKEY,
+        guardians: guardiansPda(program.programId),
       })
       .rpc();
 
@@ -1414,6 +1431,7 @@ describe("attention_fi AMM graduation", () => {
         tokenProgram: TOKEN_PROGRAM_ID,
         associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
         genesisPool: genesisPoolPda(mintKp.publicKey, program.programId),
+        guardians: guardiansPda(program.programId),
       })
       .rpc();
 
@@ -1446,6 +1464,7 @@ describe("attention_fi AMM graduation", () => {
         tokenProgram: TOKEN_PROGRAM_ID,
         associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
         genesisPool: genesisPoolPda(mintKp.publicKey, program.programId),
+        guardians: guardiansPda(program.programId),
       })
       .rpc();
 
@@ -1557,6 +1576,7 @@ describe("attention_fi creator fees (SAS-gated claim)", () => {
         tokenProgram: TOKEN_PROGRAM_ID,
         associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
         genesisPool: genesisPoolPda(mintKp.publicKey, program.programId),
+        guardians: guardiansPda(program.programId),
       })
       .rpc();
 
@@ -1661,6 +1681,7 @@ describe("attention_fi genesis group", () => {
         allocation: allocationPda(who.publicKey),
         mplCoreProgram: MPL_CORE_PROGRAM_ID,
         systemProgram: SystemProgram.programId,
+        guardians: guardiansPda(program.programId),
       })
       .transaction();
     await anchor.web3.sendAndConfirmTransaction(provider.connection, tx, [who], {
@@ -1981,6 +2002,7 @@ describe("attention_fi protocol config", () => {
         systemProgram: SystemProgram.programId,
         tokenProgram: TOKEN_PROGRAM_ID,
         associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+        guardians: guardiansPda(program.programId),
       })
       .rpc();
   }
@@ -2349,6 +2371,7 @@ describe("attention_fi genesis group — reclaim and close", () => {
         )[0],
         mplCoreProgram: MPL_CORE_PROGRAM_ID,
         systemProgram: SystemProgram.programId,
+        guardians: guardiansPda(program.programId),
       })
       .transaction();
     await anchor.web3.sendAndConfirmTransaction(provider.connection, tx, [buyer], {
@@ -2743,6 +2766,7 @@ describe("attention_fi security fixes", () => {
         systemProgram: SystemProgram.programId,
         tokenProgram: TOKEN_PROGRAM_ID,
         associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+        guardians: guardiansPda(program.programId),
       })
       .rpc();
 
@@ -3107,5 +3131,248 @@ describe("attention_fi earned perks", () => {
     const before = await score();
     await buy(0.25, false);
     assert.equal(await score(), before, "no accrual, but the trade landed");
+  });
+});
+
+/**
+ * The emergency stop.
+ *
+ * The pre-launch checklist calls this CRITICAL, citing Pump's May 2024 exploit
+ * — a former employee who kept migration access. What these cases pin down is
+ * the asymmetry that makes it worth having: one guardian can stop the protocol
+ * in a single transaction, and no one guardian can start it again.
+ */
+describe("attention_fi emergency pause", () => {
+  anchor.setProvider(anchor.AnchorProvider.env());
+  const provider = anchor.getProvider() as anchor.AnchorProvider;
+  const program = anchor.workspace.attentionFi as Program<AttentionFi>;
+  const wallet = provider.wallet.publicKey;
+
+  const [globalPda] = PublicKey.findProgramAddressSync(
+    [Buffer.from("global")],
+    program.programId
+  );
+  const guardians = guardiansPda(program.programId);
+
+  // Three guardians, two needed to resume. None of them is the authority.
+  const g1 = Keypair.generate();
+  const g2 = Keypair.generate();
+  const g3 = Keypair.generate();
+  const outsider = Keypair.generate();
+
+  const mintKp = Keypair.generate();
+  const mint = mintKp.publicKey;
+  const [curvePda] = PublicKey.findProgramAddressSync(
+    [Buffer.from("curve"), mint.toBuffer()],
+    program.programId
+  );
+  let treasury: PublicKey;
+
+  const state = () => program.account.guardians.fetch(guardians);
+
+  function buyIx(sol: number) {
+    return program.methods
+      .buy(new anchor.BN(sol * LAMPORTS_PER_SOL), new anchor.BN(0))
+      .accountsPartial({
+        buyer: wallet,
+        treasury,
+        curve: curvePda,
+        mint,
+        vault: ata(curvePda, mint),
+        buyerTokenAccount: ata(wallet, mint),
+        perk: null,
+        traderStats: null,
+        genesisPool: genesisPoolPda(mint, program.programId),
+        guardians,
+      });
+  }
+
+  async function signedBy(kp: Keypair, build: () => any) {
+    const tx = await build().transaction();
+    return anchor.web3.sendAndConfirmTransaction(provider.connection, tx, [kp], {
+      commitment: "confirmed",
+    });
+  }
+
+  before(async () => {
+    const existing = await program.account.global.fetchNullable(globalPda);
+    if (existing) {
+      treasury = existing.treasury;
+    } else {
+      treasury = Keypair.generate().publicKey;
+      await program.methods
+        .initialize()
+        .accountsPartial({ authority: wallet, treasury })
+        .rpc();
+    }
+    for (const who of [g1, g2, g3, outsider]) {
+      const sig = await provider.connection.requestAirdrop(who.publicKey, LAMPORTS_PER_SOL);
+      await provider.connection.confirmTransaction(sig, "confirmed");
+    }
+    await program.methods
+      .launchToken({ emerging: {} }, { name: "Pause", symbol: "PAUS", uri: "" })
+      .accountsPartial({
+        creator: wallet,
+        mint,
+        curve: curvePda,
+        vault: ata(curvePda, mint),
+        ...metadataAccounts(mint),
+        rent: SYSVAR_RENT_PUBKEY,
+      })
+      .signers([mintKp])
+      .rpc();
+  });
+
+  it("trades normally before any guardian set exists", async () => {
+    // The account is empty at this point, which must read as "not paused"
+    // rather than as an error — otherwise deploying would brick every trade
+    // until set_guardians ran.
+    const info = await provider.connection.getAccountInfo(guardians);
+    assert.isNull(info, "no guardian set installed yet");
+    await buyIx(1).rpc();
+  });
+
+  it("installs a 2-of-3 set, and refuses a set that could never resume", async () => {
+    try {
+      await program.methods
+        .setGuardians([g1.publicKey, g2.publicKey], 3)
+        .accountsPartial({ authority: wallet, guardians })
+        .rpc();
+      assert.fail("accepted a threshold above the member count");
+    } catch (e) {
+      assert.include(String(e), "InvalidGuardianSet");
+    }
+
+    try {
+      await program.methods
+        .setGuardians([g1.publicKey, g1.publicKey, g2.publicKey], 2)
+        .accountsPartial({ authority: wallet, guardians })
+        .rpc();
+      assert.fail("accepted a duplicated guardian");
+    } catch (e) {
+      assert.include(String(e), "InvalidGuardianSet");
+    }
+
+    await program.methods
+      .setGuardians([g1.publicKey, g2.publicKey, g3.publicKey], 2)
+      .accountsPartial({ authority: wallet, guardians })
+      .rpc();
+
+    const s = await state();
+    assert.equal(s.count, 3);
+    assert.equal(s.threshold, 2);
+    assert.isFalse(s.paused, "installing a set doesn't halt anything");
+  });
+
+  it("lets one guardian stop the protocol, and refuses a stranger", async () => {
+    try {
+      await signedBy(outsider, () =>
+        program.methods.pause().accountsPartial({ guardian: outsider.publicKey, guardians })
+      );
+      assert.fail("a non-guardian paused the protocol");
+    } catch (e) {
+      assert.include(String(e), "NotGuardian");
+    }
+
+    // One signature, one transaction. An exploit doesn't wait for a quorum.
+    await signedBy(g1, () =>
+      program.methods.pause().accountsPartial({ guardian: g1.publicKey, guardians })
+    );
+    assert.isTrue((await state()).paused);
+  });
+
+  it("refuses trades, swaps and migrations while paused", async () => {
+    try {
+      await buyIx(1).rpc();
+      assert.fail("bought while paused");
+    } catch (e) {
+      assert.include(String(e), "ProtocolPaused");
+    }
+  });
+
+  it("still lets a creator claim what they were already owed", async () => {
+    // Deliberate: a pause stops new risk, it does not trap money the ledger
+    // already says is owed. Freezing withdrawals turns an incident into a run.
+    const curve = await program.account.bondingCurve.fetch(curvePda);
+    assert.isTrue(curve.creatorFees.gtn(0), "the earlier buy accrued creator fees");
+    const ix = await program.methods
+      .claimCreatorFee()
+      .accountsPartial({ creator: wallet, mint, curve: curvePda })
+      .instruction();
+    assert.isTrue(
+      ix.keys.every((k: any) => !k.pubkey.equals(guardians)),
+      "claim_creator_fee is not gated on the pause"
+    );
+  });
+
+  it("will not resume on one guardian, however many times they ask", async () => {
+    await signedBy(g1, () =>
+      program.methods.resume().accountsPartial({ guardian: g1.publicKey, guardians })
+    );
+    assert.isTrue((await state()).paused, "one approval is not two");
+
+    // Re-approving must not carry the vote on its own.
+    await signedBy(g1, () =>
+      program.methods.resume().accountsPartial({ guardian: g1.publicKey, guardians })
+    );
+    const s = await state();
+    assert.isTrue(s.paused, "the same guardian twice is still one approval");
+    assert.equal(s.resumeCount, 1);
+  });
+
+  it("resumes on the second guardian, and trading works again", async () => {
+    await signedBy(g2, () =>
+      program.methods.resume().accountsPartial({ guardian: g2.publicKey, guardians })
+    );
+    const s = await state();
+    assert.isFalse(s.paused);
+    assert.equal(s.resumeCount, 0, "approvals are cleared once spent");
+    await buyIx(0.5).rpc();
+  });
+
+  it("clears stale approvals when a fresh pause is pulled", async () => {
+    await signedBy(g1, () =>
+      program.methods.resume().accountsPartial({ guardian: g1.publicKey, guardians })
+    ).then(
+      () => assert.fail("resumed while not paused"),
+      (e) => assert.include(String(e), "NotPaused")
+    );
+
+    await signedBy(g1, () =>
+      program.methods.pause().accountsPartial({ guardian: g1.publicKey, guardians })
+    );
+    assert.equal((await state()).resumeCount, 0);
+
+    // And pausing again is refused, so one guardian can't cancel a resume vote
+    // in progress by spamming pause.
+    await signedBy(g3, () =>
+      program.methods.pause().accountsPartial({ guardian: g3.publicKey, guardians })
+    ).then(
+      () => assert.fail("paused while already paused"),
+      (e) => assert.include(String(e), "ProtocolPaused")
+    );
+
+    await signedBy(g2, () =>
+      program.methods.resume().accountsPartial({ guardian: g2.publicKey, guardians })
+    );
+    await signedBy(g3, () =>
+      program.methods.resume().accountsPartial({ guardian: g3.publicKey, guardians })
+    );
+    assert.isFalse((await state()).paused, "any two of the three can resume");
+  });
+
+  it("does not let the protocol authority pause or resume by itself", async () => {
+    // The authority chooses the guardians; it is not one. An authority key that
+    // could also stop or start the protocol would make the threshold
+    // decorative, which is the whole finding this closes.
+    try {
+      await program.methods
+        .pause()
+        .accountsPartial({ guardian: wallet, guardians })
+        .rpc();
+      assert.fail("the authority paused without being a guardian");
+    } catch (e) {
+      assert.include(String(e), "NotGuardian");
+    }
   });
 });

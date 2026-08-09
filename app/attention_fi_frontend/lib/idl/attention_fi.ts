@@ -321,6 +321,36 @@ export type AttentionFi = {
           }
         },
         {
+          "name": "guardians",
+          "docs": [
+            "The emergency stop.",
+            "",
+            "Required, never optional: an optional stop is not a stop — omitting it",
+            "would help the caller, which is exactly the shape that made the genesis",
+            "pool exploitable. Unchecked because an empty account is the legitimate",
+            "\"no guardian set installed yet\" state rather than an error.",
+            ""
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  117,
+                  97,
+                  114,
+                  100,
+                  105,
+                  97,
+                  110,
+                  115
+                ]
+              }
+            ]
+          }
+        },
+        {
           "name": "systemProgram",
           "address": "11111111111111111111111111111111"
         },
@@ -782,6 +812,36 @@ export type AttentionFi = {
           }
         },
         {
+          "name": "guardians",
+          "docs": [
+            "The emergency stop.",
+            "",
+            "Required, never optional: an optional stop is not a stop — omitting it",
+            "would help the caller, which is exactly the shape that made the genesis",
+            "pool exploitable. Unchecked because an empty account is the legitimate",
+            "\"no guardian set installed yet\" state rather than an error.",
+            ""
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  117,
+                  97,
+                  114,
+                  100,
+                  105,
+                  97,
+                  110,
+                  115
+                ]
+              }
+            ]
+          }
+        },
+        {
           "name": "systemProgram",
           "address": "11111111111111111111111111111111"
         },
@@ -913,6 +973,36 @@ export type AttentionFi = {
         {
           "name": "mplCoreProgram",
           "address": "CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d"
+        },
+        {
+          "name": "guardians",
+          "docs": [
+            "The emergency stop.",
+            "",
+            "Required, never optional: an optional stop is not a stop — omitting it",
+            "would help the caller, which is exactly the shape that made the genesis",
+            "pool exploitable. Unchecked because an empty account is the legitimate",
+            "\"no guardian set installed yet\" state rather than an error.",
+            ""
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  117,
+                  97,
+                  114,
+                  100,
+                  105,
+                  97,
+                  110,
+                  115
+                ]
+              }
+            ]
+          }
         },
         {
           "name": "systemProgram",
@@ -1242,6 +1332,36 @@ export type AttentionFi = {
           }
         },
         {
+          "name": "guardians",
+          "docs": [
+            "The emergency stop.",
+            "",
+            "Required, never optional: an optional stop is not a stop — omitting it",
+            "would help the caller, which is exactly the shape that made the genesis",
+            "pool exploitable. Unchecked because an empty account is the legitimate",
+            "\"no guardian set installed yet\" state rather than an error.",
+            ""
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  117,
+                  97,
+                  114,
+                  100,
+                  105,
+                  97,
+                  110,
+                  115
+                ]
+              }
+            ]
+          }
+        },
+        {
           "name": "systemProgram",
           "address": "11111111111111111111111111111111"
         },
@@ -1468,6 +1588,36 @@ export type AttentionFi = {
           "address": "CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d"
         },
         {
+          "name": "guardians",
+          "docs": [
+            "The emergency stop.",
+            "",
+            "Required, never optional: an optional stop is not a stop — omitting it",
+            "would help the caller, which is exactly the shape that made the genesis",
+            "pool exploitable. Unchecked because an empty account is the legitimate",
+            "\"no guardian set installed yet\" state rather than an error.",
+            ""
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  117,
+                  97,
+                  114,
+                  100,
+                  105,
+                  97,
+                  110,
+                  115
+                ]
+              }
+            ]
+          }
+        },
+        {
           "name": "systemProgram",
           "address": "11111111111111111111111111111111"
         }
@@ -1587,6 +1737,36 @@ export type AttentionFi = {
         {
           "name": "mplCoreProgram",
           "address": "CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d"
+        },
+        {
+          "name": "guardians",
+          "docs": [
+            "The emergency stop.",
+            "",
+            "Required, never optional: an optional stop is not a stop — omitting it",
+            "would help the caller, which is exactly the shape that made the genesis",
+            "pool exploitable. Unchecked because an empty account is the legitimate",
+            "\"no guardian set installed yet\" state rather than an error.",
+            ""
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  117,
+                  97,
+                  114,
+                  100,
+                  105,
+                  97,
+                  110,
+                  115
+                ]
+              }
+            ]
+          }
         },
         {
           "name": "systemProgram",
@@ -1731,6 +1911,36 @@ export type AttentionFi = {
               {
                 "kind": "account",
                 "path": "buyer"
+              }
+            ]
+          }
+        },
+        {
+          "name": "guardians",
+          "docs": [
+            "The emergency stop.",
+            "",
+            "Required, never optional: an optional stop is not a stop — omitting it",
+            "would help the caller, which is exactly the shape that made the genesis",
+            "pool exploitable. Unchecked because an empty account is the legitimate",
+            "\"no guardian set installed yet\" state rather than an error.",
+            ""
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  117,
+                  97,
+                  114,
+                  100,
+                  105,
+                  97,
+                  110,
+                  115
+                ]
               }
             ]
           }
@@ -2773,6 +2983,36 @@ export type AttentionFi = {
                 89
               ]
             }
+          }
+        },
+        {
+          "name": "guardians",
+          "docs": [
+            "The emergency stop.",
+            "",
+            "Required, never optional: an optional stop is not a stop — omitting it",
+            "would help the caller, which is exactly the shape that made the genesis",
+            "pool exploitable. Unchecked because an empty account is the legitimate",
+            "\"no guardian set installed yet\" state rather than an error.",
+            ""
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  117,
+                  97,
+                  114,
+                  100,
+                  105,
+                  97,
+                  110,
+                  115
+                ]
+              }
+            ]
           }
         },
         {
@@ -4784,6 +5024,52 @@ export type AttentionFi = {
       "args": []
     },
     {
+      "name": "pause",
+      "docs": [
+        "Halt every gated instruction. One guardian is enough: a stop that has to",
+        "collect signatures first arrives after the money."
+      ],
+      "discriminator": [
+        211,
+        22,
+        221,
+        251,
+        74,
+        121,
+        193,
+        47
+      ],
+      "accounts": [
+        {
+          "name": "guardian",
+          "signer": true
+        },
+        {
+          "name": "guardians",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  117,
+                  97,
+                  114,
+                  100,
+                  105,
+                  97,
+                  110,
+                  115
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "promoteListing",
       "docs": [
         "Buy promoted placement for a live listing, asset or collection.",
@@ -5231,6 +5517,52 @@ export type AttentionFi = {
       "args": []
     },
     {
+      "name": "resume",
+      "docs": [
+        "Approve resuming; the call that reaches `threshold` lifts the pause.",
+        "Deliberately the expensive direction — no single key can undo a stop."
+      ],
+      "discriminator": [
+        1,
+        166,
+        51,
+        170,
+        127,
+        32,
+        141,
+        206
+      ],
+      "accounts": [
+        {
+          "name": "guardian",
+          "signer": true
+        },
+        {
+          "name": "guardians",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  117,
+                  97,
+                  114,
+                  100,
+                  105,
+                  97,
+                  110,
+                  115
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "sell",
       "docs": [
         "Sell tokens back into the curve for SOL (slippage-guarded)."
@@ -5576,6 +5908,36 @@ export type AttentionFi = {
           }
         },
         {
+          "name": "guardians",
+          "docs": [
+            "The emergency stop.",
+            "",
+            "Required, never optional: an optional stop is not a stop — omitting it",
+            "would help the caller, which is exactly the shape that made the genesis",
+            "pool exploitable. Unchecked because an empty account is the legitimate",
+            "\"no guardian set installed yet\" state rather than an error.",
+            ""
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  117,
+                  97,
+                  114,
+                  100,
+                  105,
+                  97,
+                  110,
+                  115
+                ]
+              }
+            ]
+          }
+        },
+        {
           "name": "tokenProgram",
           "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
         }
@@ -5881,6 +6243,36 @@ export type AttentionFi = {
           }
         },
         {
+          "name": "guardians",
+          "docs": [
+            "The emergency stop.",
+            "",
+            "Required, never optional: an optional stop is not a stop — omitting it",
+            "would help the caller, which is exactly the shape that made the genesis",
+            "pool exploitable. Unchecked because an empty account is the legitimate",
+            "\"no guardian set installed yet\" state rather than an error.",
+            ""
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  117,
+                  97,
+                  114,
+                  100,
+                  105,
+                  97,
+                  110,
+                  115
+                ]
+              }
+            ]
+          }
+        },
+        {
           "name": "tokenProgram",
           "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
         }
@@ -6028,6 +6420,86 @@ export type AttentionFi = {
           "type": {
             "option": "u64"
           }
+        }
+      ]
+    },
+    {
+      "name": "setGuardians",
+      "docs": [
+        "Install or rotate the guardian set that holds the emergency stop.",
+        "Authority-only — it chooses who may pause, and can do neither itself."
+      ],
+      "discriminator": [
+        166,
+        69,
+        140,
+        183,
+        157,
+        169,
+        253,
+        40
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "global",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  108,
+                  111,
+                  98,
+                  97,
+                  108
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "guardians",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  117,
+                  97,
+                  114,
+                  100,
+                  105,
+                  97,
+                  110,
+                  115
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "members",
+          "type": {
+            "vec": "pubkey"
+          }
+        },
+        {
+          "name": "threshold",
+          "type": "u8"
         }
       ]
     },
@@ -6876,6 +7348,36 @@ export type AttentionFi = {
           }
         },
         {
+          "name": "guardians",
+          "docs": [
+            "The emergency stop.",
+            "",
+            "Required, never optional: an optional stop is not a stop — omitting it",
+            "would help the caller, which is exactly the shape that made the genesis",
+            "pool exploitable. Unchecked because an empty account is the legitimate",
+            "\"no guardian set installed yet\" state rather than an error.",
+            ""
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  117,
+                  97,
+                  114,
+                  100,
+                  105,
+                  97,
+                  110,
+                  115
+                ]
+              }
+            ]
+          }
+        },
+        {
           "name": "systemProgram",
           "address": "11111111111111111111111111111111"
         },
@@ -7321,6 +7823,19 @@ export type AttentionFi = {
       ]
     },
     {
+      "name": "guardians",
+      "discriminator": [
+        223,
+        20,
+        125,
+        88,
+        240,
+        91,
+        38,
+        220
+      ]
+    },
+    {
       "name": "issuerConfig",
       "discriminator": [
         238,
@@ -7674,6 +8189,19 @@ export type AttentionFi = {
       ]
     },
     {
+      "name": "pauseEvent",
+      "discriminator": [
+        32,
+        51,
+        61,
+        169,
+        156,
+        104,
+        130,
+        43
+      ]
+    },
+    {
       "name": "poolCreatedEvent",
       "discriminator": [
         25,
@@ -7895,6 +8423,26 @@ export type AttentionFi = {
       "code": 6038,
       "name": "invalidAsset",
       "msg": "That account is not a Metaplex Core asset"
+    },
+    {
+      "code": 6039,
+      "name": "invalidGuardianSet",
+      "msg": "Guardian set must be 1-5 distinct real keys with a reachable threshold"
+    },
+    {
+      "code": 6040,
+      "name": "notGuardian",
+      "msg": "Caller is not a guardian"
+    },
+    {
+      "code": 6041,
+      "name": "protocolPaused",
+      "msg": "The protocol is paused"
+    },
+    {
+      "code": 6042,
+      "name": "notPaused",
+      "msg": "The protocol is not paused"
     }
   ],
   "types": [
@@ -9101,6 +9649,93 @@ export type AttentionFi = {
       }
     },
     {
+      "name": "guardians",
+      "docs": [
+        "The emergency stop, and the people who may pull it.",
+        "",
+        "A singleton beside `Global` rather than fields inside it, for the reason",
+        "`FeeConfig` is also its own account: `Global` is live on-chain at a fixed",
+        "length, and Anchor sizes accounts exactly, so lengthening it would fail to",
+        "deserialise on every instruction that reads it.",
+        "",
+        "Pausing takes one guardian and resuming takes `threshold` of them — see",
+        "`guardians.rs` for why those two numbers are deliberately different."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "authority",
+            "docs": [
+              "May rotate the set. The protocol authority."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "members",
+            "docs": [
+              "Guardian slots. Everything past `count` is the default key."
+            ],
+            "type": {
+              "array": [
+                "pubkey",
+                5
+              ]
+            }
+          },
+          {
+            "name": "count",
+            "docs": [
+              "How many slots are live."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "threshold",
+            "docs": [
+              "Approvals required to resume. Pausing always takes exactly one."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "paused",
+            "docs": [
+              "Whether gated instructions are currently refused."
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "pausedAt",
+            "docs": [
+              "When the current pause began, for the record."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "resumeApprovals",
+            "docs": [
+              "Guardians who have approved the *current* resume attempt. Cleared on",
+              "every pause, so approvals can never carry over from an older incident."
+            ],
+            "type": {
+              "array": [
+                "pubkey",
+                5
+              ]
+            }
+          },
+          {
+            "name": "resumeCount",
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
       "name": "issuerConfig",
       "docs": [
         "The dedicated key authorized to sign SAS attestations for `verify_handle`,",
@@ -9411,6 +10046,50 @@ export type AttentionFi = {
           {
             "name": "duration",
             "type": "i64"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "pauseEvent",
+      "docs": [
+        "Emitted whenever the emergency stop changes hands, in either direction.",
+        "",
+        "Carries the tally as well as the state because a resume is a sequence, not",
+        "an instant: watchers need to see \"2 of 3 so far\" while it is happening, not",
+        "only the moment it completes."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "guardian",
+            "docs": [
+              "The guardian whose signature caused this."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "paused",
+            "docs": [
+              "State *after* this call."
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "approvals",
+            "docs": [
+              "Resume approvals standing after this call."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "threshold",
+            "type": "u8"
           },
           {
             "name": "timestamp",

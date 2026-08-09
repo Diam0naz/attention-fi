@@ -259,3 +259,20 @@ pub struct AuthorityChangedEvent {
     pub current: Pubkey,
     pub timestamp: i64,
 }
+
+/// Emitted whenever the emergency stop changes hands, in either direction.
+///
+/// Carries the tally as well as the state because a resume is a sequence, not
+/// an instant: watchers need to see "2 of 3 so far" while it is happening, not
+/// only the moment it completes.
+#[event]
+pub struct PauseEvent {
+    /// The guardian whose signature caused this.
+    pub guardian: Pubkey,
+    /// State *after* this call.
+    pub paused: bool,
+    /// Resume approvals standing after this call.
+    pub approvals: u8,
+    pub threshold: u8,
+    pub timestamp: i64,
+}

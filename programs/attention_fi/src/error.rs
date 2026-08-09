@@ -83,4 +83,12 @@ pub enum AttentionError {
     CostAboveMax,
     #[msg("That account is not a Metaplex Core asset")]
     InvalidAsset,
+    #[msg("Guardian set must be 1-5 distinct real keys with a reachable threshold")]
+    InvalidGuardianSet,
+    #[msg("Caller is not a guardian")]
+    NotGuardian,
+    #[msg("The protocol is paused")]
+    ProtocolPaused,
+    #[msg("The protocol is not paused")]
+    NotPaused,
 }

@@ -15,6 +15,7 @@ import { useIsAdmin } from "@/lib/solana/use-admin";
 import { fetchFeeConfig, fetchGlobal } from "@/lib/solana/curve";
 import { explorerAddress, explorerTx } from "@/lib/solana/config";
 import { Notice } from "@/components/ui/notice";
+import { EmergencyStop } from "@/components/admin/emergency-stop";
 import {
   fetchClaimedPerks,
   fetchPerkGrants,
@@ -389,12 +390,24 @@ export function AdminView() {
             ← Back to the feed
           </Link>
         </Panel>
+
+        {/* Except the stop. Guardians are deliberately not the authority — that
+            separation is the point — so gating this page on the authority would
+            put the emergency brake behind the one key it exists to work
+            without. The panel shows itself read-only to everyone and offers the
+            button only to a wallet actually in the set. */}
+        <div className="mt-4">
+          <EmergencyStop isAdmin={false} />
+        </div>
       </Shell>
     );
   }
 
   return (
     <Shell>
+      <div className="mb-4">
+        <EmergencyStop isAdmin />
+      </div>
       {tx && (
         <div className="mb-4">
           <TxStatus

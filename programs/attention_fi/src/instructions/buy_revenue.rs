@@ -2,8 +2,9 @@ use anchor_lang::prelude::*;
 use anchor_lang::system_program;
 
 use crate::auction::auction_quote;
-use crate::constants::{GLOBAL_SEED, REVENUE_SEED, REVSTAKE_SEED, TRADER_SEED};
+use crate::constants::{GLOBAL_SEED, GUARDIANS_SEED, REVENUE_SEED, REVSTAKE_SEED, TRADER_SEED};
 use crate::error::AttentionError;
+use crate::guardians;
 use crate::perks;
 use crate::revenue::{accrued, pending};
 use crate::state::{Global, RevenueShare, RevenueStake, TraderStats};
@@ -52,10 +53,24 @@ pub struct BuyRevenue<'info> {
     )]
     pub position: Account<'info, RevenueStake>,
 
+    /// The emergency stop.
+    ///
+    /// Required, never optional: an optional stop is not a stop — omitting it
+    /// would help the caller, which is exactly the shape that made the genesis
+    /// pool exploitable. Unchecked because an empty account is the legitimate
+    /// "no guardian set installed yet" state rather than an error.
+    ///
+    /// CHECK: seeds pin the address; `guardians::require_live` validates it.
+    #[account(seeds = [GUARDIANS_SEED], bump)]
+    pub guardians: UncheckedAccount<'info>,
+
     pub system_program: Program<'info, System>,
 }
 
 pub fn buy_revenue_handler(ctx: Context<BuyRevenue>, amount: u64) -> Result<()> {
+    // Refuses while a guardian has pulled the stop.
+    guardians::require_live(&ctx.accounts.guardians.to_account_info())?;
+
     require!(amount > 0, AttentionError::ZeroAmount);
 
     let global = &ctx.accounts.global;

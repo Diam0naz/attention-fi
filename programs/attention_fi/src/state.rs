@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 
-use crate::constants::{SEED_EMERGING, SEED_NEW_ENTRANT, SEED_TOP_10, SEED_TOP_100};
+use crate::constants::{MAX_GUARDIANS, SEED_EMERGING, SEED_NEW_ENTRANT, SEED_TOP_10, SEED_TOP_100};
 
 /// Protocol-wide configuration, created once at `initialize`.
 #[account]
@@ -515,4 +515,35 @@ impl MindshareTier {
             MindshareTier::Top10 => 3,
         }
     }
+}
+
+/// The emergency stop, and the people who may pull it.
+///
+/// A singleton beside `Global` rather than fields inside it, for the reason
+/// `FeeConfig` is also its own account: `Global` is live on-chain at a fixed
+/// length, and Anchor sizes accounts exactly, so lengthening it would fail to
+/// deserialise on every instruction that reads it.
+///
+/// Pausing takes one guardian and resuming takes `threshold` of them — see
+/// `guardians.rs` for why those two numbers are deliberately different.
+#[account]
+#[derive(InitSpace)]
+pub struct Guardians {
+    /// May rotate the set. The protocol authority.
+    pub authority: Pubkey,
+    /// Guardian slots. Everything past `count` is the default key.
+    pub members: [Pubkey; MAX_GUARDIANS],
+    /// How many slots are live.
+    pub count: u8,
+    /// Approvals required to resume. Pausing always takes exactly one.
+    pub threshold: u8,
+    /// Whether gated instructions are currently refused.
+    pub paused: bool,
+    /// When the current pause began, for the record.
+    pub paused_at: i64,
+    /// Guardians who have approved the *current* resume attempt. Cleared on
+    /// every pause, so approvals can never carry over from an older incident.
+    pub resume_approvals: [Pubkey; MAX_GUARDIANS],
+    pub resume_count: u8,
+    pub bump: u8,
 }

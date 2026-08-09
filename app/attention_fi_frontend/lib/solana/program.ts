@@ -242,6 +242,17 @@ export const traderStatsPda = (owner: PublicKey): PublicKey =>
 export const perkPda = (asset: PublicKey): PublicKey =>
   PublicKey.findProgramAddressSync([enc.encode("perk"), asset.toBytes()], PROGRAM_ID)[0];
 
+/**
+ * The emergency stop, and the guardians who hold it.
+ *
+ * Passed by every gated instruction and never optional — an optional stop is
+ * not a stop. Empty until an authority installs a guardian set, which the
+ * program reads as "not paused" rather than as an error, so the address is
+ * always safe to send.
+ */
+export const guardiansPda = (): PublicKey =>
+  PublicKey.findProgramAddressSync([enc.encode("guardians")], PROGRAM_ID)[0];
+
 /** A 1-of-1 asset's listing. */
 export const nftAuctionPda = (asset: PublicKey): PublicKey =>
   PublicKey.findProgramAddressSync([enc.encode("nftauction"), asset.toBytes()], PROGRAM_ID)[0];

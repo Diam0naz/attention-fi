@@ -4,9 +4,10 @@ use mpl_core::instructions::{TransferV1CpiBuilder, UpdatePluginV1CpiBuilder};
 use mpl_core::types::Plugin;
 
 use crate::auction::{current_price, is_perpetual};
-use crate::constants::{FEECONFIG_SEED, GLOBAL_SEED, NFTAUCTION_SEED};
+use crate::constants::{FEECONFIG_SEED, GLOBAL_SEED, GUARDIANS_SEED, NFTAUCTION_SEED};
 use crate::error::AttentionError;
 use crate::events::{NftAuctionEvent, NFT_SOLD};
+use crate::guardians;
 use crate::nft::{has_attributes_plugin, last_sale_attributes};
 use crate::state::{FeeConfig, Global, NftAuction};
 
@@ -46,10 +47,24 @@ pub struct BuyNft<'info> {
     #[account(address = mpl_core::ID)]
     pub mpl_core_program: UncheckedAccount<'info>,
 
+    /// The emergency stop.
+    ///
+    /// Required, never optional: an optional stop is not a stop — omitting it
+    /// would help the caller, which is exactly the shape that made the genesis
+    /// pool exploitable. Unchecked because an empty account is the legitimate
+    /// "no guardian set installed yet" state rather than an error.
+    ///
+    /// CHECK: seeds pin the address; `guardians::require_live` validates it.
+    #[account(seeds = [GUARDIANS_SEED], bump)]
+    pub guardians: UncheckedAccount<'info>,
+
     pub system_program: Program<'info, System>,
 }
 
 pub fn buy_nft_handler(ctx: Context<BuyNft>, max_total: u64) -> Result<()> {
+    // Refuses while a guardian has pulled the stop.
+    guardians::require_live(&ctx.accounts.guardians.to_account_info())?;
+
     require!(!ctx.accounts.auction.complete, AttentionError::SoldOut);
 
     let auction = &ctx.accounts.auction;

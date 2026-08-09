@@ -7,6 +7,7 @@ pub mod curve;
 pub mod error;
 pub mod events;
 pub mod genesis;
+pub mod guardians;
 pub mod instructions;
 pub mod metadata;
 pub mod nft;
@@ -211,6 +212,28 @@ pub mod attention_fi {
             graduation_sol,
             virtual_token_reserves,
         )
+    }
+
+    /// Install or rotate the guardian set that holds the emergency stop.
+    /// Authority-only — it chooses who may pause, and can do neither itself.
+    pub fn set_guardians(
+        ctx: Context<SetGuardians>,
+        members: Vec<Pubkey>,
+        threshold: u8,
+    ) -> Result<()> {
+        set_guardians::set_guardians_handler(ctx, members, threshold)
+    }
+
+    /// Halt every gated instruction. One guardian is enough: a stop that has to
+    /// collect signatures first arrives after the money.
+    pub fn pause(ctx: Context<Pause>) -> Result<()> {
+        pause::pause_handler(ctx)
+    }
+
+    /// Approve resuming; the call that reaches `threshold` lifts the pause.
+    /// Deliberately the expensive direction — no single key can undo a stop.
+    pub fn resume(ctx: Context<Resume>) -> Result<()> {
+        resume::resume_handler(ctx)
     }
 
     /// Set the NFT market's fee schedule — its sale fee and the daily price of

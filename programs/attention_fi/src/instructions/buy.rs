@@ -3,10 +3,13 @@ use anchor_lang::system_program;
 use anchor_spl::associated_token::AssociatedToken;
 use anchor_spl::token::{self, Mint, Token, TokenAccount, Transfer};
 
-use crate::constants::{CURVE_SEED, GENPOOL_SEED, GLOBAL_SEED, PERK_SEED, TRADER_SEED};
+use crate::constants::{
+    CURVE_SEED, GENPOOL_SEED, GLOBAL_SEED, GUARDIANS_SEED, PERK_SEED, TRADER_SEED,
+};
 use crate::curve::{buy_quote, split_creator_fee};
 use crate::error::AttentionError;
 use crate::events::{GraduateEvent, TradeEvent};
+use crate::guardians;
 use crate::nft::{discounted_fee_bps, perk_discount_bps};
 use crate::perks;
 use crate::revenue::{credit_genesis_pool, genesis_share_bps, split_genesis_fee};
@@ -81,6 +84,17 @@ pub struct Buy<'info> {
     #[account(mut, seeds = [GENPOOL_SEED, mint.key().as_ref()], bump)]
     pub genesis_pool: UncheckedAccount<'info>,
 
+    /// The emergency stop.
+    ///
+    /// Required, never optional: an optional stop is not a stop — omitting it
+    /// would help the caller, which is exactly the shape that made the genesis
+    /// pool exploitable. Unchecked because an empty account is the legitimate
+    /// "no guardian set installed yet" state rather than an error.
+    ///
+    /// CHECK: seeds pin the address; `guardians::require_live` validates it.
+    #[account(seeds = [GUARDIANS_SEED], bump)]
+    pub guardians: UncheckedAccount<'info>,
+
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,
     pub associated_token_program: Program<'info, AssociatedToken>,
@@ -91,6 +105,9 @@ pub fn buy_handler<'info>(
     sol_amount: u64,
     min_tokens_out: u64,
 ) -> Result<()> {
+    // Refuses while a guardian has pulled the stop.
+    guardians::require_live(&ctx.accounts.guardians.to_account_info())?;
+
     require!(sol_amount > 0, AttentionError::ZeroAmount);
     require!(!ctx.accounts.curve.complete, AttentionError::CurveComplete);
 
