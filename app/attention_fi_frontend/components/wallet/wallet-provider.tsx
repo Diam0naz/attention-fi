@@ -60,6 +60,14 @@ const short = (addr: string) => `${addr.slice(0, 4)}…${addr.slice(-4)}`;
 
 interface WalletContextValue {
   connected: boolean;
+  /**
+   * True until the eager reconnect below has settled.
+   *
+   * Anything that gates on `connected` has to wait for this, or it decides
+   * against a returning user before their session has been restored — the app
+   * would bounce someone who is, a beat later, perfectly well connected.
+   */
+  restoring: boolean;
   address: string | null;
   shortAddress: string | null;
   walletId: string | null;
@@ -79,6 +87,10 @@ const STORAGE_KEY = "af.wallet";
 export function WalletProvider({ children }: { children: ReactNode }) {
   const [address, setAddress] = useState<string | null>(null);
   const [walletId, setWalletId] = useState<string | null>(null);
+  // Starts true on every render, server and client alike: until the effect
+  // below runs there is genuinely no answer yet, and claiming "signed out"
+  // in the meantime is the one wrong answer that has consequences.
+  const [restoring, setRestoring] = useState(true);
   const [detected, setDetected] = useState<Set<string>>(new Set());
   // Injected wallets publish their own logo, so a detected wallet is drawn with
   // its real mark rather than an approximation that drifts when they rebrand.
@@ -113,21 +125,59 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   }, [refreshDetected]);
 
   // Eager reconnect if the user previously connected and the wallet trusts us.
+  //
+  // Retried rather than attempted once: extensions inject asynchronously, so a
+  // hard refresh regularly mounts this before the wallet object exists, and a
+  // single miss used to mean a silently signed-out session. That was survivable
+  // when it only affected a button's label; now that the app itself is behind
+  // this state, giving up early would lock a connected user out of their own
+  // session until they clicked connect again.
   useEffect(() => {
-    const saved = typeof window !== "undefined" ? window.localStorage.getItem(STORAGE_KEY) : null;
-    if (!saved) return;
-    const provider = getProvider(saved);
-    if (!provider) return;
-    provider
-      .connect({ onlyIfTrusted: true })
-      .then((res) => {
-        const pk = res?.publicKey?.toString() ?? provider.publicKey?.toString();
-        if (pk) {
-          setAddress(pk);
-          setWalletId(saved);
+    let cancelled = false;
+    let attempts = 0;
+    let timer: ReturnType<typeof setTimeout>;
+
+    // Every path settles from a timer callback rather than the effect body, so
+    // none of them sets state synchronously during the effect.
+    const attempt = () => {
+      if (cancelled) return;
+      const saved = window.localStorage.getItem(STORAGE_KEY);
+      if (!saved) {
+        setRestoring(false);
+        return;
+      }
+      const provider = getProvider(saved);
+      if (!provider) {
+        attempts += 1;
+        // ~1s of grace in total, which covers extension injection without
+        // holding the gate long enough to look like a hang.
+        if (attempts > 4) {
+          setRestoring(false);
+          return;
         }
-      })
-      .catch(() => undefined);
+        timer = setTimeout(attempt, 250);
+        return;
+      }
+      provider
+        .connect({ onlyIfTrusted: true })
+        .then((res) => {
+          const pk = res?.publicKey?.toString() ?? provider.publicKey?.toString();
+          if (pk && !cancelled) {
+            setAddress(pk);
+            setWalletId(saved);
+          }
+        })
+        .catch(() => undefined)
+        .finally(() => {
+          if (!cancelled) setRestoring(false);
+        });
+    };
+
+    timer = setTimeout(attempt, 0);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
   }, []);
 
   const connect = useCallback(async (id: string): Promise<boolean> => {
@@ -162,6 +212,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const value = useMemo<WalletContextValue>(
     () => ({
       connected: address !== null,
+      restoring,
       address,
       shortAddress: address ? short(address) : null,
       walletId,
@@ -171,7 +222,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       disconnect,
       getSigner,
     }),
-    [address, walletId, detected, icons, connect, disconnect, getSigner],
+    [address, restoring, walletId, detected, icons, connect, disconnect, getSigner],
   );
 
   return <WalletContext.Provider value={value}>{children}</WalletContext.Provider>;

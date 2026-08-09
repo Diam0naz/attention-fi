@@ -3,6 +3,7 @@ import "./globals.css";
 import { cn } from "@/lib/utils";
 import { AppNav } from "@/components/nav/app-nav";
 import { WalletProvider } from "@/components/wallet/wallet-provider";
+import { AppGate } from "@/components/wallet/app-gate";
 import { QueryProvider } from "@/components/providers/query-provider";
 
 // Fonts are declared as a zero-network CSS stack in globals.css (`--font-sans` /
@@ -35,7 +36,7 @@ export default function RootLayout({
         <QueryProvider>
           <WalletProvider>
             <AppNav />
-            {children}
+            <AppGate>{children}</AppGate>
           </WalletProvider>
         </QueryProvider>
       </body>

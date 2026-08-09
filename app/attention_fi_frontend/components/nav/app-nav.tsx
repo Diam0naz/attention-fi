@@ -11,7 +11,7 @@ import { NotificationsBell } from "@/components/notifications/notifications-bell
 import { refreshSolUsd } from "@/lib/solana/sol-usd";
 import { syncRegistry } from "@/lib/solana/registry";
 import { cn } from "@/lib/utils";
-import { V0_GATE } from "@/lib/v0-gate";
+import { useAppAccess } from "@/components/wallet/use-app-access";
 
 const APP_LINKS = [
   { label: "Discover", href: "/discover" },
@@ -20,21 +20,21 @@ const APP_LINKS = [
   { label: "NFT", href: "/nft" },
 ] as const;
 
-/** On the gated deployment the app surfaces redirect, so point at the story
- *  instead — offering a link the proxy will bounce is worse than no link. */
+/** What a visitor sees before connecting: the story, not the product. Also what
+ *  the gated deployment shows, where the app surfaces redirect — offering a link
+ *  that turns you away is worse than no link. */
 const V0_LINKS = [
   { label: "Thesis", href: "/#thesis" },
   { label: "Mechanism Design", href: "/#mechanism" },
   { label: "Verticals", href: "/#verticals" },
 ] as const;
 
-const LINKS: readonly { label: string; href: string }[] = V0_GATE ? V0_LINKS : APP_LINKS;
-
 /** The link set, shared by the desktop centre row and the mobile scroll row. */
-function NavLinks({ pathname }: { pathname: string }) {
+function NavLinks({ pathname, unlocked }: { pathname: string; unlocked: boolean }) {
+  const links: readonly { label: string; href: string }[] = unlocked ? APP_LINKS : V0_LINKS;
   return (
     <>
-      {LINKS.map((l) => {
+      {links.map((l) => {
         const active = pathname === l.href || pathname.startsWith(`${l.href}/`);
         return (
           <li key={l.href} className="leading-none">
@@ -61,6 +61,7 @@ function NavLinks({ pathname }: { pathname: string }) {
  */
 export function AppNav() {
   const pathname = usePathname();
+  const { unlocked } = useAppAccess();
 
   // Keep the app-wide SOL/USD display rate fresh (used by feeds, token pages,
   // NFT pricing). Refreshes on load and every 5 min; the rate is display-only.
@@ -91,18 +92,21 @@ export function AppNav() {
             <Logo />
           </Link>
           <ul className="hidden flex-1 items-center justify-center gap-3 px-2 sm:flex sm:gap-6">
-            <NavLinks pathname={pathname} />
+            <NavLinks pathname={pathname} unlocked={unlocked} />
           </ul>
           <div className="ml-auto flex shrink-0 items-center gap-2.5 sm:ml-0">
             {pathname === "/" && <WaitlistButton />}
-            <NotificationsBell />
+            {/* Nothing to notify a visitor about until they have positions and
+                listings of their own — an empty bell in front of the gate is
+                furniture advertising a room they can't enter. */}
+            {unlocked && <NotificationsBell />}
             <WalletButton />
           </div>
         </div>
         {/* mobile link row — scrolls horizontally rather than wrapping or
             compressing, so every destination stays one tap away */}
         <ul className="af-no-scrollbar -mx-4 flex items-center gap-5 overflow-x-auto px-4 pb-2.5 sm:hidden">
-          <NavLinks pathname={pathname} />
+          <NavLinks pathname={pathname} unlocked={unlocked} />
         </ul>
       </div>
       </nav>
