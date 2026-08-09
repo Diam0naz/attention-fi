@@ -41,6 +41,45 @@ function genesisPoolPda(mint: PublicKey, programId: PublicKey): PublicKey {
   )[0];
 }
 
+/**
+ * The NFT market's default fee (2.5%), deliberately not the 1% the curve
+ * charges — selling an asset is not the same act as trading a token.
+ */
+const NFT_FEE_BPS = 250;
+
+/** The protocol's fee schedule, created alongside Global by `initialize`. */
+function feeConfigPda(programId: PublicKey): PublicKey {
+  return PublicKey.findProgramAddressSync([Buffer.from("feeconfig")], programId)[0];
+}
+
+/** Metaplex token metadata for a mint — every launch writes one now. */
+function metadataPda(mint: PublicKey): PublicKey {
+  return PublicKey.findProgramAddressSync(
+    [
+      Buffer.from("metadata"),
+      TOKEN_METADATA_PROGRAM_ID.toBuffer(),
+      mint.toBuffer(),
+    ],
+    TOKEN_METADATA_PROGRAM_ID
+  )[0];
+}
+
+/**
+ * Metadata for launches whose test doesn't care what the token is called.
+ *
+ * An empty `uri` is what the app writes too — the launch artwork lives in the
+ * registry rather than a hosted JSON document, and the field is valid empty.
+ */
+const META = { name: "Test Token", symbol: "TEST", uri: "" };
+
+/** The metadata accounts every launch instruction now takes. */
+function metadataAccounts(mint: PublicKey) {
+  return {
+    metadata: metadataPda(mint),
+    tokenMetadataProgram: TOKEN_METADATA_PROGRAM_ID,
+  };
+}
+
 describe("attention_fi bonding curve", () => {
   anchor.setProvider(anchor.AnchorProvider.env());
   const provider = anchor.getProvider() as anchor.AnchorProvider;
@@ -80,6 +119,7 @@ describe("attention_fi bonding curve", () => {
       .accountsStrict({
         authority: wallet,
         global: globalPda,
+        feeConfig: feeConfigPda(program.programId),
         treasury,
         systemProgram: SystemProgram.programId,
       })
@@ -92,7 +132,7 @@ describe("attention_fi bonding curve", () => {
 
   it("launches a Top100 token seeded from mindshare tier", async () => {
     await program.methods
-      .launchToken({ top100: {} })
+      .launchToken({ top100: {} }, META)
       .accountsStrict({
         creator: wallet,
         global: globalPda,
@@ -103,6 +143,7 @@ describe("attention_fi bonding curve", () => {
         tokenProgram: TOKEN_PROGRAM_ID,
         associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
         rent: SYSVAR_RENT_PUBKEY,
+        ...metadataAccounts(mintKp.publicKey),
       })
       .signers([mintKp])
       .rpc();
@@ -138,6 +179,7 @@ describe("attention_fi bonding curve", () => {
         systemProgram: SystemProgram.programId,
         tokenProgram: TOKEN_PROGRAM_ID,
         associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+        genesisPool: genesisPoolPda(mintKp.publicKey, program.programId),
       })
       .rpc();
 
@@ -177,6 +219,7 @@ describe("attention_fi bonding curve", () => {
         perk: null,
         traderStats: null,
         tokenProgram: TOKEN_PROGRAM_ID,
+        genesisPool: genesisPoolPda(mintKp.publicKey, program.programId),
       })
       .rpc();
 
@@ -236,6 +279,7 @@ describe("attention_fi dutch auction", () => {
         .accountsStrict({
           authority: wallet,
           global: globalPda,
+          feeConfig: feeConfigPda(program.programId),
           treasury,
           systemProgram: SystemProgram.programId,
         })
@@ -251,7 +295,8 @@ describe("attention_fi dutch auction", () => {
         { emerging: {} },
         new anchor.BN(START_PRICE),
         new anchor.BN(FLOOR_PRICE),
-        new anchor.BN(DURATION)
+        new anchor.BN(DURATION),
+        META
       )
       .accountsStrict({
         creator: wallet,
@@ -263,6 +308,7 @@ describe("attention_fi dutch auction", () => {
         tokenProgram: TOKEN_PROGRAM_ID,
         associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
         rent: SYSVAR_RENT_PUBKEY,
+        ...metadataAccounts(mintKp.publicKey),
       })
       .signers([mintKp])
       .rpc();
@@ -291,6 +337,7 @@ describe("attention_fi dutch auction", () => {
           systemProgram: SystemProgram.programId,
           tokenProgram: TOKEN_PROGRAM_ID,
           associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+          ...metadataAccounts(mintKp.publicKey),
         })
         .rpc();
     } catch (err) {
@@ -368,6 +415,7 @@ describe("attention_fi conviction curve", () => {
         .accountsStrict({
           authority: wallet,
           global: globalPda,
+          feeConfig: feeConfigPda(program.programId),
           treasury,
           systemProgram: SystemProgram.programId,
         })
@@ -393,7 +441,12 @@ describe("attention_fi conviction curve", () => {
     const holderAta = ata(wallet, mintKp.publicKey);
 
     await program.methods
-      .launchConviction({ emerging: {} }, new anchor.BN(lockPeriod), PENALTY_BPS)
+      .launchConviction(
+        { emerging: {} },
+        new anchor.BN(lockPeriod),
+        PENALTY_BPS,
+        META
+      )
       .accountsStrict({
         creator: wallet,
         global: globalPda,
@@ -404,6 +457,7 @@ describe("attention_fi conviction curve", () => {
         tokenProgram: TOKEN_PROGRAM_ID,
         associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
         rent: SYSVAR_RENT_PUBKEY,
+        ...metadataAccounts(mintKp.publicKey),
       })
       .signers([mintKp])
       .rpc();
@@ -422,6 +476,8 @@ describe("attention_fi conviction curve", () => {
         systemProgram: SystemProgram.programId,
         tokenProgram: TOKEN_PROGRAM_ID,
         associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+        ...metadataAccounts(mintKp.publicKey),
+        traderStats: null,
       })
       .rpc();
 
@@ -515,6 +571,7 @@ describe("attention_fi revenue share", () => {
         .accountsStrict({
           authority: wallet,
           global: globalPda,
+          feeConfig: feeConfigPda(program.programId),
           treasury,
           systemProgram: SystemProgram.programId,
         })
@@ -533,7 +590,7 @@ describe("attention_fi revenue share", () => {
 
   it("launches a revenue-share pool", async () => {
     await program.methods
-      .launchRevenue({ emerging: {} }, new anchor.BN(SHARE_PRICE))
+      .launchRevenue({ emerging: {} }, new anchor.BN(SHARE_PRICE), META)
       .accountsStrict({
         creator: wallet,
         global: globalPda,
@@ -544,6 +601,7 @@ describe("attention_fi revenue share", () => {
         tokenProgram: TOKEN_PROGRAM_ID,
         associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
         rent: SYSVAR_RENT_PUBKEY,
+        ...metadataAccounts(mintKp.publicKey),
       })
       .signers([mintKp])
       .rpc();
@@ -565,6 +623,8 @@ describe("attention_fi revenue share", () => {
         mint: mintKp.publicKey,
         position: stake1,
         systemProgram: SystemProgram.programId,
+        ...metadataAccounts(mintKp.publicKey),
+        traderStats: null,
       })
       .rpc();
 
@@ -578,6 +638,7 @@ describe("attention_fi revenue share", () => {
         mint: mintKp.publicKey,
         position: stake2,
         systemProgram: SystemProgram.programId,
+        traderStats: null,
       })
       .signers([holder2])
       .rpc();
@@ -672,6 +733,7 @@ describe("attention_fi verification NFT (SAS-gated)", () => {
         .accountsStrict({
           authority: wallet,
           global: globalPda,
+          feeConfig: feeConfigPda(program.programId),
           treasury: Keypair.generate().publicKey,
           systemProgram: SystemProgram.programId,
         })
@@ -759,6 +821,7 @@ describe("attention_fi perk & genesis NFTs", () => {
         .accountsStrict({
           authority: wallet,
           global: globalPda,
+          feeConfig: feeConfigPda(program.programId),
           treasury: Keypair.generate().publicKey,
           systemProgram: SystemProgram.programId,
         })
@@ -766,7 +829,12 @@ describe("attention_fi perk & genesis NFTs", () => {
     }
   });
 
-  it("mints an upgradeable perk NFT and levels it up (raising the discount)", async () => {
+  // The protocol can still mint a perk directly. What changed is that it can no
+  // longer raise one: level_up is signed by the holder and gated on their own
+  // activity, so the authority has no more standing over someone else's perk
+  // than any other wallet. The successful climb is covered end to end in
+  // "attention_fi earned perks".
+  it("mints an upgradeable perk NFT, which the authority can no longer level up", async () => {
     const recipient = Keypair.generate().publicKey;
     const asset = Keypair.generate();
     const [perkPda] = PublicKey.findProgramAddressSync(
@@ -793,31 +861,72 @@ describe("attention_fi perk & genesis NFTs", () => {
     assert.strictEqual(perk.level, 1);
     assert.strictEqual(perk.discountBps, 1000, "level 1 => 10% off the fee");
 
-    await program.methods
-      .levelUp()
-      .accountsStrict({
-        authority: wallet,
-        global: globalPda,
-        perkAuthority,
-        perk: perkPda,
-        asset: asset.publicKey,
-        mplCoreProgram: MPL_CORE_PROGRAM_ID,
-        systemProgram: SystemProgram.programId,
-      })
-      .rpc();
+    try {
+      await program.methods
+        .levelUp()
+        .accountsStrict({
+          owner: wallet,
+          stats: PublicKey.findProgramAddressSync(
+            [Buffer.from("trader"), wallet.toBuffer()],
+            program.programId
+          )[0],
+          perkAuthority,
+          perk: perkPda,
+          asset: asset.publicKey,
+          mplCoreProgram: MPL_CORE_PROGRAM_ID,
+          systemProgram: SystemProgram.programId,
+        })
+        .rpc();
+      assert.fail("the authority levelled up a perk it doesn't hold");
+    } catch (e) {
+      // `owner` is bound to perk.owner, which is the recipient — a throwaway
+      // key here. The authority's signature buys it nothing.
+      assert.match(String(e), /Unauthorized|ConstraintAddress|AccountNotInitialized/);
+    }
 
     perk = await program.account.perkNft.fetch(perkPda);
-    assert.strictEqual(perk.level, 2, "leveled up");
-    assert.strictEqual(perk.discountBps, 2000, "level 2 => 20% off the fee");
+    assert.strictEqual(perk.level, 1, "still level 1 — nobody could raise it");
 
     // Confirm the Core asset itself is real and Core-owned.
     const acc = await provider.connection.getAccountInfo(asset.publicKey);
     assert.strictEqual(acc!.owner.toBase58(), MPL_CORE_PROGRAM_ID.toBase58());
   });
 
+  /**
+   * A real launched token to hang genesis NFTs off.
+   *
+   * `mint_genesis` is creator-gated through the subject's bonding curve, so a
+   * bare keypair is no longer a usable subject — the curve has to exist and the
+   * signer has to be its creator. These tests used a pubkey nobody had launched.
+   */
+  async function launchSubject(): Promise<PublicKey> {
+    const kp = Keypair.generate();
+    const [curve] = PublicKey.findProgramAddressSync(
+      [Buffer.from("curve"), kp.publicKey.toBuffer()],
+      program.programId
+    );
+    await program.methods
+      .launchToken({ emerging: {} }, META)
+      .accountsStrict({
+        creator: wallet,
+        global: globalPda,
+        mint: kp.publicKey,
+        curve,
+        vault: ata(curve, kp.publicKey),
+        ...metadataAccounts(kp.publicKey),
+        systemProgram: SystemProgram.programId,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+        rent: SYSVAR_RENT_PUBKEY,
+      })
+      .signers([kp])
+      .rpc();
+    return kp.publicKey;
+  }
+
   it("mints a transferable fee-share genesis NFT for a token", async () => {
     const recipient = Keypair.generate().publicKey;
-    const subjectMint = Keypair.generate().publicKey;
+    const subjectMint = await launchSubject();
     const asset = Keypair.generate();
     const [genesisPda] = PublicKey.findProgramAddressSync(
       [Buffer.from("genesis"), asset.publicKey.toBuffer()],
@@ -858,7 +967,7 @@ describe("attention_fi perk & genesis NFTs", () => {
   });
 
   it("routes a token's fees to two genesis holders pro-rata (3:1)", async () => {
-    const subjectMint = Keypair.generate().publicKey;
+    const subjectMint = await launchSubject();
     const [poolPda] = PublicKey.findProgramAddressSync(
       [Buffer.from("genpool"), subjectMint.toBuffer()],
       program.programId
@@ -970,6 +1079,7 @@ describe("attention_fi NFT-as-asset auction", () => {
         .accountsStrict({
           authority: wallet,
           global: globalPda,
+          feeConfig: feeConfigPda(program.programId),
           treasury: Keypair.generate().publicKey,
           systemProgram: SystemProgram.programId,
         })
@@ -1011,7 +1121,10 @@ describe("attention_fi NFT-as-asset auction", () => {
     await provider.connection.confirmTransaction(sig, "confirmed");
 
     await program.methods
-      .buyNft(startPrice)
+      // `max_total` bounds price + the NFT market fee, not the price alone —
+      // a cap that excluded the fee left the buyer authorising less than the
+      // transaction actually spends.
+      .buyNft(startPrice.add(startPrice.muln(NFT_FEE_BPS).divn(10_000)))
       .accountsStrict({
         buyer: buyer.publicKey,
         global: globalPda,
@@ -1021,6 +1134,7 @@ describe("attention_fi NFT-as-asset auction", () => {
         asset: asset.publicKey,
         mplCoreProgram: MPL_CORE_PROGRAM_ID,
         systemProgram: SystemProgram.programId,
+        feeConfig: feeConfigPda(program.programId),
       })
       .signers([buyer])
       .rpc();
@@ -1074,6 +1188,7 @@ describe("attention_fi perk fee discount", () => {
         .accountsStrict({
           authority: wallet,
           global: globalPda,
+          feeConfig: feeConfigPda(program.programId),
           treasury: Keypair.generate().publicKey,
           systemProgram: SystemProgram.programId,
         })
@@ -1100,7 +1215,7 @@ describe("attention_fi perk fee discount", () => {
 
     // Launch a bonding token to trade on.
     await program.methods
-      .launchToken({ emerging: {} })
+      .launchToken({ emerging: {} }, META)
       .accountsStrict({
         creator: wallet,
         global: globalPda,
@@ -1111,6 +1226,7 @@ describe("attention_fi perk fee discount", () => {
         tokenProgram: TOKEN_PROGRAM_ID,
         associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
         rent: SYSVAR_RENT_PUBKEY,
+        ...metadataAccounts(mintKp.publicKey),
       })
       .signers([mintKp])
       .rpc();
@@ -1132,6 +1248,8 @@ describe("attention_fi perk fee discount", () => {
         systemProgram: SystemProgram.programId,
         tokenProgram: TOKEN_PROGRAM_ID,
         associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+        genesisPool: genesisPoolPda(mintKp.publicKey, program.programId),
+        traderStats: null,
       })
       .rpc();
     return (await provider.connection.getBalance(treasury)) - before;
@@ -1194,6 +1312,7 @@ describe("attention_fi AMM graduation", () => {
         .accountsStrict({
           authority: wallet,
           global: globalPda,
+          feeConfig: feeConfigPda(program.programId),
           treasury: Keypair.generate().publicKey,
           systemProgram: SystemProgram.programId,
         })
@@ -1206,7 +1325,7 @@ describe("attention_fi AMM graduation", () => {
   it("graduates a completed curve into a native AMM pool", async () => {
     // Top10 tier so a 90-SOL buy leaves healthy reserves for the pool.
     await program.methods
-      .launchToken({ top10: {} })
+      .launchToken({ top10: {} }, META)
       .accountsStrict({
         creator: wallet,
         global: globalPda,
@@ -1217,6 +1336,7 @@ describe("attention_fi AMM graduation", () => {
         tokenProgram: TOKEN_PROGRAM_ID,
         associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
         rent: SYSVAR_RENT_PUBKEY,
+        ...metadataAccounts(mintKp.publicKey),
       })
       .signers([mintKp])
       .rpc();
@@ -1237,6 +1357,7 @@ describe("attention_fi AMM graduation", () => {
         systemProgram: SystemProgram.programId,
         tokenProgram: TOKEN_PROGRAM_ID,
         associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+        genesisPool: genesisPoolPda(mintKp.publicKey, program.programId),
       })
       .rpc();
 
@@ -1282,6 +1403,8 @@ describe("attention_fi AMM graduation", () => {
         trader: wallet,
         global: globalPda,
         pool: poolPda,
+        treasury,
+        curve: curvePda,
         mint: mintKp.publicKey,
         poolVault,
         traderTokenAccount: walletAta,
@@ -1290,14 +1413,17 @@ describe("attention_fi AMM graduation", () => {
         systemProgram: SystemProgram.programId,
         tokenProgram: TOKEN_PROGRAM_ID,
         associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+        genesisPool: genesisPoolPda(mintKp.publicKey, program.programId),
       })
       .rpc();
 
     const afterBuy = await program.account.ammPool.fetch(poolPda);
     assert.strictEqual(
       afterBuy.solReserves.sub(before.solReserves).toString(),
-      LAMPORTS_PER_SOL.toString(),
-      "pool gained 1 SOL"
+      (LAMPORTS_PER_SOL - LAMPORTS_PER_SOL / 100).toString(),
+      "pool gained the buy net of the 1% fee — the fee leaves the pool now, " +
+        "split between the creator and the treasury, so a graduated token's " +
+        "creator keeps earning"
     );
     assert.isTrue(afterBuy.tokenReserves.lt(before.tokenReserves), "pool released tokens");
 
@@ -1309,6 +1435,8 @@ describe("attention_fi AMM graduation", () => {
         trader: wallet,
         global: globalPda,
         pool: poolPda,
+        treasury,
+        curve: curvePda,
         mint: mintKp.publicKey,
         poolVault,
         traderTokenAccount: walletAta,
@@ -1317,6 +1445,7 @@ describe("attention_fi AMM graduation", () => {
         systemProgram: SystemProgram.programId,
         tokenProgram: TOKEN_PROGRAM_ID,
         associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+        genesisPool: genesisPoolPda(mintKp.publicKey, program.programId),
       })
       .rpc();
 
@@ -1361,6 +1490,7 @@ describe("attention_fi creator fees (SAS-gated claim)", () => {
         .accountsStrict({
           authority: wallet,
           global: globalPda,
+          feeConfig: feeConfigPda(program.programId),
           treasury: Keypair.generate().publicKey,
           systemProgram: SystemProgram.programId,
         })
@@ -1394,7 +1524,7 @@ describe("attention_fi creator fees (SAS-gated claim)", () => {
   it("accrues creator fees and pays them to the verified creator", async () => {
     // Launch a token whose creator is the (verified) wallet.
     await program.methods
-      .launchToken({ emerging: {} })
+      .launchToken({ emerging: {} }, META)
       .accountsStrict({
         creator: wallet,
         global: globalPda,
@@ -1405,6 +1535,7 @@ describe("attention_fi creator fees (SAS-gated claim)", () => {
         tokenProgram: TOKEN_PROGRAM_ID,
         associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
         rent: SYSVAR_RENT_PUBKEY,
+        ...metadataAccounts(mintKp.publicKey),
       })
       .signers([mintKp])
       .rpc();
@@ -1425,6 +1556,7 @@ describe("attention_fi creator fees (SAS-gated claim)", () => {
         systemProgram: SystemProgram.programId,
         tokenProgram: TOKEN_PROGRAM_ID,
         associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+        genesisPool: genesisPoolPda(mintKp.publicKey, program.programId),
       })
       .rpc();
 
@@ -1463,9 +1595,6 @@ describe("attention_fi genesis group", () => {
   // Group terms: 4 units at 5% of the creator's fee stream each, 0.5 SOL a
   // unit, two to a wallet.
   const TOTAL_UNITS = 4;
-  // The NFT market's default fee (2.5%), which is deliberately not the 1% the
-  // curve charges — a genesis unit is a sale, not a trade.
-  const NFT_FEE_BPS = 250;
   const SHARE_BPS = 500;
   const PRICE = LAMPORTS_PER_SOL / 2;
   const PER_WALLET_CAP = 2;

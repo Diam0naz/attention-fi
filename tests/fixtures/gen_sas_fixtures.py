@@ -83,7 +83,14 @@ def main() -> None:
         str(out / "att_invalid.json"),
         attestation_data(subject2, bad, args.handle, 0),
     )
-    print("wrote att_valid.json and att_invalid.json to", out)
+    # The issuer verifying itself. `claim_creator_fee` is gated on the claimant
+    # holding a Verification PDA, and the claimant in those tests is the local
+    # wallet — which is also the issuer, so nonce and signer are the same key.
+    write_account(
+        str(out / "att_wallet.json"),
+        attestation_data(issuer, issuer, args.handle, 0),
+    )
+    print("wrote att_valid.json, att_invalid.json and att_wallet.json to", out)
 
 
 if __name__ == "__main__":
