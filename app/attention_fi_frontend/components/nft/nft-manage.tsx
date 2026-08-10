@@ -35,21 +35,22 @@ import { useQueryClient } from "@tanstack/react-query";
 import { notificationsKey } from "@/components/notifications/use-notifications";
 import {
   auctionEnded,
-  currentAuctionPrice,
+  collectionListingFor,
   collectionPrice,
+  currentAuctionPrice,
+  fetchCollectableNfts,
   fetchCollectionAuctions,
   fetchCollections,
-  fetchCollectableNfts,
   fetchListableNfts,
   fetchNftAuctions,
   fetchPerkGrant,
   listingEnded,
   type CollectionAuctionData,
   type CollectionData,
-  type PerkGrantData,
-  type NftPortfolio,
   type NftAuctionData,
+  type NftPortfolio,
   type OwnedAsset,
+  type PerkGrantData,
 } from "@/lib/solana/nft-data";
 
 /**
@@ -736,6 +737,11 @@ export function NftManage({ section }: { section: Section }) {
           // Core refuses a transfer of a collection member unless the
           // collection is passed; standalone assets must pass null instead.
           collection: asset.collection ? new PublicKey(asset.collection) : null,
+          // Optional on-chain, and therefore never resolved for us — a call
+          // that leaves it unnamed fails in the browser before it is signed.
+          // Only supplied when the collection genuinely has a listing account,
+          // since an Option account is deserialised when present.
+          collectionAuction: await collectionListingFor(readProgram, asset.collection),
         })
         .rpc();
       setTx({

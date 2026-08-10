@@ -14,7 +14,7 @@ import { BN } from "@anchor-lang/core";
 import { useProgram, useReadonlyProgram } from "@/lib/solana/use-program";
 import { useQueryClient } from "@tanstack/react-query";
 import { nftPortfolioKey } from "@/components/nft/use-nft-portfolio";
-import { fetchCollections, fetchListableNfts, type CollectionData, type OwnedAsset } from "@/lib/solana/nft-data";
+import { collectionListingFor, fetchCollections, fetchListableNfts, type CollectionData, type OwnedAsset } from "@/lib/solana/nft-data";
 import { handleToMint, launchedMeta, myCreatedTokens } from "@/lib/solana/registry";
 import { solUsd } from "@/lib/solana/sol-usd";
 import { appOrigin, explorerTx } from "@/lib/solana/config";
@@ -318,6 +318,10 @@ export function NftCreateFlow() {
             creator: me,
             asset: new PublicKey(pickedAsset.asset),
             collection: pickedAsset.collection ? new PublicKey(pickedAsset.collection) : null,
+            // Optional on-chain, so Anchor will not resolve it for us and a
+            // call that omits it never leaves the browser. Passed only when the
+            // collection actually has a listing account.
+            collectionAuction: await collectionListingFor(program, pickedAsset.collection),
           })
           .rpc();
       }

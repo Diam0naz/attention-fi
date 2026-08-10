@@ -4,6 +4,7 @@ import bs58 from "bs58";
 import type { AttentionFi } from "@/lib/idl/attention_fi";
 import type { NftCardData } from "@/components/nft/nft-card";
 import { artworkUrl } from "@/lib/nft-artwork";
+import { collectionAuctionPda } from "./program";
 
 const short = (a: string) => `${a.slice(0, 4)}…${a.slice(-4)}`;
 
@@ -868,4 +869,28 @@ export async function fetchPerkGrant(
     level: g.level,
     granter: g.granter.toBase58(),
   };
+}
+
+/**
+ * The `collection_auction` account `list_nft_auction` expects, or null.
+ *
+ * That account is optional on-chain, and optional accounts are not resolved by
+ * Anchor's client — a call that doesn't name it fails before it ever leaves the
+ * browser with "Reached maximum depth for account resolution", which is what
+ * broke listing a 1-of-1.
+ *
+ * Naming it is not enough on its own: an `Option<Account<..>>` is deserialised
+ * when supplied, so handing over the address of a collection that was never
+ * listed fails just as hard. Hence the existence check. The program uses it to
+ * refuse selling a piece out from under someone buying the whole set, so it
+ * matters only while the collection's own listing is live.
+ */
+export async function collectionListingFor(
+  program: Program<AttentionFi>,
+  collection: string | null | undefined,
+): Promise<PublicKey | null> {
+  if (!collection) return null;
+  const pda = collectionAuctionPda(new PublicKey(collection));
+  const info = await program.provider.connection.getAccountInfo(pda).catch(() => null);
+  return info ? pda : null;
 }
