@@ -16,11 +16,16 @@
  *   API_ORIGIN=https://your-deployment.example \
  *   ANCHOR_PROVIDER_URL=https://api.devnet.solana.com \
  *   ANCHOR_WALLET=~/.config/solana/id.json \
- *   npx ts-node scripts/create-feed.ts <handle>
+ *   npx ts-node scripts/create-feed.ts <handle> [existing-feed-address]
  *
- * Prints the feed address. Put it in NEXT_PUBLIC_MINDSHARE_FEED and rebuild —
- * that variable is inlined at build time, so a redeploy without a rebuild does
- * nothing.
+ * With no second argument it creates a feed and prints the address, which goes
+ * in NEXT_PUBLIC_MINDSHARE_FEED — and needs a *rebuild*, since NEXT_PUBLIC_
+ * variables are inlined at build time rather than read at runtime.
+ *
+ * With an existing feed address it repoints that feed's job instead. Prefer
+ * this when a feed already exists: the address doesn't change, so there is no
+ * env edit and no rebuild — which matters because the wrong job is publishing
+ * a timeable number until the swap lands, and a rebuild is minutes of that.
  */
 import * as anchor from "@anchor-lang/core";
 
@@ -76,11 +81,13 @@ async function main() {
   anchor.setProvider(provider);
 
   const sb = await import("@switchboard-xyz/on-demand");
+  // OracleJob lives in @switchboard-xyz/common, not the on-demand package.
+  const { OracleJob } = await import("@switchboard-xyz/common");
   const program = await sb.AnchorUtils.loadProgramFromConnection(provider.connection);
   const queue = await sb.Queue.loadDefault(program);
 
   const jobs = [
-    sb.OracleJob.fromObject({
+    OracleJob.fromObject({
       tasks: [
         { httpTask: { url } },
         // The averaged field. Reading `$.mindshare` here would defeat the whole
@@ -90,6 +97,25 @@ async function main() {
     }),
   ];
 
+  const existing = process.argv[3];
+  if (existing) {
+    const pullFeed = new sb.PullFeed(program, new anchor.web3.PublicKey(existing));
+    const ix = await pullFeed.setConfigsIx({ jobs, maxVariance: 5, minResponses: MIN_ORACLE_SAMPLES });
+    const tx = await sb.asV0Tx({
+      connection: provider.connection,
+      ixs: [ix],
+      payer: provider.wallet.publicKey,
+      signers: [],
+    });
+    const signed = await provider.wallet.signTransaction(tx);
+    const sig = await provider.connection.sendTransaction(signed);
+    await provider.connection.confirmTransaction(sig, "confirmed");
+    console.log(`\nfeed ${existing} repointed at $.mindshare24h`);
+    console.log(`signature: ${sig}`);
+    console.log("\nNo env change and no rebuild — the address is unchanged.");
+    return;
+  }
+
   const [pullFeed, keypair] = sb.PullFeed.generate(program);
   const ix = await pullFeed.initIx({
     name: `attentionfi/mindshare/${handle}`,
@@ -97,7 +123,7 @@ async function main() {
     jobs,
     maxVariance: 5,
     minResponses: MIN_ORACLE_SAMPLES,
-    numSignatures: MIN_ORACLE_SAMPLES,
+    minSampleSize: MIN_ORACLE_SAMPLES,
     maxStaleness: MAX_STALENESS_SLOTS,
   });
 
@@ -107,7 +133,8 @@ async function main() {
     payer: provider.wallet.publicKey,
     signers: [keypair],
   });
-  const sig = await provider.connection.sendTransaction(tx);
+  const signed = await provider.wallet.signTransaction(tx);
+  const sig = await provider.connection.sendTransaction(signed);
   await provider.connection.confirmTransaction(sig, "confirmed");
 
   console.log(`\nfeed created: ${pullFeed.pubkey.toBase58()}`);

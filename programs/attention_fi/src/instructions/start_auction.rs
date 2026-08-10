@@ -3,10 +3,11 @@ use anchor_spl::associated_token::AssociatedToken;
 use anchor_spl::token::spl_token::instruction::AuthorityType;
 use anchor_spl::token::{self, Mint, MintTo, SetAuthority, Token, TokenAccount};
 
-use crate::constants::{AUCTION_SEED, GLOBAL_SEED};
+use crate::constants::{AUCTION_SEED, GLOBAL_SEED, LAUNCHPOLICY_SEED, LAUNCHQUOTA_SEED};
 use crate::error::AttentionError;
+use crate::launch_quota;
 use crate::metadata::{create_token_metadata, MetadataCpi, TokenMetadataArgs};
-use crate::state::{DutchAuction, Global, MindshareTier};
+use crate::state::{DutchAuction, Global, LaunchQuota, MindshareTier};
 
 #[derive(Accounts)]
 pub struct StartAuction<'info> {
@@ -52,6 +53,24 @@ pub struct StartAuction<'info> {
     #[account(address = anchor_spl::metadata::ID)]
     pub token_metadata_program: UncheckedAccount<'info>,
 
+    /// The launch policy — how many launches a wallet gets per window.
+    ///
+    /// CHECK: seeds pin the address; absent means the defaults apply, which is
+    /// what keeps a fresh deployment bounded rather than unlimited.
+    #[account(seeds = [LAUNCHPOLICY_SEED], bump)]
+    pub launch_policy: UncheckedAccount<'info>,
+
+    /// This creator's recent launches. Created on their first one, paid for by
+    /// them — the rate limit costs the protocol nothing to enforce.
+    #[account(
+        init_if_needed,
+        payer = creator,
+        space = 8 + LaunchQuota::INIT_SPACE,
+        seeds = [LAUNCHQUOTA_SEED, creator.key().as_ref()],
+        bump,
+    )]
+    pub launch_quota: Account<'info, LaunchQuota>,
+
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,
     pub associated_token_program: Program<'info, AssociatedToken>,
@@ -66,6 +85,17 @@ pub fn start_auction_handler(
     duration: i64,
     metadata: TokenMetadataArgs,
 ) -> Result<()> {
+    // One quota across every mechanism: a per-instruction limit is four times
+    // the limit to anyone willing to call a different one.
+    let (max_launches, window_secs) =
+        launch_quota::policy_or_default(&ctx.accounts.launch_policy.to_account_info())?;
+    let now_ts = Clock::get()?.unix_timestamp;
+    let quota_bump = ctx.bumps.launch_quota;
+    let quota = &mut ctx.accounts.launch_quota;
+    quota.creator = ctx.accounts.creator.key();
+    quota.bump = quota_bump;
+    launch_quota::record_launch(&mut quota.stamps, now_ts, max_launches, window_secs)?;
+
     require!(
         start_price >= floor_price,
         AttentionError::InvalidAuctionParams

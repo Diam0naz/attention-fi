@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { isGatedPath, V0_GATE } from "@/lib/v0-gate";
+import { BLOCKED_PATH, isBlockedCountry } from "@/lib/geo-block";
 
 /**
  * v0 gate — redirects v1 app surfaces back to the landing page.
@@ -16,6 +17,27 @@ import { isGatedPath, V0_GATE } from "@/lib/v0-gate";
  * landing page, and an asset's `uri` points at them permanently.
  */
 export function middleware(request: NextRequest) {
+  // Jurisdiction first, and before the v0 gate: a blocked visitor should be
+  // told they're blocked whichever deployment they land on, and the reason
+  // doesn't depend on whether the app happens to be unlocked.
+  //
+  // Reuses `isGatedPath`, so the block covers exactly the app surfaces and
+  // leaves the landing page, the feed and /api reachable — including the page
+  // explaining the block, which a redirect loop would otherwise hide.
+  const country =
+    request.headers.get("x-vercel-ip-country") ?? request.headers.get("cf-ipcountry");
+  if (
+    isBlockedCountry(country) &&
+    isGatedPath(request.nextUrl.pathname) &&
+    request.nextUrl.pathname !== BLOCKED_PATH
+  ) {
+    const url = request.nextUrl.clone();
+    url.pathname = BLOCKED_PATH;
+    url.search = "";
+    url.hash = "";
+    return NextResponse.redirect(url);
+  }
+
   if (!V0_GATE) return NextResponse.next();
 
   if (isGatedPath(request.nextUrl.pathname)) {

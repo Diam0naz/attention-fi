@@ -3378,6 +3378,67 @@ export type AttentionFi = {
           "address": "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s"
         },
         {
+          "name": "launchPolicy",
+          "docs": [
+            "The launch policy — how many launches a wallet gets per window.",
+            "",
+            "what keeps a fresh deployment bounded rather than unlimited."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  97,
+                  117,
+                  110,
+                  99,
+                  104,
+                  112,
+                  111,
+                  108,
+                  105,
+                  99,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "launchQuota",
+          "docs": [
+            "This creator's recent launches. Created on their first one, paid for by",
+            "them — the rate limit costs the protocol nothing to enforce."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  97,
+                  117,
+                  110,
+                  99,
+                  104,
+                  113,
+                  117,
+                  111,
+                  116,
+                  97
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "creator"
+              }
+            ]
+          }
+        },
+        {
           "name": "systemProgram",
           "address": "11111111111111111111111111111111"
         },
@@ -3599,6 +3660,67 @@ export type AttentionFi = {
           "address": "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s"
         },
         {
+          "name": "launchPolicy",
+          "docs": [
+            "The launch policy — how many launches a wallet gets per window.",
+            "",
+            "what keeps a fresh deployment bounded rather than unlimited."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  97,
+                  117,
+                  110,
+                  99,
+                  104,
+                  112,
+                  111,
+                  108,
+                  105,
+                  99,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "launchQuota",
+          "docs": [
+            "This creator's recent launches. Created on their first one, paid for by",
+            "them — the rate limit costs the protocol nothing to enforce."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  97,
+                  117,
+                  110,
+                  99,
+                  104,
+                  113,
+                  117,
+                  111,
+                  116,
+                  97
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "creator"
+              }
+            ]
+          }
+        },
+        {
           "name": "systemProgram",
           "address": "11111111111111111111111111111111"
         },
@@ -3796,6 +3918,67 @@ export type AttentionFi = {
         {
           "name": "tokenMetadataProgram",
           "address": "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s"
+        },
+        {
+          "name": "launchPolicy",
+          "docs": [
+            "The launch policy — how many launches a wallet gets per window.",
+            "",
+            "what keeps a fresh deployment bounded rather than unlimited."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  97,
+                  117,
+                  110,
+                  99,
+                  104,
+                  112,
+                  111,
+                  108,
+                  105,
+                  99,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "launchQuota",
+          "docs": [
+            "This creator's recent launches. Created on their first one, paid for by",
+            "them — the rate limit costs the protocol nothing to enforce."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  97,
+                  117,
+                  110,
+                  99,
+                  104,
+                  113,
+                  117,
+                  111,
+                  116,
+                  97
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "creator"
+              }
+            ]
+          }
         },
         {
           "name": "systemProgram",
@@ -4011,6 +4194,67 @@ export type AttentionFi = {
         {
           "name": "tokenMetadataProgram",
           "address": "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s"
+        },
+        {
+          "name": "launchPolicy",
+          "docs": [
+            "The launch policy — how many launches a wallet gets per window.",
+            "",
+            "what keeps a fresh deployment bounded rather than unlimited."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  97,
+                  117,
+                  110,
+                  99,
+                  104,
+                  112,
+                  111,
+                  108,
+                  105,
+                  99,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "launchQuota",
+          "docs": [
+            "This creator's recent launches. Created on their first one, paid for by",
+            "them — the rate limit costs the protocol nothing to enforce."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  97,
+                  117,
+                  110,
+                  99,
+                  104,
+                  113,
+                  117,
+                  111,
+                  116,
+                  97
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "creator"
+              }
+            ]
+          }
         },
         {
           "name": "systemProgram",
@@ -6575,6 +6819,87 @@ export type AttentionFi = {
       ]
     },
     {
+      "name": "setLaunchPolicy",
+      "docs": [
+        "Retune how often one wallet may launch. Authority-only. Until it runs,",
+        "the defaults in `launch_quota` apply — 3 per rolling 24 hours."
+      ],
+      "discriminator": [
+        160,
+        215,
+        179,
+        54,
+        156,
+        201,
+        130,
+        112
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "global",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  108,
+                  111,
+                  98,
+                  97,
+                  108
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "policy",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  97,
+                  117,
+                  110,
+                  99,
+                  104,
+                  112,
+                  111,
+                  108,
+                  105,
+                  99,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "maxLaunches",
+          "type": "u8"
+        },
+        {
+          "name": "windowSecs",
+          "type": "i64"
+        }
+      ]
+    },
+    {
       "name": "settleAuction",
       "docs": [
         "Finalize a Dutch auction once it has ended."
@@ -6821,6 +7146,67 @@ export type AttentionFi = {
         {
           "name": "tokenMetadataProgram",
           "address": "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s"
+        },
+        {
+          "name": "launchPolicy",
+          "docs": [
+            "The launch policy — how many launches a wallet gets per window.",
+            "",
+            "what keeps a fresh deployment bounded rather than unlimited."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  97,
+                  117,
+                  110,
+                  99,
+                  104,
+                  112,
+                  111,
+                  108,
+                  105,
+                  99,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "launchQuota",
+          "docs": [
+            "This creator's recent launches. Created on their first one, paid for by",
+            "them — the rate limit costs the protocol nothing to enforce."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  97,
+                  117,
+                  110,
+                  99,
+                  104,
+                  113,
+                  117,
+                  111,
+                  116,
+                  97
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "creator"
+              }
+            ]
+          }
         },
         {
           "name": "systemProgram",
@@ -7849,6 +8235,32 @@ export type AttentionFi = {
       ]
     },
     {
+      "name": "launchPolicy",
+      "discriminator": [
+        219,
+        235,
+        220,
+        211,
+        225,
+        110,
+        83,
+        26
+      ]
+    },
+    {
+      "name": "launchQuota",
+      "discriminator": [
+        1,
+        250,
+        176,
+        39,
+        101,
+        126,
+        183,
+        239
+      ]
+    },
+    {
       "name": "mindshareState",
       "discriminator": [
         195,
@@ -8443,6 +8855,16 @@ export type AttentionFi = {
       "code": 6042,
       "name": "notPaused",
       "msg": "The protocol is not paused"
+    },
+    {
+      "code": 6043,
+      "name": "launchRateLimited",
+      "msg": "This wallet has reached its launch limit for now"
+    },
+    {
+      "code": 6044,
+      "name": "invalidLaunchPolicy",
+      "msg": "Launch policy is outside the range the program accepts"
     }
   ],
   "types": [
@@ -9796,6 +10218,80 @@ export type AttentionFi = {
           {
             "name": "timestamp",
             "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "launchPolicy",
+      "docs": [
+        "How often any one wallet may launch. Singleton, authority-set.",
+        "",
+        "Its own account rather than fields on `Global` or `FeeConfig`, both of which",
+        "are live on-chain at a fixed length — Anchor sizes accounts exactly, so",
+        "lengthening either fails to deserialise on every instruction that reads it.",
+        "",
+        "Absent means the defaults in `launch_quota.rs` apply, so a deploy never",
+        "leaves launching unbounded while waiting for a config transaction."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "maxLaunches",
+            "docs": [
+              "Launches allowed per window, per wallet."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "windowSecs",
+            "docs": [
+              "Length of the window in seconds."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "launchQuota",
+      "docs": [
+        "One wallet's recent launches, as a ring of unix timestamps.",
+        "",
+        "Timestamps rather than a counter: a counter needs a reset, and a reset means",
+        "a boundary a script can launch across twice. See `launch_quota.rs`."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "creator",
+            "type": "pubkey"
+          },
+          {
+            "name": "stamps",
+            "docs": [
+              "Recent launch times; zeroed slots are unused."
+            ],
+            "type": {
+              "array": [
+                "i64",
+                8
+              ]
+            }
+          },
+          {
+            "name": "bump",
+            "type": "u8"
           }
         ]
       }

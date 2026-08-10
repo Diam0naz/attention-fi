@@ -52,6 +52,19 @@ function guardiansPda(programId: PublicKey): PublicKey {
   return PublicKey.findProgramAddressSync([Buffer.from("guardians")], programId)[0];
 }
 
+/** The singleton launch policy. Empty until an authority tunes it. */
+function launchPolicyPda(programId: PublicKey): PublicKey {
+  return PublicKey.findProgramAddressSync([Buffer.from("launchpolicy")], programId)[0];
+}
+
+/** One creator's recent-launch ring. */
+function launchQuotaPda(creator: PublicKey, programId: PublicKey): PublicKey {
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from("launchquota"), creator.toBuffer()],
+    programId
+  )[0];
+}
+
 /** The protocol's fee schedule, created alongside Global by `initialize`. */
 function feeConfigPda(programId: PublicKey): PublicKey {
   return PublicKey.findProgramAddressSync([Buffer.from("feeconfig")], programId)[0];
@@ -84,6 +97,42 @@ function metadataAccounts(mint: PublicKey) {
     tokenMetadataProgram: TOKEN_METADATA_PROGRAM_ID,
   };
 }
+
+/**
+ * Seed a launch policy the suite can actually run under.
+ *
+ * The rate limit is per *wallet*, and every describe below launches from the
+ * same provider wallet — so the default 3-per-24h stops the fourth describe
+ * dead. That is the limit working, not a bug in it, and it surfaces something
+ * worth knowing operationally: the authority's own wallet cannot seed a demo
+ * environment without widening the window first.
+ *
+ * So the suite widens it: 8 launches per second, which is the most permissive
+ * policy `validate_policy` allows. The limit itself is exercised properly in
+ * "attention_fi launch rate limit", which installs its own strict policy and
+ * launches from a dedicated creator.
+ */
+before(async () => {
+  anchor.setProvider(anchor.AnchorProvider.env());
+  const provider = anchor.getProvider() as anchor.AnchorProvider;
+  const program = anchor.workspace.attentionFi as Program<AttentionFi>;
+  const wallet = provider.wallet.publicKey;
+  const [globalPda] = PublicKey.findProgramAddressSync(
+    [Buffer.from("global")],
+    program.programId
+  );
+
+  if (!(await program.account.global.fetchNullable(globalPda))) {
+    await program.methods
+      .initialize()
+      .accountsPartial({ authority: wallet, treasury: Keypair.generate().publicKey })
+      .rpc();
+  }
+  await program.methods
+    .setLaunchPolicy(8, new anchor.BN(1))
+    .accountsPartial({ authority: wallet, policy: launchPolicyPda(program.programId) })
+    .rpc();
+});
 
 describe("attention_fi bonding curve", () => {
   anchor.setProvider(anchor.AnchorProvider.env());
@@ -149,6 +198,8 @@ describe("attention_fi bonding curve", () => {
         associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
         rent: SYSVAR_RENT_PUBKEY,
         ...metadataAccounts(mintKp.publicKey),
+        launchPolicy: launchPolicyPda(program.programId),
+        launchQuota: launchQuotaPda(wallet, program.programId),
       })
       .signers([mintKp])
       .rpc();
@@ -316,6 +367,8 @@ describe("attention_fi dutch auction", () => {
         associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
         rent: SYSVAR_RENT_PUBKEY,
         ...metadataAccounts(mintKp.publicKey),
+        launchPolicy: launchPolicyPda(program.programId),
+        launchQuota: launchQuotaPda(wallet, program.programId),
       })
       .signers([mintKp])
       .rpc();
@@ -467,6 +520,8 @@ describe("attention_fi conviction curve", () => {
         associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
         rent: SYSVAR_RENT_PUBKEY,
         ...metadataAccounts(mintKp.publicKey),
+        launchPolicy: launchPolicyPda(program.programId),
+        launchQuota: launchQuotaPda(wallet, program.programId),
       })
       .signers([mintKp])
       .rpc();
@@ -613,6 +668,8 @@ describe("attention_fi revenue share", () => {
         associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
         rent: SYSVAR_RENT_PUBKEY,
         ...metadataAccounts(mintKp.publicKey),
+        launchPolicy: launchPolicyPda(program.programId),
+        launchQuota: launchQuotaPda(wallet, program.programId),
       })
       .signers([mintKp])
       .rpc();
@@ -931,6 +988,8 @@ describe("attention_fi perk & genesis NFTs", () => {
         tokenProgram: TOKEN_PROGRAM_ID,
         associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
         rent: SYSVAR_RENT_PUBKEY,
+        launchPolicy: launchPolicyPda(program.programId),
+        launchQuota: launchQuotaPda(wallet, program.programId),
       })
       .signers([kp])
       .rpc();
@@ -1241,6 +1300,8 @@ describe("attention_fi perk fee discount", () => {
         associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
         rent: SYSVAR_RENT_PUBKEY,
         ...metadataAccounts(mintKp.publicKey),
+        launchPolicy: launchPolicyPda(program.programId),
+        launchQuota: launchQuotaPda(wallet, program.programId),
       })
       .signers([mintKp])
       .rpc();
@@ -1352,6 +1413,8 @@ describe("attention_fi AMM graduation", () => {
         associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
         rent: SYSVAR_RENT_PUBKEY,
         ...metadataAccounts(mintKp.publicKey),
+        launchPolicy: launchPolicyPda(program.programId),
+        launchQuota: launchQuotaPda(wallet, program.programId),
       })
       .signers([mintKp])
       .rpc();
@@ -1555,6 +1618,8 @@ describe("attention_fi creator fees (SAS-gated claim)", () => {
         associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
         rent: SYSVAR_RENT_PUBKEY,
         ...metadataAccounts(mintKp.publicKey),
+        launchPolicy: launchPolicyPda(program.programId),
+        launchQuota: launchQuotaPda(wallet, program.programId),
       })
       .signers([mintKp])
       .rpc();
@@ -1732,6 +1797,8 @@ describe("attention_fi genesis group", () => {
         tokenProgram: TOKEN_PROGRAM_ID,
         associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
         rent: SYSVAR_RENT_PUBKEY,
+        launchPolicy: launchPolicyPda(program.programId),
+        launchQuota: launchQuotaPda(wallet, program.programId),
       })
       .signers([mintKp])
       .rpc();
@@ -2050,6 +2117,8 @@ describe("attention_fi protocol config", () => {
         tokenProgram: TOKEN_PROGRAM_ID,
         associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
         rent: SYSVAR_RENT_PUBKEY,
+        launchPolicy: launchPolicyPda(program.programId),
+        launchQuota: launchQuotaPda(wallet, program.programId),
       })
       .signers([mintKp])
       .rpc();
@@ -2290,6 +2359,8 @@ describe("attention_fi genesis group — reclaim and close", () => {
         tokenProgram: TOKEN_PROGRAM_ID,
         associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
         rent: SYSVAR_RENT_PUBKEY,
+        launchPolicy: launchPolicyPda(program.programId),
+        launchQuota: launchQuotaPda(wallet, program.programId),
       })
       .signers([mintKp])
       .rpc();
@@ -2623,6 +2694,8 @@ describe("attention_fi security fixes", () => {
         tokenProgram: TOKEN_PROGRAM_ID,
         associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
         rent: SYSVAR_RENT_PUBKEY,
+        launchPolicy: launchPolicyPda(program.programId),
+        launchQuota: launchQuotaPda(wallet, program.programId),
       })
       .signers([mintKp])
       .rpc();
@@ -2949,6 +3022,8 @@ describe("attention_fi earned perks", () => {
         tokenProgram: TOKEN_PROGRAM_ID,
         associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
         rent: SYSVAR_RENT_PUBKEY,
+        launchPolicy: launchPolicyPda(program.programId),
+        launchQuota: launchQuotaPda(wallet, program.programId),
       })
       .signers([mintKp])
       .rpc();
@@ -3373,6 +3448,185 @@ describe("attention_fi emergency pause", () => {
       assert.fail("the authority paused without being a guardian");
     } catch (e) {
       assert.include(String(e), "NotGuardian");
+    }
+  });
+});
+
+/**
+ * Launch rate limiting.
+ *
+ * The checklist's reasoning: "Without limits, bots will launch hundreds of fake
+ * narrative tokens to pollute the feed." The feed is the product, so this isn't
+ * housekeeping. What these cases pin is the part that's easy to get wrong — the
+ * window slides rather than resetting, so a burst across a boundary is refused.
+ */
+describe("attention_fi launch rate limit", () => {
+  anchor.setProvider(anchor.AnchorProvider.env());
+  const provider = anchor.getProvider() as anchor.AnchorProvider;
+  const program = anchor.workspace.attentionFi as Program<AttentionFi>;
+  const wallet = provider.wallet.publicKey;
+
+  const [globalPda] = PublicKey.findProgramAddressSync(
+    [Buffer.from("global")],
+    program.programId
+  );
+  const policy = launchPolicyPda(program.programId);
+
+  // A dedicated creator, so this describe's quota is its own.
+  const creator = Keypair.generate();
+  const quota = launchQuotaPda(creator.publicKey, program.programId);
+
+  async function launch(): Promise<string> {
+    const kp = Keypair.generate();
+    const [curve] = PublicKey.findProgramAddressSync(
+      [Buffer.from("curve"), kp.publicKey.toBuffer()],
+      program.programId
+    );
+    const tx = await program.methods
+      .launchToken({ emerging: {} }, META)
+      .accountsPartial({
+        creator: creator.publicKey,
+        mint: kp.publicKey,
+        curve,
+        vault: ata(curve, kp.publicKey),
+        ...metadataAccounts(kp.publicKey),
+        rent: SYSVAR_RENT_PUBKEY,
+      })
+      .transaction();
+    return anchor.web3.sendAndConfirmTransaction(provider.connection, tx, [creator, kp], {
+      commitment: "confirmed",
+    });
+  }
+
+  before(async () => {
+    const existing = await program.account.global.fetchNullable(globalPda);
+    if (!existing) {
+      await program.methods
+        .initialize()
+        .accountsPartial({ authority: wallet, treasury: Keypair.generate().publicKey })
+        .rpc();
+    }
+    const sig = await provider.connection.requestAirdrop(
+      creator.publicKey,
+      20 * LAMPORTS_PER_SOL
+    );
+    await provider.connection.confirmTransaction(sig, "confirmed");
+  });
+
+  it("enforces the policy in force, three per day", async () => {
+    // The suite runs under a deliberately permissive policy (see the root
+    // hook), so this describe installs the real one first. The *default* — 3
+    // per 24h with no policy account at all — is covered by the host tests in
+    // launch_quota.rs, which is where an absent account can actually be
+    // simulated.
+    await program.methods
+      .setLaunchPolicy(3, new anchor.BN(86_400))
+      .accountsPartial({ authority: wallet, policy })
+      .rpc();
+
+    await launch();
+    await launch();
+    await launch();
+    const q = await program.account.launchQuota.fetch(quota);
+    assert.equal(
+      q.stamps.filter((s: anchor.BN) => !s.isZero()).length,
+      3,
+      "three launches recorded"
+    );
+  });
+
+  it("refuses the fourth launch inside the window", async () => {
+    try {
+      await launch();
+      assert.fail("launched past the cap");
+    } catch (e) {
+      assert.include(String(e), "LaunchRateLimited");
+    }
+  });
+
+  it("counts every mechanism against one quota", async () => {
+    // A per-instruction limit is four times the limit to anyone willing to call
+    // a different one, so a Dutch auction must hit the same wall.
+    const kp = Keypair.generate();
+    const [auction] = PublicKey.findProgramAddressSync(
+      [Buffer.from("auction"), kp.publicKey.toBuffer()],
+      program.programId
+    );
+    try {
+      const tx = await program.methods
+        .startAuction(
+          { emerging: {} },
+          new anchor.BN(LAMPORTS_PER_SOL),
+          new anchor.BN(LAMPORTS_PER_SOL / 2),
+          new anchor.BN(3600),
+          META
+        )
+        .accountsPartial({
+          creator: creator.publicKey,
+          mint: kp.publicKey,
+          auction,
+          vault: ata(auction, kp.publicKey),
+          ...metadataAccounts(kp.publicKey),
+          rent: SYSVAR_RENT_PUBKEY,
+        })
+        .transaction();
+      await anchor.web3.sendAndConfirmTransaction(provider.connection, tx, [creator, kp], {
+        commitment: "confirmed",
+      });
+      assert.fail("a different mechanism dodged the quota");
+    } catch (e) {
+      assert.include(String(e), "LaunchRateLimited");
+    }
+  });
+
+  it("lets the authority retune the limit, and refuses an unenforceable one", async () => {
+    try {
+      await program.methods
+        .setLaunchPolicy(200, new anchor.BN(86_400))
+        .accountsPartial({ authority: wallet, policy })
+        .rpc();
+      assert.fail("accepted a cap larger than the ring can remember");
+    } catch (e) {
+      assert.include(String(e), "InvalidLaunchPolicy");
+    }
+
+    // Widen the cap; the blocked creator can launch again immediately.
+    await program.methods
+      .setLaunchPolicy(5, new anchor.BN(86_400))
+      .accountsPartial({ authority: wallet, policy })
+      .rpc();
+    const p = await program.account.launchPolicy.fetch(policy);
+    assert.equal(p.maxLaunches, 5);
+
+    await launch();
+    const q = await program.account.launchQuota.fetch(quota);
+    assert.equal(q.stamps.filter((s: anchor.BN) => !s.isZero()).length, 4);
+  });
+
+  after(async () => {
+    // Leave the suite as it was found: a strict policy escaping this describe
+    // would break whatever runs next, and mocha's ordering is not a promise.
+    await program.methods
+      .setLaunchPolicy(8, new anchor.BN(1))
+      .accountsPartial({ authority: wallet, policy })
+      .rpc();
+  });
+
+  it("will not let a non-authority set the policy", async () => {
+    const stranger = Keypair.generate();
+    const sig = await provider.connection.requestAirdrop(stranger.publicKey, LAMPORTS_PER_SOL);
+    await provider.connection.confirmTransaction(sig, "confirmed");
+    try {
+      const tx = await program.methods
+        .setLaunchPolicy(8, new anchor.BN(86_400))
+        .accountsPartial({ authority: stranger.publicKey, policy })
+        .transaction();
+      await anchor.web3.sendAndConfirmTransaction(provider.connection, tx, [stranger], {
+        commitment: "confirmed",
+      });
+      assert.fail("a stranger retuned the launch policy");
+    } catch (e) {
+      assert.match(String(e), /Unauthorized|ConstraintAddress/);
     }
   });
 });

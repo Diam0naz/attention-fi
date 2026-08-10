@@ -1,6 +1,8 @@
 use anchor_lang::prelude::*;
 
-use crate::constants::{MAX_GUARDIANS, SEED_EMERGING, SEED_NEW_ENTRANT, SEED_TOP_10, SEED_TOP_100};
+use crate::constants::{
+    MAX_GUARDIANS, MAX_LAUNCH_SLOTS, SEED_EMERGING, SEED_NEW_ENTRANT, SEED_TOP_10, SEED_TOP_100,
+};
 
 /// Protocol-wide configuration, created once at `initialize`.
 #[account]
@@ -545,5 +547,37 @@ pub struct Guardians {
     /// every pause, so approvals can never carry over from an older incident.
     pub resume_approvals: [Pubkey; MAX_GUARDIANS],
     pub resume_count: u8,
+    pub bump: u8,
+}
+
+/// How often any one wallet may launch. Singleton, authority-set.
+///
+/// Its own account rather than fields on `Global` or `FeeConfig`, both of which
+/// are live on-chain at a fixed length — Anchor sizes accounts exactly, so
+/// lengthening either fails to deserialise on every instruction that reads it.
+///
+/// Absent means the defaults in `launch_quota.rs` apply, so a deploy never
+/// leaves launching unbounded while waiting for a config transaction.
+#[account]
+#[derive(InitSpace)]
+pub struct LaunchPolicy {
+    pub authority: Pubkey,
+    /// Launches allowed per window, per wallet.
+    pub max_launches: u8,
+    /// Length of the window in seconds.
+    pub window_secs: i64,
+    pub bump: u8,
+}
+
+/// One wallet's recent launches, as a ring of unix timestamps.
+///
+/// Timestamps rather than a counter: a counter needs a reset, and a reset means
+/// a boundary a script can launch across twice. See `launch_quota.rs`.
+#[account]
+#[derive(InitSpace)]
+pub struct LaunchQuota {
+    pub creator: Pubkey,
+    /// Recent launch times; zeroed slots are unused.
+    pub stamps: [i64; MAX_LAUNCH_SLOTS],
     pub bump: u8,
 }

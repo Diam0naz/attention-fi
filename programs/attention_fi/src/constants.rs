@@ -144,3 +144,17 @@ pub const MAX_GUARDIANS: usize = 5;
 
 /// Singleton PDA holding the guardian set and the pause flag.
 pub const GUARDIANS_SEED: &[u8] = b"guardians";
+
+/// Timestamps kept per wallet for the launch rate limit.
+///
+/// The ring must be at least the largest cap the policy may set, or the window
+/// could hold more launches than it can remember and the limit would leak.
+/// `validate_launch_policy` enforces that relationship rather than leaving it
+/// to whoever edits these numbers next.
+pub const MAX_LAUNCH_SLOTS: usize = 8;
+
+/// Singleton PDA holding the tunable launch policy.
+pub const LAUNCHPOLICY_SEED: &[u8] = b"launchpolicy";
+
+/// Per-wallet PDA holding recent launch timestamps.
+pub const LAUNCHQUOTA_SEED: &[u8] = b"launchquota";

@@ -9,6 +9,7 @@ pub mod events;
 pub mod genesis;
 pub mod guardians;
 pub mod instructions;
+pub mod launch_quota;
 pub mod metadata;
 pub mod nft;
 pub mod oracle;
@@ -212,6 +213,16 @@ pub mod attention_fi {
             graduation_sol,
             virtual_token_reserves,
         )
+    }
+
+    /// Retune how often one wallet may launch. Authority-only. Until it runs,
+    /// the defaults in `launch_quota` apply — 3 per rolling 24 hours.
+    pub fn set_launch_policy(
+        ctx: Context<SetLaunchPolicy>,
+        max_launches: u8,
+        window_secs: i64,
+    ) -> Result<()> {
+        set_launch_policy::set_launch_policy_handler(ctx, max_launches, window_secs)
     }
 
     /// Install or rotate the guardian set that holds the emergency stop.

@@ -9,6 +9,7 @@ import { X_URL } from "@/lib/config";
 import { PriceChart } from "@/components/token/price-chart";
 import { MindshareView } from "@/components/token/mindshare-view";
 import { OnchainMindshare } from "@/components/token/onchain-mindshare";
+import { RiskDisclaimer } from "@/components/ui/risk-disclaimer";
 import { Avatar } from "@/components/feed/avatar";
 import { Footer } from "@/components/feed/footer";
 import { WalletConnectModal } from "@/components/wallet/wallet-connect-modal";
@@ -314,6 +315,12 @@ export function TokenDetailTerminal({ token: tokenProp }: { token: TokenDetail }
             </span>
             <span className="text-[11px] text-[#6B6B6B]">market cap</span>
           </div>
+
+          {/* Directly under the price, which is where the checklist asks for it
+              and the only place it does any work: the argument it makes — that
+              nothing here promises a return — is worth nothing at the bottom of
+              a page the buyer never scrolls to. */}
+          <RiskDisclaimer className="mt-4 max-w-2xl" />
 
           {/* view toggle — 1a data-dense terminal vs 1b mindshare-first */}
           <div className="mt-4 inline-flex rounded-sm border border-white/10 p-0.5">

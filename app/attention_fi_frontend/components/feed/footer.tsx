@@ -3,6 +3,7 @@
 import { X_HANDLE, X_URL } from "@/lib/config";
 import { Logo } from "@/components/brand/logo";
 import { useAppAccess } from "@/components/wallet/use-app-access";
+import { RiskDisclaimer } from "@/components/ui/risk-disclaimer";
 
 const APP_PRODUCT = [
   { label: "Discover", href: "/discover" },
@@ -62,9 +63,14 @@ export function Footer() {
           </div>
         </div>
 
-        <div className="mt-8 flex flex-col gap-2 border-t border-white/[0.06] pt-5 font-mono text-[10px] text-[#4b5563] sm:flex-row sm:items-center sm:justify-between">
+        {/* The long form. The one-liner below used to be the only disclosure
+            anywhere, which put it in the same class as a copyright notice —
+            true, present, and read by nobody. */}
+        <RiskDisclaimer variant="full" className="mt-8" />
+
+        <div className="mt-6 flex flex-col gap-2 border-t border-white/[0.06] pt-5 font-mono text-[10px] text-[#4b5563] sm:flex-row sm:items-center sm:justify-between">
           <span>© 2026 AttentionFi · Phase 1 preview</span>
-          <span>Experimental software · not audited · not financial advice</span>
+          <span>Experimental software · not audited</span>
         </div>
       </div>
     </footer>

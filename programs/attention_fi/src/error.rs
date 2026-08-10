@@ -91,4 +91,8 @@ pub enum AttentionError {
     ProtocolPaused,
     #[msg("The protocol is not paused")]
     NotPaused,
+    #[msg("This wallet has reached its launch limit for now")]
+    LaunchRateLimited,
+    #[msg("Launch policy is outside the range the program accepts")]
+    InvalidLaunchPolicy,
 }
