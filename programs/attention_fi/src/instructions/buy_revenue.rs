@@ -2,9 +2,12 @@ use anchor_lang::prelude::*;
 use anchor_lang::system_program;
 
 use crate::auction::auction_quote;
-use crate::constants::{GLOBAL_SEED, GUARDIANS_SEED, REVENUE_SEED, REVSTAKE_SEED, TRADER_SEED};
+use crate::constants::{
+    DISAVOW_SEED, GLOBAL_SEED, GUARDIANS_SEED, REVENUE_SEED, REVSTAKE_SEED, TRADER_SEED,
+};
 use crate::error::AttentionError;
 use crate::guardians;
+use crate::instructions::disavow_token::require_not_disavowed;
 use crate::perks;
 use crate::revenue::{accrued, pending};
 use crate::state::{Global, RevenueShare, RevenueStake, TraderStats};
@@ -15,7 +18,7 @@ pub struct BuyRevenue<'info> {
     pub buyer: Signer<'info>,
 
     #[account(seeds = [GLOBAL_SEED], bump = global.bump)]
-    pub global: Account<'info, Global>,
+    pub global: Box<Account<'info, Global>>,
 
     /// CHECK: must equal the treasury recorded in Global. Receives the share
     /// purchase payment + fee (creator-raise routing is a later refinement).
@@ -31,7 +34,7 @@ pub struct BuyRevenue<'info> {
         seeds = [TRADER_SEED, buyer.key().as_ref()],
         bump = trader_stats.bump,
     )]
-    pub trader_stats: Option<Account<'info, TraderStats>>,
+    pub trader_stats: Option<Box<Account<'info, TraderStats>>>,
 
     #[account(
         mut,
@@ -39,7 +42,7 @@ pub struct BuyRevenue<'info> {
         bump = revenue.bump,
         has_one = mint,
     )]
-    pub revenue: Account<'info, RevenueShare>,
+    pub revenue: Box<Account<'info, RevenueShare>>,
 
     /// CHECK: only used to derive the pool/stake PDAs and stamp the position.
     pub mint: UncheckedAccount<'info>,
@@ -51,7 +54,18 @@ pub struct BuyRevenue<'info> {
         seeds = [REVSTAKE_SEED, mint.key().as_ref(), buyer.key().as_ref()],
         bump,
     )]
-    pub position: Account<'info, RevenueStake>,
+    pub position: Box<Account<'info, RevenueStake>>,
+
+    /// Set when the token's subject has disowned it.
+    ///
+    /// Only the buy side carries this. Selling and claiming must keep working
+    /// on a disowned token — freezing exits would make holders pay for somebody
+    /// else's misrepresentation.
+    ///
+    /// CHECK: seeds pin the address; empty is the ordinary case and means
+    /// "not disavowed".
+    #[account(seeds = [DISAVOW_SEED, mint.key().as_ref()], bump)]
+    pub disavowal: UncheckedAccount<'info>,
 
     /// The emergency stop.
     ///
@@ -68,6 +82,9 @@ pub struct BuyRevenue<'info> {
 }
 
 pub fn buy_revenue_handler(ctx: Context<BuyRevenue>, amount: u64) -> Result<()> {
+    // A disowned token can be sold, not bought.
+    require_not_disavowed(&ctx.accounts.disavowal.to_account_info())?;
+
     // Refuses while a guardian has pulled the stop.
     guardians::require_live(&ctx.accounts.guardians.to_account_info())?;
 
@@ -137,7 +154,10 @@ pub fn buy_revenue_handler(ctx: Context<BuyRevenue>, amount: u64) -> Result<()> 
     // Credit this trade's committed capital toward the trader's perk level. Skipped
     // silently when the account isn't supplied — see `perks::record_activity`.
     perks::record_activity(
-        ctx.accounts.trader_stats.as_deref_mut(),
+        ctx.accounts
+            .trader_stats
+            .as_deref_mut()
+            .map(|stats| &mut **stats),
         ctx.accounts.buyer.key(),
         0,
         total_due,

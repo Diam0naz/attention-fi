@@ -95,4 +95,8 @@ pub enum AttentionError {
     LaunchRateLimited,
     #[msg("Launch policy is outside the range the program accepts")]
     InvalidLaunchPolicy,
+    #[msg("This token has been disowned by its subject — it can be sold, not bought")]
+    TokenDisavowed,
+    #[msg("That token is not disavowed")]
+    NotDisavowed,
 }

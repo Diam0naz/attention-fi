@@ -215,6 +215,19 @@ pub mod attention_fi {
         )
     }
 
+    /// Mark a token as disowned by the person it names. Authority or any one
+    /// guardian. Buying stops; selling and claiming stay open, because trapping
+    /// holders in an asset they now want out of makes them pay for someone
+    /// else's misrepresentation.
+    pub fn disavow_token(ctx: Context<DisavowToken>, reason: DisavowReason) -> Result<()> {
+        disavow_token::disavow_token_handler(ctx, reason)
+    }
+
+    /// Lift a disavowal. Authority only — flagging is cheap, clearing is not.
+    pub fn restore_token(ctx: Context<RestoreToken>) -> Result<()> {
+        disavow_token::restore_token_handler(ctx)
+    }
+
     /// Retune how often one wallet may launch. Authority-only. Until it runs,
     /// the defaults in `launch_quota` apply — 3 per rolling 24 hours.
     pub fn set_launch_policy(

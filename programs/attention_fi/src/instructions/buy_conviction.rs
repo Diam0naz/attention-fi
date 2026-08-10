@@ -3,10 +3,13 @@ use anchor_lang::system_program;
 use anchor_spl::associated_token::AssociatedToken;
 use anchor_spl::token::{self, Mint, Token, TokenAccount, Transfer};
 
-use crate::constants::{CONVICTION_SEED, GLOBAL_SEED, GUARDIANS_SEED, POSITION_SEED, TRADER_SEED};
+use crate::constants::{
+    CONVICTION_SEED, DISAVOW_SEED, GLOBAL_SEED, GUARDIANS_SEED, POSITION_SEED, TRADER_SEED,
+};
 use crate::curve::buy_quote;
 use crate::error::AttentionError;
 use crate::guardians;
+use crate::instructions::disavow_token::require_not_disavowed;
 use crate::perks;
 use crate::state::{ConvictionCurve, ConvictionPosition, Global, TraderStats};
 
@@ -16,7 +19,7 @@ pub struct BuyConviction<'info> {
     pub buyer: Signer<'info>,
 
     #[account(seeds = [GLOBAL_SEED], bump = global.bump)]
-    pub global: Account<'info, Global>,
+    pub global: Box<Account<'info, Global>>,
 
     /// CHECK: must equal the treasury recorded in Global.
     #[account(mut, address = global.treasury)]
@@ -31,7 +34,7 @@ pub struct BuyConviction<'info> {
         seeds = [TRADER_SEED, buyer.key().as_ref()],
         bump = trader_stats.bump,
     )]
-    pub trader_stats: Option<Account<'info, TraderStats>>,
+    pub trader_stats: Option<Box<Account<'info, TraderStats>>>,
 
     #[account(
         mut,
@@ -39,12 +42,12 @@ pub struct BuyConviction<'info> {
         bump = curve.bump,
         has_one = mint,
     )]
-    pub curve: Account<'info, ConvictionCurve>,
+    pub curve: Box<Account<'info, ConvictionCurve>>,
 
-    pub mint: Account<'info, Mint>,
+    pub mint: Box<Account<'info, Mint>>,
 
     #[account(mut, associated_token::mint = mint, associated_token::authority = curve)]
-    pub vault: Account<'info, TokenAccount>,
+    pub vault: Box<Account<'info, TokenAccount>>,
 
     #[account(
         init_if_needed,
@@ -52,7 +55,7 @@ pub struct BuyConviction<'info> {
         associated_token::mint = mint,
         associated_token::authority = buyer,
     )]
-    pub buyer_token_account: Account<'info, TokenAccount>,
+    pub buyer_token_account: Box<Account<'info, TokenAccount>>,
 
     #[account(
         init_if_needed,
@@ -61,7 +64,18 @@ pub struct BuyConviction<'info> {
         seeds = [POSITION_SEED, mint.key().as_ref(), buyer.key().as_ref()],
         bump,
     )]
-    pub position: Account<'info, ConvictionPosition>,
+    pub position: Box<Account<'info, ConvictionPosition>>,
+
+    /// Set when the token's subject has disowned it.
+    ///
+    /// Only the buy side carries this. Selling and claiming must keep working
+    /// on a disowned token — freezing exits would make holders pay for somebody
+    /// else's misrepresentation.
+    ///
+    /// CHECK: seeds pin the address; empty is the ordinary case and means
+    /// "not disavowed".
+    #[account(seeds = [DISAVOW_SEED, mint.key().as_ref()], bump)]
+    pub disavowal: UncheckedAccount<'info>,
 
     /// The emergency stop.
     ///
@@ -84,6 +98,9 @@ pub fn buy_conviction_handler(
     sol_amount: u64,
     min_tokens_out: u64,
 ) -> Result<()> {
+    // A disowned token can be sold, not bought.
+    require_not_disavowed(&ctx.accounts.disavowal.to_account_info())?;
+
     // Refuses while a guardian has pulled the stop.
     guardians::require_live(&ctx.accounts.guardians.to_account_info())?;
 
@@ -184,7 +201,10 @@ pub fn buy_conviction_handler(
     // Credit this trade's committed capital toward the trader's perk level. Skipped
     // silently when the account isn't supplied — see `perks::record_activity`.
     perks::record_activity(
-        ctx.accounts.trader_stats.as_deref_mut(),
+        ctx.accounts
+            .trader_stats
+            .as_deref_mut()
+            .map(|stats| &mut **stats),
         ctx.accounts.buyer.key(),
         0,
         sol_amount,

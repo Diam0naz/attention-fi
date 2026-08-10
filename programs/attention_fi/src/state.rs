@@ -581,3 +581,40 @@ pub struct LaunchQuota {
     pub stamps: [i64; MAX_LAUNCH_SLOTS],
     pub bump: u8,
 }
+
+/// A token the subject it names has disowned.
+///
+/// Keyed by mint rather than by handle, because a handle is not something the
+/// program can check. No launch instruction receives one: the association
+/// between "@alice" and a mint lives entirely in the token's metadata and the
+/// off-chain registry, so a handle blocklist could only ever be enforced by the
+/// app, and anyone calling the program directly would walk past it. A mint is
+/// unambiguous, and a flag on a mint is enforceable.
+///
+/// The judgement that a token misrepresents someone is inherently off-chain for
+/// the same reason — the claim being judged is a string in metadata. So this
+/// records *that* a decision was taken and by whom, and leaves the deciding to
+/// people. What it buys is that the decision then binds the program.
+#[account]
+#[derive(InitSpace)]
+pub struct TokenDisavowal {
+    pub mint: Pubkey,
+    /// Who flagged it — the authority or a guardian.
+    pub disavowed_by: Pubkey,
+    /// Short machine-readable reason, for the UI to phrase.
+    pub reason: DisavowReason,
+    pub at: i64,
+    pub bump: u8,
+}
+
+/// Why a token was disowned. Deliberately coarse: a free-text field would grow
+/// into an unmoderated message shown on someone's token page.
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, PartialEq, Eq, Debug, InitSpace)]
+pub enum DisavowReason {
+    /// The named subject says it is not theirs and objects to it.
+    Disowned,
+    /// The subject's account is gone — deleted, banned, or deceased.
+    SubjectGone,
+    /// Impersonation, harassment, or another policy breach.
+    Abuse,
+}

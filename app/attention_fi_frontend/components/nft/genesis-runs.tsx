@@ -6,6 +6,7 @@ import { BN } from "@anchor-lang/core";
 import { Loader2, Plus, Rocket, Undo2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Notice } from "@/components/ui/notice";
+import { DilutionPreview } from "@/components/nft/dilution-preview";
 import { TxStatus, type TxState } from "@/components/wallet/tx-status";
 import { useProgram, useReadonlyProgram } from "@/lib/solana/use-program";
 import { explorerTx } from "@/lib/solana/config";
@@ -323,16 +324,17 @@ function StartRun({
         <Num label="Max per wallet" value={cap} onChange={setCap} />
       </div>
 
-      <p
-        className={cn(
-          "mt-2 font-mono text-[10px]",
-          oversubscribed ? "text-noise" : "text-[#6B6B6B]",
-        )}
-      >
-        {oversubscribed
-          ? `${totalPct}% is more than your whole fee stream — the program will refuse this.`
-          : `Sells ${totalPct}% of this token's creator fees in total, forever.`}
-      </p>
+      {/* Replaces a one-line total that multiplied the two inputs. It ignored
+          what the token had already committed, so a creator part-way through a
+          programme was shown a number that was simply wrong — and it left the
+          reader to work out that a unit's share is a slice of the creator's cut
+          rather than of the trade. */}
+      <DilutionPreview
+        className="mt-3"
+        subjectMint={handle ? handleToMint(handle)?.toBase58() ?? null : null}
+        units={unitCount}
+        shareBpsPerUnit={shareBps}
+      />
 
       {mine.length === 0 && (
         <Notice tone="caution" title="NO LAUNCHED TOKENS ON THIS WALLET" className="mt-2">

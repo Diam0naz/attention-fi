@@ -21,6 +21,11 @@ import { DISCOUNT_PER_LEVEL_BPS, explorerTx, PROGRAM_ID } from "@/lib/solana/con
 import { SkinPicker } from "@/components/nft/skin-picker";
 import { AssetSkinPicker } from "@/components/nft/asset-skin-picker";
 import { CollectionShelf } from "@/components/nft/collection-shelf";
+import {
+  COLLECTIONS_PER_PAGE,
+  CollectionMarketCard,
+  MarketPager,
+} from "@/components/nft/collection-market-card";
 import { GenesisRuns } from "@/components/nft/genesis-runs";
 import { PromoteDialog } from "@/components/nft/promote-dialog";
 import { PerkProgress } from "@/components/nft/perk-progress";
@@ -142,6 +147,9 @@ export function NftManage({ section }: { section: Section }) {
   });
   const [listOpen, setListOpen] = useState(false);
   const [promotions, setPromotions] = useState<Map<string, Promotion>>(() => new Map());
+  // Reset to the first page whenever the market changes underneath, so a buy
+  // can't leave the reader on a page that no longer exists.
+  const [collectionPage, setCollectionPage] = useState(0);
   const [promoting, setPromoting] = useState<{
     subject: string;
     kind: "asset" | "collection";
@@ -1503,28 +1511,39 @@ export function NftManage({ section }: { section: Section }) {
                   the set is up, so the count you see is the count you get.
                 </p>
                 <div className="mt-3 flex flex-col gap-2.5">
-                  {liveCollections.map((c) => (
-                    <CollectionListingRow
-                      key={c.collection}
-                      listing={c}
-                      now={now}
-                      mine={c.creator === address}
-                      onBuy={buyCollection}
-                      onDelist={delistCollectionFromAuctions}
-                      promoted={isPromoted(promotions.get(c.collection), nowSec)}
-                      onPromote={
-                        c.creator === address
-                          ? () =>
-                              setPromoting({
-                                subject: c.collection,
-                                kind: "collection",
-                                name: c.name,
-                              })
-                          : undefined
-                      }
-                    />
-                  ))}
+                  {liveCollections
+                    .slice(
+                      collectionPage * COLLECTIONS_PER_PAGE,
+                      collectionPage * COLLECTIONS_PER_PAGE + COLLECTIONS_PER_PAGE,
+                    )
+                    .map((c) => (
+                      <CollectionMarketCard
+                        key={c.collection}
+                        listing={c}
+                        now={now}
+                        mine={c.creator === address}
+                        onBuy={buyCollection}
+                        onDelist={delistCollectionFromAuctions}
+                        promoted={isPromoted(promotions.get(c.collection), nowSec)}
+                        onPromote={
+                          c.creator === address
+                            ? () =>
+                                setPromoting({
+                                  subject: c.collection,
+                                  kind: "collection",
+                                  name: c.name,
+                                })
+                            : undefined
+                        }
+                      />
+                    ))}
                 </div>
+                <MarketPager
+                  className="mt-4"
+                  page={collectionPage}
+                  pages={Math.ceil(liveCollections.length / COLLECTIONS_PER_PAGE)}
+                  onPage={setCollectionPage}
+                />
               </>
             )}
 
@@ -1945,87 +1964,6 @@ function Row({ k, v, accent }: { k: string; v: string; accent?: boolean }) {
  * collection has no single artwork to lead with — its members each have their
  * own.
  */
-function CollectionListingRow({
-  listing,
-  now,
-  mine,
-  onBuy,
-  onDelist,
-  promoted,
-  onPromote,
-}: {
-  listing: CollectionAuctionData;
-  now: number;
-  mine: boolean;
-  onBuy: (c: CollectionAuctionData) => void;
-  onDelist: (c: CollectionAuctionData) => void;
-  promoted?: boolean;
-  onPromote?: (() => void) | undefined;
-}) {
-  const price = collectionPrice(listing, now);
-  const declining = listing.startPrice !== listing.floorPrice;
-  const secondsLeft =
-    listing.duration === 0 ? null : listing.startTime + listing.duration - Math.floor(now / 1000);
-
-  return (
-    <div className="flex flex-wrap items-center gap-4 rounded-sm border border-white/[0.08] bg-[#0f1620] p-4">
-      <div className="af-pack-empty flex h-16 w-12 shrink-0 items-center justify-center rounded-md border border-white/12">
-        <Layers className="h-5 w-5 text-[#4b5563]" />
-      </div>
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
-          <span className="truncate text-[13px] font-bold">{listing.name}</span>
-          {promoted && (
-            <span className="shrink-0 rounded-sm border border-signal/40 bg-signal/[0.08] px-1.5 py-0.5 font-mono text-[9px] font-bold tracking-wide text-signal">
-              PROMOTED
-            </span>
-          )}
-        </div>
-        <div className="mt-0.5 font-mono text-[10px] text-[#6B6B6B]">
-          {listing.size} {listing.size === 1 ? "piece" : "pieces"} · {short(listing.collection)}
-        </div>
-        <div className="mt-1 font-mono text-[10px] text-[#6B6B6B]">
-          {listing.duration === 0
-            ? "No deadline"
-            : secondsLeft !== null && secondsLeft > 0
-              ? `${countdown(secondsLeft)} left`
-              : "ending"}
-          {declining ? " · price falling" : ""}
-        </div>
-      </div>
-      <div className="text-right">
-        <div className="font-mono text-[10px] text-[#6B6B6B]">PRICE</div>
-        <div className="font-mono text-[18px] font-bold text-signal tabular-nums">{sol(price)}</div>
-      </div>
-      {mine ? (
-        <div className="flex flex-col gap-1.5">
-          <button
-            onClick={() => onDelist(listing)}
-            className="rounded-sm border border-noise/40 px-4 py-2 font-mono text-[11px] font-bold text-noise"
-          >
-            DELIST
-          </button>
-          {onPromote && (
-            <button
-              onClick={onPromote}
-              className="rounded-sm border border-signal/40 px-4 py-1.5 font-mono text-[10px] font-bold text-signal transition-colors hover:bg-signal/10"
-            >
-              {promoted ? "EXTEND" : "PROMOTE"}
-            </button>
-          )}
-        </div>
-      ) : (
-        <button
-          onClick={() => onBuy(listing)}
-          className="rounded-sm bg-signal px-5 py-2.5 font-mono text-[11px] font-bold text-[#0A0A0A]"
-        >
-          BUY SET
-        </button>
-      )}
-    </div>
-  );
-}
-
 function BurnConfirm({
   asset,
   acknowledged,

@@ -10,8 +10,12 @@
 # everyone else. So the fixtures are generated here, against whatever wallet is
 # configured, immediately before the validator loads them.
 #
-# The other two dependencies are external programs, cloned from devnet:
-# mpl-core (every NFT path) and token-metadata (every launch).
+# The other two dependencies are external programs: mpl-core (every NFT path)
+# and token-metadata (every launch). They are dumped once into target/ and
+# loaded from disk after that. Cloning them live was the single flakiest step
+# in the whole test loop — each is roughly a megabyte, and a dropped fetch
+# fails the validator rather than the download, so a network blip read as
+# "the tests are broken".
 #
 # Usage:
 #   ./scripts/localnet.sh              # generate fixtures, start validator
@@ -91,17 +95,43 @@ JSON
   log "Fixtures written for wallet ${wallet_addr}"
 }
 
+# ─────────────────────────────────────────────────────────────────────────
+# fetch_programs: dump the external programs once, then reuse them.
+# ─────────────────────────────────────────────────────────────────────────
+fetch_programs() {
+  mkdir -p "$WORK/programs"
+  local -A wanted=(
+    ["mpl_core.so"]="$MPL_CORE"
+    ["token_metadata.so"]="$TOKEN_METADATA"
+  )
+  for file in "${!wanted[@]}"; do
+    local path="$WORK/programs/$file"
+    [[ -s "$path" ]] && continue
+    log "Dumping ${wanted[$file]} (once) ..."
+    local ok=0
+    for _ in 1 2 3; do
+      if solana program dump "${wanted[$file]}" "$path" --url "$CLONE_FROM" >/dev/null 2>&1 &&
+        [[ -s "$path" ]]; then
+        ok=1
+        break
+      fi
+      sleep 5
+    done
+    ((ok)) || die "could not dump ${wanted[$file]} from $CLONE_FROM"
+  done
+}
+
 generate_fixtures
 [[ "${1:-}" == "--fixtures" ]] && exit 0
+fetch_programs
 
-log "Starting validator on port ${RPC_PORT} (cloning mpl-core + token-metadata from ${CLONE_FROM})"
+log "Starting validator on port ${RPC_PORT} (programs loaded from ${WORK}/programs)"
 exec solana-test-validator \
   --reset \
   --ledger "$WORK/ledger" \
   --rpc-port "$RPC_PORT" \
-  --url "$CLONE_FROM" \
-  --clone-upgradeable-program "$MPL_CORE" \
-  --clone-upgradeable-program "$TOKEN_METADATA" \
+  --bpf-program "$MPL_CORE" "$WORK/programs/mpl_core.so" \
+  --bpf-program "$TOKEN_METADATA" "$WORK/programs/token_metadata.so" \
   --bpf-program "$PROGRAM_ID" "$PROGRAM_SO" \
   --account "$(solana address -k "$WORK/att_valid_kp.json")" "$WORK/att_valid.json" \
   --account "$(solana address -k "$WORK/att_invalid_kp.json")" "$WORK/att_invalid.json" \

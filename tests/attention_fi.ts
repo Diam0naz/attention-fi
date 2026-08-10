@@ -52,6 +52,14 @@ function guardiansPda(programId: PublicKey): PublicKey {
   return PublicKey.findProgramAddressSync([Buffer.from("guardians")], programId)[0];
 }
 
+/** A token's disavowal record. Empty unless someone has disowned it. */
+function disavowalPda(mint: PublicKey, programId: PublicKey): PublicKey {
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from("disavow"), mint.toBuffer()],
+    programId
+  )[0];
+}
+
 /** The singleton launch policy. Empty until an authority tunes it. */
 function launchPolicyPda(programId: PublicKey): PublicKey {
   return PublicKey.findProgramAddressSync([Buffer.from("launchpolicy")], programId)[0];
@@ -237,6 +245,7 @@ describe("attention_fi bonding curve", () => {
         associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
         genesisPool: genesisPoolPda(mintKp.publicKey, program.programId),
         guardians: guardiansPda(program.programId),
+        disavowal: disavowalPda(mintKp.publicKey, program.programId),
       })
       .rpc();
 
@@ -399,6 +408,7 @@ describe("attention_fi dutch auction", () => {
           associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
           ...metadataAccounts(mintKp.publicKey),
           guardians: guardiansPda(program.programId),
+          disavowal: disavowalPda(mintKp.publicKey, program.programId),
         })
         .rpc();
     } catch (err) {
@@ -443,6 +453,7 @@ describe("attention_fi dutch auction", () => {
         tokenProgram: TOKEN_PROGRAM_ID,
         associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
         guardians: guardiansPda(program.programId),
+        disavowal: disavowalPda(mintKp.publicKey, program.programId),
       })
       .rpc();
 
@@ -543,6 +554,7 @@ describe("attention_fi conviction curve", () => {
         ...metadataAccounts(mintKp.publicKey),
         traderStats: null,
         guardians: guardiansPda(program.programId),
+        disavowal: disavowalPda(mintKp.publicKey, program.programId),
       })
       .rpc();
 
@@ -694,6 +706,7 @@ describe("attention_fi revenue share", () => {
         ...metadataAccounts(mintKp.publicKey),
         traderStats: null,
         guardians: guardiansPda(program.programId),
+        disavowal: disavowalPda(mintKp.publicKey, program.programId),
       })
       .rpc();
 
@@ -709,6 +722,7 @@ describe("attention_fi revenue share", () => {
         systemProgram: SystemProgram.programId,
         traderStats: null,
         guardians: guardiansPda(program.programId),
+        disavowal: disavowalPda(mintKp.publicKey, program.programId),
       })
       .signers([holder2])
       .rpc();
@@ -1326,6 +1340,7 @@ describe("attention_fi perk fee discount", () => {
         genesisPool: genesisPoolPda(mintKp.publicKey, program.programId),
         traderStats: null,
         guardians: guardiansPda(program.programId),
+        disavowal: disavowalPda(mintKp.publicKey, program.programId),
       })
       .rpc();
     return (await provider.connection.getBalance(treasury)) - before;
@@ -1437,6 +1452,7 @@ describe("attention_fi AMM graduation", () => {
         associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
         genesisPool: genesisPoolPda(mintKp.publicKey, program.programId),
         guardians: guardiansPda(program.programId),
+        disavowal: disavowalPda(mintKp.publicKey, program.programId),
       })
       .rpc();
 
@@ -1495,6 +1511,7 @@ describe("attention_fi AMM graduation", () => {
         associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
         genesisPool: genesisPoolPda(mintKp.publicKey, program.programId),
         guardians: guardiansPda(program.programId),
+        disavowal: disavowalPda(mintKp.publicKey, program.programId),
       })
       .rpc();
 
@@ -1528,6 +1545,7 @@ describe("attention_fi AMM graduation", () => {
         associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
         genesisPool: genesisPoolPda(mintKp.publicKey, program.programId),
         guardians: guardiansPda(program.programId),
+        disavowal: disavowalPda(mintKp.publicKey, program.programId),
       })
       .rpc();
 
@@ -1642,6 +1660,7 @@ describe("attention_fi creator fees (SAS-gated claim)", () => {
         associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
         genesisPool: genesisPoolPda(mintKp.publicKey, program.programId),
         guardians: guardiansPda(program.programId),
+        disavowal: disavowalPda(mintKp.publicKey, program.programId),
       })
       .rpc();
 
@@ -2070,6 +2089,7 @@ describe("attention_fi protocol config", () => {
         tokenProgram: TOKEN_PROGRAM_ID,
         associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
         guardians: guardiansPda(program.programId),
+        disavowal: disavowalPda(subjectMint, program.programId),
       })
       .rpc();
   }
@@ -2840,6 +2860,7 @@ describe("attention_fi security fixes", () => {
         tokenProgram: TOKEN_PROGRAM_ID,
         associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
         guardians: guardiansPda(program.programId),
+        disavowal: disavowalPda(subjectMint, program.programId),
       })
       .rpc();
 
@@ -3628,5 +3649,192 @@ describe("attention_fi launch rate limit", () => {
     } catch (e) {
       assert.match(String(e), /Unauthorized|ConstraintAddress/);
     }
+  });
+});
+
+/**
+ * Disowning a token.
+ *
+ * The strategy brief's biggest non-obvious risk: a token reaches a real market
+ * cap for someone who then posts "I didn't launch this, don't buy it". What
+ * these cases pin is the asymmetry — the door closes, the room stays unlocked.
+ */
+describe("attention_fi disavowal", () => {
+  anchor.setProvider(anchor.AnchorProvider.env());
+  const provider = anchor.getProvider() as anchor.AnchorProvider;
+  const program = anchor.workspace.attentionFi as Program<AttentionFi>;
+  const wallet = provider.wallet.publicKey;
+
+  const [globalPda] = PublicKey.findProgramAddressSync(
+    [Buffer.from("global")],
+    program.programId
+  );
+  const mintKp = Keypair.generate();
+  const mint = mintKp.publicKey;
+  const [curvePda] = PublicKey.findProgramAddressSync(
+    [Buffer.from("curve"), mint.toBuffer()],
+    program.programId
+  );
+  const [disavowal] = PublicKey.findProgramAddressSync(
+    [Buffer.from("disavow"), mint.toBuffer()],
+    program.programId
+  );
+  let treasury: PublicKey;
+
+  const buyIx = (sol: number) =>
+    program.methods
+      .buy(new anchor.BN(sol * LAMPORTS_PER_SOL), new anchor.BN(0))
+      .accountsPartial({
+        buyer: wallet,
+        treasury,
+        curve: curvePda,
+        mint,
+        vault: ata(curvePda, mint),
+        buyerTokenAccount: ata(wallet, mint),
+        perk: null,
+        traderStats: null,
+        genesisPool: genesisPoolPda(mint, program.programId),
+      });
+
+  before(async () => {
+    const g = await program.account.global.fetchNullable(globalPda);
+    treasury = g ? g.treasury : Keypair.generate().publicKey;
+    if (!g) {
+      await program.methods
+        .initialize()
+        .accountsPartial({ authority: wallet, treasury })
+        .rpc();
+    }
+    await program.methods
+      .launchToken({ emerging: {} }, { name: "Disowned", symbol: "DIS", uri: "" })
+      .accountsPartial({
+        creator: wallet,
+        mint,
+        curve: curvePda,
+        vault: ata(curvePda, mint),
+        ...metadataAccounts(mint),
+        rent: SYSVAR_RENT_PUBKEY,
+      })
+      .signers([mintKp])
+      .rpc();
+    await buyIx(2).rpc();
+  });
+
+  it("trades normally before anyone objects", async () => {
+    const info = await provider.connection.getAccountInfo(disavowal);
+    assert.isNull(info, "no disavowal recorded");
+    await buyIx(0.5).rpc();
+  });
+
+  it("lets a guardian disown it without the authority's key", async () => {
+    // Guardians exist to act on foul play fast. A quorum here would mean the
+    // flag lands a day after the screenshots.
+    const guardians = guardiansPda(program.programId);
+    const state = await program.account.guardians.fetchNullable(guardians);
+    assert.isNotNull(state, "the pause describe installs a guardian set");
+
+    await program.methods
+      .disavowToken({ disowned: {} })
+      .accountsPartial({ signer: wallet, mint, disavowal })
+      .rpc();
+
+    const d = await program.account.tokenDisavowal.fetch(disavowal);
+    assert.equal(d.mint.toBase58(), mint.toBase58());
+    assert.deepEqual(d.reason, { disowned: {} });
+  });
+
+  it("refuses new money into a disowned token", async () => {
+    try {
+      await buyIx(0.5).rpc();
+      assert.fail("bought a disowned token");
+    } catch (e) {
+      assert.include(String(e), "TokenDisavowed");
+    }
+  });
+
+  it("still lets holders sell out of it", async () => {
+    // The whole point. Freezing exits would make holders pay for somebody
+    // else's misrepresentation, which is the opposite of protecting them.
+    const before = await provider.connection.getBalance(wallet);
+    const balance = await provider.connection.getTokenAccountBalance(ata(wallet, mint));
+    const held = BigInt(balance.value.amount);
+    assert.isTrue(held > 0n, "holding something to sell");
+
+    await program.methods
+      .sell(new anchor.BN((held / 2n).toString()), new anchor.BN(0))
+      .accountsPartial({
+        seller: wallet,
+        treasury,
+        curve: curvePda,
+        mint,
+        vault: ata(curvePda, mint),
+        sellerTokenAccount: ata(wallet, mint),
+        perk: null,
+        traderStats: null,
+        genesisPool: genesisPoolPda(mint, program.programId),
+      })
+      .rpc();
+
+    assert.isAbove(
+      await provider.connection.getBalance(wallet),
+      before,
+      "the seller got paid"
+    );
+  });
+
+  it("refuses a stranger, in both directions", async () => {
+    const stranger = Keypair.generate();
+    const sig = await provider.connection.requestAirdrop(
+      stranger.publicKey,
+      LAMPORTS_PER_SOL
+    );
+    await provider.connection.confirmTransaction(sig, "confirmed");
+
+    const other = Keypair.generate().publicKey;
+    const [otherDisavowal] = PublicKey.findProgramAddressSync(
+      [Buffer.from("disavow"), other.toBuffer()],
+      program.programId
+    );
+    for (const [label, build] of [
+      [
+        "disavow",
+        () =>
+          program.methods
+            .disavowToken({ abuse: {} })
+            .accountsPartial({ signer: stranger.publicKey, mint: other, disavowal: otherDisavowal }),
+      ],
+      [
+        "restore",
+        () =>
+          program.methods
+            .restoreToken()
+            .accountsPartial({ authority: stranger.publicKey, mint, disavowal }),
+      ],
+    ] as [string, () => any][]) {
+      try {
+        const tx = await build().transaction();
+        await anchor.web3.sendAndConfirmTransaction(provider.connection, tx, [stranger], {
+          commitment: "confirmed",
+        });
+        assert.fail(`a stranger could ${label}`);
+      } catch (e) {
+        assert.match(String(e), /Unauthorized|ConstraintAddress/);
+      }
+    }
+  });
+
+  it("restores cleanly, leaving no permanent accusation behind", async () => {
+    await program.methods
+      .restoreToken()
+      .accountsPartial({ authority: wallet, mint, disavowal })
+      .rpc();
+
+    // Closed, not flagged-false: a lingering record would read as an
+    // accusation that was merely withdrawn.
+    assert.isNull(
+      await provider.connection.getAccountInfo(disavowal),
+      "the record is gone entirely"
+    );
+    await buyIx(0.5).rpc();
   });
 });

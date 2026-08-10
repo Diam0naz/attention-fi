@@ -19,6 +19,7 @@ import { handleToMint, launchedMeta, myCreatedTokens } from "@/lib/solana/regist
 import { solUsd } from "@/lib/solana/sol-usd";
 import { appOrigin, explorerTx } from "@/lib/solana/config";
 import { Notice } from "@/components/ui/notice";
+import { DilutionPreview } from "@/components/nft/dilution-preview";
 import { ConfirmGate, useConfirmGate } from "@/components/ui/confirm-gate";
 
 const DURATION_SEC: Record<string, number> = { "6h": 21_600, "12h": 43_200, "24h": 86_400, "48h": 172_800 };
@@ -683,13 +684,16 @@ export function NftCreateFlow() {
                 />
               </Field>
             </div>
-            <div className="mt-1 font-mono text-[10px] text-[#6B6B6B]">
-              Total allocated: {(+sharePct * +supply || 0).toFixed(1)}% of the
-              fee stream
-              {+sharePct * +supply > 100 && (
-                <span className="text-noise"> · exceeds 100%</span>
-              )}
-            </div>
+            {/* Replaces a line that multiplied the two inputs and stopped
+                there. It ignored what the token had already sold, and it left
+                the reader to work out that "1% per NFT" is 1% of the creator's
+                cut rather than 1% of a trade — a factor of two hundred. */}
+            <DilutionPreview
+              className="mt-3"
+              subjectMint={tokenHandle ? handleToMint(tokenHandle)?.toBase58() ?? null : null}
+              units={+supply || 0}
+              shareBpsPerUnit={Math.round((+sharePct || 0) * 100)}
+            />
 
             {/* Over-allocating isn't rejected on-chain and doesn't break
                 anything — fees are split across whatever the total happens to

@@ -158,3 +158,6 @@ pub const LAUNCHPOLICY_SEED: &[u8] = b"launchpolicy";
 
 /// Per-wallet PDA holding recent launch timestamps.
 pub const LAUNCHQUOTA_SEED: &[u8] = b"launchquota";
+
+/// Per-token PDA recording that a subject has disowned it.
+pub const DISAVOW_SEED: &[u8] = b"disavow";

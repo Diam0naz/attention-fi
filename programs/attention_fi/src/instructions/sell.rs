@@ -19,7 +19,7 @@ pub struct Sell<'info> {
     pub seller: Signer<'info>,
 
     #[account(seeds = [GLOBAL_SEED], bump = global.bump)]
-    pub global: Account<'info, Global>,
+    pub global: Box<Account<'info, Global>>,
 
     /// CHECK: must equal the treasury recorded in Global.
     #[account(mut, address = global.treasury)]
@@ -31,15 +31,15 @@ pub struct Sell<'info> {
         bump = curve.bump,
         has_one = mint,
     )]
-    pub curve: Account<'info, BondingCurve>,
+    pub curve: Box<Account<'info, BondingCurve>>,
 
-    pub mint: Account<'info, Mint>,
+    pub mint: Box<Account<'info, Mint>>,
 
     #[account(mut, associated_token::mint = mint, associated_token::authority = curve)]
-    pub vault: Account<'info, TokenAccount>,
+    pub vault: Box<Account<'info, TokenAccount>>,
 
     #[account(mut, associated_token::mint = mint, associated_token::authority = seller)]
-    pub seller_token_account: Account<'info, TokenAccount>,
+    pub seller_token_account: Box<Account<'info, TokenAccount>>,
 
     /// Optional perk NFT owned by the seller; grants a trading-fee discount.
     #[account(
@@ -47,7 +47,7 @@ pub struct Sell<'info> {
         bump = perk.bump,
         constraint = perk.owner == seller.key() @ AttentionError::Unauthorized,
     )]
-    pub perk: Option<Account<'info, PerkNft>>,
+    pub perk: Option<Box<Account<'info, PerkNft>>>,
 
     /// Optional cumulative-activity record for the seller, credited with this
     /// trade's SOL. Optional for the reason set out in `perks::record_activity`:
@@ -59,7 +59,7 @@ pub struct Sell<'info> {
         seeds = [TRADER_SEED, seller.key().as_ref()],
         bump = trader_stats.bump,
     )]
-    pub trader_stats: Option<Account<'info, TraderStats>>,
+    pub trader_stats: Option<Box<Account<'info, TraderStats>>>,
 
     /// The token's genesis fee pool.
     ///
@@ -221,7 +221,10 @@ pub fn sell_handler<'info>(
     // Credit this trade's volume toward the trader's perk level. Skipped
     // silently when the account isn't supplied — see `perks::record_activity`.
     perks::record_activity(
-        ctx.accounts.trader_stats.as_deref_mut(),
+        ctx.accounts
+            .trader_stats
+            .as_deref_mut()
+            .map(|stats| &mut **stats),
         seller_key,
         quote.sol_out,
         0,

@@ -14,7 +14,7 @@ pub struct SellConviction<'info> {
     pub seller: Signer<'info>,
 
     #[account(seeds = [GLOBAL_SEED], bump = global.bump)]
-    pub global: Account<'info, Global>,
+    pub global: Box<Account<'info, Global>>,
 
     /// CHECK: must equal the treasury recorded in Global. Also receives the
     /// early-exit penalty (LP-reward proxy until real LP distribution ships).
@@ -27,15 +27,15 @@ pub struct SellConviction<'info> {
         bump = curve.bump,
         has_one = mint,
     )]
-    pub curve: Account<'info, ConvictionCurve>,
+    pub curve: Box<Account<'info, ConvictionCurve>>,
 
-    pub mint: Account<'info, Mint>,
+    pub mint: Box<Account<'info, Mint>>,
 
     #[account(mut, associated_token::mint = mint, associated_token::authority = curve)]
-    pub vault: Account<'info, TokenAccount>,
+    pub vault: Box<Account<'info, TokenAccount>>,
 
     #[account(mut, associated_token::mint = mint, associated_token::authority = seller)]
-    pub seller_token_account: Account<'info, TokenAccount>,
+    pub seller_token_account: Box<Account<'info, TokenAccount>>,
 
     #[account(
         mut,
@@ -43,7 +43,7 @@ pub struct SellConviction<'info> {
         bump = position.bump,
         has_one = mint,
     )]
-    pub position: Account<'info, ConvictionPosition>,
+    pub position: Box<Account<'info, ConvictionPosition>>,
 
     /// The emergency stop.
     ///

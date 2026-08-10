@@ -321,6 +321,38 @@ export type AttentionFi = {
           }
         },
         {
+          "name": "disavowal",
+          "docs": [
+            "Set when the token's subject has disowned it.",
+            "",
+            "Only the buy side carries this. Selling and claiming must keep working",
+            "on a disowned token — freezing exits would make holders pay for somebody",
+            "else's misrepresentation.",
+            "",
+            "\"not disavowed\"."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  105,
+                  115,
+                  97,
+                  118,
+                  111,
+                  119
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ]
+          }
+        },
+        {
           "name": "guardians",
           "docs": [
             "The emergency stop.",
@@ -802,6 +834,38 @@ export type AttentionFi = {
                   111,
                   111,
                   108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "disavowal",
+          "docs": [
+            "Set when the token's subject has disowned it.",
+            "",
+            "Only the buy side carries this. Selling and claiming must keep working",
+            "on a disowned token — freezing exits would make holders pay for somebody",
+            "else's misrepresentation.",
+            "",
+            "\"not disavowed\"."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  105,
+                  115,
+                  97,
+                  118,
+                  111,
+                  119
                 ]
               },
               {
@@ -1327,6 +1391,38 @@ export type AttentionFi = {
               {
                 "kind": "account",
                 "path": "buyer"
+              }
+            ]
+          }
+        },
+        {
+          "name": "disavowal",
+          "docs": [
+            "Set when the token's subject has disowned it.",
+            "",
+            "Only the buy side carries this. Selling and claiming must keep working",
+            "on a disowned token — freezing exits would make holders pay for somebody",
+            "else's misrepresentation.",
+            "",
+            "\"not disavowed\"."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  105,
+                  115,
+                  97,
+                  118,
+                  111,
+                  119
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
               }
             ]
           }
@@ -1911,6 +2007,38 @@ export type AttentionFi = {
               {
                 "kind": "account",
                 "path": "buyer"
+              }
+            ]
+          }
+        },
+        {
+          "name": "disavowal",
+          "docs": [
+            "Set when the token's subject has disowned it.",
+            "",
+            "Only the buy side carries this. Selling and claiming must keep working",
+            "on a disowned token — freezing exits would make holders pay for somebody",
+            "else's misrepresentation.",
+            "",
+            "\"not disavowed\"."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  105,
+                  115,
+                  97,
+                  118,
+                  111,
+                  119
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
               }
             ]
           }
@@ -2712,6 +2840,117 @@ export type AttentionFi = {
         {
           "name": "amount",
           "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "disavowToken",
+      "docs": [
+        "Mark a token as disowned by the person it names. Authority or any one",
+        "guardian. Buying stops; selling and claiming stay open, because trapping",
+        "holders in an asset they now want out of makes them pay for someone",
+        "else's misrepresentation."
+      ],
+      "discriminator": [
+        245,
+        142,
+        213,
+        74,
+        179,
+        142,
+        133,
+        136
+      ],
+      "accounts": [
+        {
+          "name": "signer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "global",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  108,
+                  111,
+                  98,
+                  97,
+                  108
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "guardians",
+          "docs": [
+            "The guardian set, so a guardian can act without the authority's key.",
+            "",
+            "tolerates it being absent, which is the state before `set_guardians`."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  117,
+                  97,
+                  114,
+                  100,
+                  105,
+                  97,
+                  110,
+                  115
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "mint"
+        },
+        {
+          "name": "disavowal",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  105,
+                  115,
+                  97,
+                  118,
+                  111,
+                  119
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "reason",
+          "type": {
+            "defined": {
+              "name": "disavowReason"
+            }
+          }
         }
       ]
     },
@@ -5761,6 +6000,78 @@ export type AttentionFi = {
       "args": []
     },
     {
+      "name": "restoreToken",
+      "docs": [
+        "Lift a disavowal. Authority only — flagging is cheap, clearing is not."
+      ],
+      "discriminator": [
+        152,
+        117,
+        183,
+        85,
+        166,
+        199,
+        88,
+        80
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "global",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  108,
+                  111,
+                  98,
+                  97,
+                  108
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "mint",
+          "relations": [
+            "disavowal"
+          ]
+        },
+        {
+          "name": "disavowal",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  105,
+                  115,
+                  97,
+                  118,
+                  111,
+                  119
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "resume",
       "docs": [
         "Approve resuming; the call that reaches `threshold` lifts the pause.",
@@ -7734,6 +8045,37 @@ export type AttentionFi = {
           }
         },
         {
+          "name": "disavowal",
+          "docs": [
+            "Set when the token's subject has disowned it.",
+            "",
+            "Checked only on the buy side — a holder must always be able to swap out",
+            "of a disowned token, or the flag would cost them rather than protect",
+            "them.",
+            ""
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  105,
+                  115,
+                  97,
+                  118,
+                  111,
+                  119
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ]
+          }
+        },
+        {
           "name": "guardians",
           "docs": [
             "The emergency stop.",
@@ -8352,6 +8694,19 @@ export type AttentionFi = {
       ]
     },
     {
+      "name": "tokenDisavowal",
+      "discriminator": [
+        53,
+        98,
+        110,
+        203,
+        44,
+        20,
+        204,
+        93
+      ]
+    },
+    {
       "name": "traderStats",
       "discriminator": [
         16,
@@ -8455,6 +8810,19 @@ export type AttentionFi = {
         5,
         142,
         9
+      ]
+    },
+    {
+      "name": "disavowEvent",
+      "discriminator": [
+        251,
+        243,
+        163,
+        126,
+        243,
+        163,
+        224,
+        155
       ]
     },
     {
@@ -8865,6 +9233,16 @@ export type AttentionFi = {
       "code": 6044,
       "name": "invalidLaunchPolicy",
       "msg": "Launch policy is outside the range the program accepts"
+    },
+    {
+      "code": 6045,
+      "name": "tokenDisavowed",
+      "msg": "This token has been disowned by its subject — it can be sold, not bought"
+    },
+    {
+      "code": 6046,
+      "name": "notDisavowed",
+      "msg": "That token is not disavowed"
     }
   ],
   "types": [
@@ -9376,6 +9754,69 @@ export type AttentionFi = {
           {
             "name": "timestamp",
             "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "disavowEvent",
+      "docs": [
+        "Emitted when a token is disowned or restored.",
+        "",
+        "Carries the direction as a flag rather than being two events, so an indexer",
+        "watching a mint sees one ordered stream and cannot render a restore it",
+        "missed the flag for."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "disavowedBy",
+            "type": "pubkey"
+          },
+          {
+            "name": "reason",
+            "type": {
+              "defined": {
+                "name": "disavowReason"
+              }
+            }
+          },
+          {
+            "name": "disavowed",
+            "docs": [
+              "State *after* this call."
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "disavowReason",
+      "docs": [
+        "Why a token was disowned. Deliberately coarse: a free-text field would grow",
+        "into an unmoderated message shown on someone's token page."
+      ],
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "disowned"
+          },
+          {
+            "name": "subjectGone"
+          },
+          {
+            "name": "abuse"
           }
         ]
       }
@@ -10867,6 +11308,59 @@ export type AttentionFi = {
               "Settled-but-unclaimed revenue (banked when stake changes)."
             ],
             "type": "u64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "tokenDisavowal",
+      "docs": [
+        "A token the subject it names has disowned.",
+        "",
+        "Keyed by mint rather than by handle, because a handle is not something the",
+        "program can check. No launch instruction receives one: the association",
+        "between \"@alice\" and a mint lives entirely in the token's metadata and the",
+        "off-chain registry, so a handle blocklist could only ever be enforced by the",
+        "app, and anyone calling the program directly would walk past it. A mint is",
+        "unambiguous, and a flag on a mint is enforceable.",
+        "",
+        "The judgement that a token misrepresents someone is inherently off-chain for",
+        "the same reason — the claim being judged is a string in metadata. So this",
+        "records *that* a decision was taken and by whom, and leaves the deciding to",
+        "people. What it buys is that the decision then binds the program."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "disavowedBy",
+            "docs": [
+              "Who flagged it — the authority or a guardian."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "reason",
+            "docs": [
+              "Short machine-readable reason, for the UI to phrase."
+            ],
+            "type": {
+              "defined": {
+                "name": "disavowReason"
+              }
+            }
+          },
+          {
+            "name": "at",
+            "type": "i64"
           },
           {
             "name": "bump",

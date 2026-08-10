@@ -5,12 +5,14 @@ use anchor_spl::token::{self, Mint, Token, TokenAccount, Transfer};
 
 use crate::amm::swap_quote;
 use crate::constants::{
-    AMM_SEED, CURVE_SEED, GENPOOL_SEED, GLOBAL_SEED, GUARDIANS_SEED, PERK_SEED, TRADER_SEED,
+    AMM_SEED, CURVE_SEED, DISAVOW_SEED, GENPOOL_SEED, GLOBAL_SEED, GUARDIANS_SEED, PERK_SEED,
+    TRADER_SEED,
 };
 use crate::curve::{mul_div, split_creator_fee};
 use crate::error::AttentionError;
 use crate::events::AmmSwapEvent;
 use crate::guardians;
+use crate::instructions::disavow_token::require_not_disavowed;
 use crate::nft::{discounted_fee_bps, perk_discount_bps};
 use crate::perks;
 use crate::revenue::{credit_genesis_pool, genesis_share_bps, split_genesis_fee};
@@ -96,6 +98,16 @@ pub struct Swap<'info> {
     #[account(mut, seeds = [GENPOOL_SEED, mint.key().as_ref()], bump)]
     pub genesis_pool: UncheckedAccount<'info>,
 
+    /// Set when the token's subject has disowned it.
+    ///
+    /// Checked only on the buy side — a holder must always be able to swap out
+    /// of a disowned token, or the flag would cost them rather than protect
+    /// them.
+    ///
+    /// CHECK: seeds pin the address; empty means "not disavowed".
+    #[account(seeds = [DISAVOW_SEED, mint.key().as_ref()], bump)]
+    pub disavowal: UncheckedAccount<'info>,
+
     /// The emergency stop.
     ///
     /// Required, never optional: an optional stop is not a stop — omitting it
@@ -145,6 +157,11 @@ pub fn swap_handler<'info>(
 ) -> Result<()> {
     // Refuses while a guardian has pulled the stop.
     guardians::require_live(&ctx.accounts.guardians.to_account_info())?;
+
+    // A disowned token can be swapped out of, never into.
+    if is_buy {
+        require_not_disavowed(&ctx.accounts.disavowal.to_account_info())?;
+    }
 
     require!(amount_in > 0, AttentionError::ZeroAmount);
 

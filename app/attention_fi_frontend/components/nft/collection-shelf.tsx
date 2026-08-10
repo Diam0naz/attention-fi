@@ -7,6 +7,7 @@ import { BN } from "@anchor-lang/core";
 import { ChevronDown, Loader2, PackageOpen, Plus, Tag, Trash2, Undo2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { NftCardFace, type NftCardData } from "@/components/nft/nft-card";
+import { CollectionDeck } from "@/components/nft/collection-deck";
 import { artworkUrl } from "@/lib/nft-artwork";
 import { Notice } from "@/components/ui/notice";
 import { ListingFields, listingTerms, type ListingMode } from "@/components/nft/listing-form";
@@ -282,7 +283,6 @@ export function CollectionShelf({
   // A listing only constrains this collection while it can still be bought.
   const listed = Boolean(listing && !listing.complete);
   const loading = members === null;
-  const cover = (members ?? []).slice(0, 3);
   // Core refuses to burn a collection that still holds assets, so the button
   // waits for the count rather than offering an action that would revert.
   const isEmpty = members !== null && members.length === 0;
@@ -293,74 +293,16 @@ export function CollectionShelf({
         {/* The pack. Closed it sits as a squared-up deck; opening fans it.
             Both states are pure transforms so the animation stays on the
             compositor — see .af-pack-card in globals.css. */}
-        <button
-          // An empty pack has no contents to reveal, so tapping it does the
-          // only useful thing instead: opens the picker. The sleeve doubles as
-          // the affordance rather than sitting there as decoration.
-          onClick={() => (isEmpty ? setPicking(true) : setOpen((o) => !o))}
-          disabled={loading}
-          aria-busy={loading}
-          aria-expanded={isEmpty ? undefined : open}
-          aria-label={
-            loading
-              ? `Reading ${collection.name}`
-              : isEmpty
-                ? `Add NFTs to ${collection.name}`
-                : `${open ? "Hide" : "Show"} ${collection.name} contents`
-          }
-          className="group relative h-24 w-[72px] shrink-0"
-        >
-          {loading ? (
-            // A loading pack must not look like an empty one — otherwise it
-            // offers "+ ADD" for a collection that may be full, and the label
-            // changes under the cursor when the read lands. Same deck shape,
-            // no contents claimed.
-            <>
-              {[0, 1, 2].map((i) => (
-                <div
-                  key={i}
-                  className="af-skeleton absolute inset-0 rounded-xl border border-white/[0.06]"
-                  style={{
-                    transform: `translate3d(${i * 3}px, ${i * -2}px, 0) rotate(${(i - 1) * 2.5}deg)`,
-                    zIndex: 3 - i,
-                    animationDelay: `${i * 140}ms`,
-                  }}
-                />
-              ))}
-            </>
-          ) : cover.length === 0 ? (
-            <div className="af-pack-empty flex h-full w-full flex-col items-center justify-center gap-1 rounded-md border border-dashed border-white/12 group-hover:border-signal/40">
-              <Plus className="h-4 w-4 text-[#4b5563] transition-colors group-hover:text-signal" />
-              <span className="font-mono text-[8px] tracking-[0.12em] text-[#4b5563] transition-colors group-hover:text-signal">
-                ADD
-              </span>
-            </div>
-          ) : (
-            cover.map((m, i) => {
-              // Closed: a tight deck, each card peeking a couple of pixels.
-              // Open: fanned from a shared bottom origin, like a hand.
-              const t = open
-                ? `translate3d(${(i - 1) * 13}px, ${i === 1 ? -4 : 0}px, 0) rotate(${(i - 1) * 11}deg)`
-                : `translate3d(${i * 3}px, ${i * -2}px, 0) rotate(${(i - 1) * 2.5}deg)`;
-              return (
-                <div
-                  key={m.asset}
-                  className="af-pack-card absolute inset-0 origin-bottom rounded-xl"
-                  style={{ transform: t, zIndex: cover.length - i }}
-                >
-                  <NftCardFace data={toCard(m, { name: collection.name, size: collection.size })} />
-                </div>
-              );
-            })
-          )}
-          {/* Count sits on the pack rather than only in the text column, so the
-              artwork carries its own label at a glance. */}
-          {collection.size > 0 && (
-            <span className="pointer-events-none absolute -bottom-1 -right-1 z-10 rounded-full border border-white/15 bg-[#0A0A0A] px-1.5 py-0.5 font-mono text-[9px] font-bold text-[#F5F4F0]">
-              {collection.size}
-            </span>
-          )}
-        </button>
+        {/* Shared with the market listing, so a set looks the same to the
+            person selling it and the person deciding whether to buy it. */}
+        <CollectionDeck
+          name={collection.name}
+          size={collection.size}
+          members={members}
+          open={open}
+          onToggle={() => setOpen((o) => !o)}
+          emptyAction={{ label: "Add NFTs to", onClick: () => setPicking(true) }}
+        />
 
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">

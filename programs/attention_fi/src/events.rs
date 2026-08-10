@@ -276,3 +276,18 @@ pub struct PauseEvent {
     pub threshold: u8,
     pub timestamp: i64,
 }
+
+/// Emitted when a token is disowned or restored.
+///
+/// Carries the direction as a flag rather than being two events, so an indexer
+/// watching a mint sees one ordered stream and cannot render a restore it
+/// missed the flag for.
+#[event]
+pub struct DisavowEvent {
+    pub mint: Pubkey,
+    pub disavowed_by: Pubkey,
+    pub reason: crate::state::DisavowReason,
+    /// State *after* this call.
+    pub disavowed: bool,
+    pub timestamp: i64,
+}

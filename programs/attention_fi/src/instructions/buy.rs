@@ -4,12 +4,13 @@ use anchor_spl::associated_token::AssociatedToken;
 use anchor_spl::token::{self, Mint, Token, TokenAccount, Transfer};
 
 use crate::constants::{
-    CURVE_SEED, GENPOOL_SEED, GLOBAL_SEED, GUARDIANS_SEED, PERK_SEED, TRADER_SEED,
+    CURVE_SEED, DISAVOW_SEED, GENPOOL_SEED, GLOBAL_SEED, GUARDIANS_SEED, PERK_SEED, TRADER_SEED,
 };
 use crate::curve::{buy_quote, split_creator_fee};
 use crate::error::AttentionError;
 use crate::events::{GraduateEvent, TradeEvent};
 use crate::guardians;
+use crate::instructions::disavow_token::require_not_disavowed;
 use crate::nft::{discounted_fee_bps, perk_discount_bps};
 use crate::perks;
 use crate::revenue::{credit_genesis_pool, genesis_share_bps, split_genesis_fee};
@@ -21,7 +22,7 @@ pub struct Buy<'info> {
     pub buyer: Signer<'info>,
 
     #[account(seeds = [GLOBAL_SEED], bump = global.bump)]
-    pub global: Account<'info, Global>,
+    pub global: Box<Account<'info, Global>>,
     /// CHECK: must equal the treasury recorded in Global.
     #[account(mut, address = global.treasury)]
     pub treasury: UncheckedAccount<'info>,
@@ -32,12 +33,12 @@ pub struct Buy<'info> {
         bump = curve.bump,
         has_one = mint,
     )]
-    pub curve: Account<'info, BondingCurve>,
+    pub curve: Box<Account<'info, BondingCurve>>,
 
-    pub mint: Account<'info, Mint>,
+    pub mint: Box<Account<'info, Mint>>,
 
     #[account(mut, associated_token::mint = mint, associated_token::authority = curve)]
-    pub vault: Account<'info, TokenAccount>,
+    pub vault: Box<Account<'info, TokenAccount>>,
 
     #[account(
         init_if_needed,
@@ -45,7 +46,7 @@ pub struct Buy<'info> {
         associated_token::mint = mint,
         associated_token::authority = buyer,
     )]
-    pub buyer_token_account: Account<'info, TokenAccount>,
+    pub buyer_token_account: Box<Account<'info, TokenAccount>>,
 
     /// Optional perk NFT owned by the buyer; grants a trading-fee discount.
     /// Constrained to a perk PDA owned by the buyer when supplied.
@@ -54,7 +55,7 @@ pub struct Buy<'info> {
         bump = perk.bump,
         constraint = perk.owner == buyer.key() @ AttentionError::Unauthorized,
     )]
-    pub perk: Option<Account<'info, PerkNft>>,
+    pub perk: Option<Box<Account<'info, PerkNft>>>,
 
     /// Optional cumulative-activity record for the buyer, credited with this
     /// trade's SOL. Optional for the reason set out in `perks::record_activity`:
@@ -66,7 +67,7 @@ pub struct Buy<'info> {
         seeds = [TRADER_SEED, buyer.key().as_ref()],
         bump = trader_stats.bump,
     )]
-    pub trader_stats: Option<Account<'info, TraderStats>>,
+    pub trader_stats: Option<Box<Account<'info, TraderStats>>>,
 
     /// The token's genesis fee pool.
     ///
@@ -83,6 +84,17 @@ pub struct Buy<'info> {
     /// account; the handler validates the contents before trusting them.
     #[account(mut, seeds = [GENPOOL_SEED, mint.key().as_ref()], bump)]
     pub genesis_pool: UncheckedAccount<'info>,
+
+    /// Set when the token's subject has disowned it.
+    ///
+    /// Only the buy side carries this. Selling and claiming must keep working
+    /// on a disowned token — freezing exits would make holders pay for somebody
+    /// else's misrepresentation.
+    ///
+    /// CHECK: seeds pin the address; empty is the ordinary case and means
+    /// "not disavowed".
+    #[account(seeds = [DISAVOW_SEED, mint.key().as_ref()], bump)]
+    pub disavowal: UncheckedAccount<'info>,
 
     /// The emergency stop.
     ///
@@ -105,6 +117,9 @@ pub fn buy_handler<'info>(
     sol_amount: u64,
     min_tokens_out: u64,
 ) -> Result<()> {
+    // A disowned token can be sold, not bought.
+    require_not_disavowed(&ctx.accounts.disavowal.to_account_info())?;
+
     // Refuses while a guardian has pulled the stop.
     guardians::require_live(&ctx.accounts.guardians.to_account_info())?;
 
@@ -257,7 +272,10 @@ pub fn buy_handler<'info>(
     // Credit this trade's volume toward the trader's perk level. Skipped
     // silently when the account isn't supplied — see `perks::record_activity`.
     perks::record_activity(
-        ctx.accounts.trader_stats.as_deref_mut(),
+        ctx.accounts
+            .trader_stats
+            .as_deref_mut()
+            .map(|stats| &mut **stats),
         buyer_key,
         sol_amount,
         0,
