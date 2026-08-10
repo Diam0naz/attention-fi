@@ -10,6 +10,7 @@ import { PriceChart } from "@/components/token/price-chart";
 import { MindshareView } from "@/components/token/mindshare-view";
 import { OnchainMindshare } from "@/components/token/onchain-mindshare";
 import { RiskDisclaimer } from "@/components/ui/risk-disclaimer";
+import { DisavowBanner } from "@/components/token/disavow-banner";
 import { Avatar } from "@/components/feed/avatar";
 import { Footer } from "@/components/feed/footer";
 import { WalletConnectModal } from "@/components/wallet/wallet-connect-modal";
@@ -243,6 +244,10 @@ export function TokenDetailTerminal({ token: tokenProp }: { token: TokenDetail }
       <div className="grid flex-1 lg:grid-cols-[1fr_380px]">
         {/* left: chart + info */}
         <div className="border-white/[0.08] p-5 sm:p-7 lg:border-r">
+          {/* Before anything about price. A raw TokenDisavowed at the moment of
+              signing is the worst place to learn this. */}
+          <DisavowBanner mint={handleToMint(token.handle)?.toBase58() ?? null} />
+
           {/* Graduation status, live from the curve where there is one. The
               three states are genuinely different and used to collapse into
               one optimistic banner. */}

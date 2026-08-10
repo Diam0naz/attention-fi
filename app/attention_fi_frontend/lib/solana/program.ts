@@ -257,6 +257,23 @@ export const guardiansPda = (): PublicKey =>
 export const mindsharePda = (mint: PublicKey): PublicKey =>
   PublicKey.findProgramAddressSync([enc.encode("mindshare"), mint.toBytes()], PROGRAM_ID)[0];
 
+/**
+ * A token's disavowal record — present only when its subject has disowned it.
+ *
+ * Passed by the buy-side instructions and derived from the mint, so Anchor
+ * resolves it automatically; this exists for reads and for the admin console.
+ */
+export const disavowalPda = (mint: PublicKey): PublicKey =>
+  PublicKey.findProgramAddressSync([enc.encode("disavow"), mint.toBytes()], PROGRAM_ID)[0];
+
+/**
+ * The singleton launch policy. Absent means the program's defaults apply —
+ * 3 launches per 24 hours — so a deployment is bounded from the first block
+ * rather than from whenever an admin gets to it.
+ */
+export const launchPolicyPda = (): PublicKey =>
+  PublicKey.findProgramAddressSync([enc.encode("launchpolicy")], PROGRAM_ID)[0];
+
 /** A 1-of-1 asset's listing. */
 export const nftAuctionPda = (asset: PublicKey): PublicKey =>
   PublicKey.findProgramAddressSync([enc.encode("nftauction"), asset.toBytes()], PROGRAM_ID)[0];

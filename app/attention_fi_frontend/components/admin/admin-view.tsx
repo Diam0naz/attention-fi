@@ -16,6 +16,7 @@ import { fetchFeeConfig, fetchGlobal } from "@/lib/solana/curve";
 import { explorerAddress, explorerTx } from "@/lib/solana/config";
 import { Notice } from "@/components/ui/notice";
 import { EmergencyStop } from "@/components/admin/emergency-stop";
+import { TokenSafety } from "@/components/admin/token-safety";
 import {
   fetchClaimedPerks,
   fetchPerkGrants,
@@ -396,8 +397,12 @@ export function AdminView() {
             put the emergency brake behind the one key it exists to work
             without. The panel shows itself read-only to everyone and offers the
             button only to a wallet actually in the set. */}
-        <div className="mt-4">
+        <div className="mt-4 flex flex-col gap-4">
           <EmergencyStop isAdmin={false} />
+          {/* Flagging is a guardian power, so it cannot live behind the
+              authority gate — that would put the fastest safety action behind
+              the one key it is designed to work without. */}
+          <TokenSafety isAdmin={false} />
         </div>
       </Shell>
     );
@@ -405,8 +410,9 @@ export function AdminView() {
 
   return (
     <Shell>
-      <div className="mb-4">
+      <div className="mb-4 flex flex-col gap-4">
         <EmergencyStop isAdmin />
+        <TokenSafety isAdmin />
       </div>
       {tx && (
         <div className="mb-4">
