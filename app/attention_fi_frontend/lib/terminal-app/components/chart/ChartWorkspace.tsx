@@ -6,6 +6,7 @@ import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import { ChartPane } from "@/lib/terminal-app/components/chart/ChartPane";
 import { SubPane } from "@/lib/terminal-app/components/chart/SubPane";
 import { useCandleFeed } from "@/lib/terminal-app/lib/chart/feed";
+import { cn } from "@/lib/terminal-app/lib/cn";
 import * as gridSync from "@/lib/terminal-app/lib/chart/sync";
 import { INDICATORS } from "@/lib/terminal-app/lib/indicators/registry";
 import { useProvider } from "@/lib/terminal-app/lib/providers";
@@ -30,11 +31,15 @@ export interface PaneSyncApi {
 export function ChartWorkspace({
   workspaceId,
   symbol,
-  isPrimary,
+  isActive,
+  showFocus,
+  onActivate,
 }: {
   workspaceId: string;
   symbol: string;
-  isPrimary: boolean;
+  isActive: boolean;
+  showFocus: boolean;
+  onActivate: () => void;
 }) {
   const provider = useProvider();
   const timeframe = useSettings((s) => s.timeframe);
@@ -99,22 +104,34 @@ export function ChartWorkspace({
   }, [workspaceId]);
 
   return (
-    <PanelGroup direction="vertical" autoSaveId={`tt-ws-${workspaceId}`}>
-      <Panel defaultSize={70} minSize={25}>
-        <ChartPane
-          paneId="main"
-          feed={feed}
-          symbol={symbol}
-          sync={sync}
-          isPrimary={isPrimary}
-        />
-      </Panel>
-      {subInstances.map((inst) => (
-        <SubPaneSlot key={inst.id}>
-          <SubPane instanceId={inst.id} feed={feed} sync={sync} />
-        </SubPaneSlot>
-      ))}
-    </PanelGroup>
+    // Capture phase: the chart canvas handles its own pointer events for
+    // panning and drawing, so a bubbling listener would miss most clicks and
+    // focusing a pane would only work on its margins.
+    <div
+      onPointerDownCapture={onActivate}
+      className={cn(
+        "relative h-full w-full min-h-0 min-w-0 overflow-hidden",
+        showFocus && "ring-1 ring-inset",
+        showFocus && (isActive ? "ring-focus" : "ring-transparent"),
+      )}
+    >
+      <PanelGroup direction="vertical" autoSaveId={`tt-ws-${workspaceId}`}>
+        <Panel defaultSize={70} minSize={25}>
+          <ChartPane
+            paneId="main"
+            feed={feed}
+            symbol={symbol}
+            sync={sync}
+            isPrimary={isActive}
+          />
+        </Panel>
+        {subInstances.map((inst) => (
+          <SubPaneSlot key={inst.id}>
+            <SubPane instanceId={inst.id} feed={feed} sync={sync} />
+          </SubPaneSlot>
+        ))}
+      </PanelGroup>
+    </div>
   );
 }
 

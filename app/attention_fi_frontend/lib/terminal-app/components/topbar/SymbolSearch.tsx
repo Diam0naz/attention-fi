@@ -5,14 +5,17 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { cn } from "@/lib/terminal-app/lib/cn";
 import { useProvider } from "@/lib/terminal-app/lib/providers";
+import { useTokenLabel } from "@/lib/terminal-app/lib/token-label";
 import { useSettings } from "@/lib/terminal-app/stores/settings";
 
 export const FOCUS_SYMBOL_SEARCH_EVENT = "tt:focus-symbol-search";
 
 export function SymbolSearch() {
   const provider = useProvider();
-  const symbol = useSettings((s) => s.symbol);
   const setSymbol = useSettings((s) => s.setSymbol);
+  const gridLayout = useSettings((s) => s.gridLayout);
+  const activePane = useSettings((s) => s.activePane);
+  const { ticker } = useTokenLabel();
 
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
@@ -80,7 +83,7 @@ export function SymbolSearch() {
         <input
           ref={inputRef}
           value={query}
-          placeholder={symbol}
+          placeholder={ticker}
           spellCheck={false}
           autoComplete="off"
           className="num w-full bg-transparent text-xs text-hi outline-none placeholder:text-mid"
@@ -106,6 +109,16 @@ export function SymbolSearch() {
             }
           }}
         />
+        {/* Which chart this search will change. Without it, typing a symbol in
+            a split view silently retargets whichever pane was last clicked. */}
+        {gridLayout !== "1" && (
+          <span
+            title={`Searching changes pane ${activePane + 1}. Click another chart to retarget.`}
+            className="num shrink-0 rounded border border-edge bg-elevated px-1 text-2xs text-tacc"
+          >
+            P{activePane + 1}
+          </span>
+        )}
         <kbd className="rounded border border-edge bg-elevated px-1 text-2xs text-low">/</kbd>
       </div>
       {open &&
@@ -136,7 +149,7 @@ export function SymbolSearch() {
                 onMouseEnter={() => setHighlight(i)}
                 onClick={() => choose(r.symbol)}
               >
-                <span className="num text-xs text-hi">{r.symbol}</span>
+                <span className="num shrink-0 text-xs text-hi">{r.base || r.symbol}</span>
                 <span className="truncate pl-3 text-2xs text-low">{r.description}</span>
               </button>
             ))}

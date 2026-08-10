@@ -31,6 +31,7 @@ import { toHeikinAshi } from "@/lib/terminal-app/lib/chart/heikinAshi";
 import type { CandleFeed } from "@/lib/terminal-app/lib/chart/feed";
 import { INDICATORS } from "@/lib/terminal-app/lib/indicators/registry";
 import { fmtCompact, fmtCountdown, fmtPercent, fmtPrice } from "@/lib/terminal-app/lib/format";
+import { useTokenLabel } from "@/lib/terminal-app/lib/token-label";
 import type { Candle, ChartType } from "@/lib/terminal-app/lib/types";
 import { useIndicators } from "@/lib/terminal-app/stores/indicators";
 import { useSettings } from "@/lib/terminal-app/stores/settings";
@@ -78,6 +79,9 @@ function toVolumeData(candles: Candle[], theme: ChartTheme): HistogramData[] {
 }
 
 export function ChartPane({ paneId, feed, symbol, sync, isPrimary }: ChartPaneProps) {
+  // This pane's own symbol, not the active one — in a grid each pane charts
+  // something different and the legend has to name what it's actually drawing.
+  const { ticker, handle } = useTokenLabel(symbol);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const legendRef = useRef<HTMLDivElement | null>(null);
   const countdownRef = useRef<HTMLDivElement | null>(null);
@@ -566,7 +570,8 @@ export function ChartPane({ paneId, feed, symbol, sync, isPrimary }: ChartPanePr
         ref={legendRef}
         className="num pointer-events-none absolute left-2 top-1.5 z-20 flex items-center gap-2 text-2xs"
       >
-        <span className="font-semibold text-hi">{symbol}</span>
+        <span className="font-semibold text-hi">{ticker}</span>
+        {handle && <span className="text-low">{handle}</span>}
         <LegendCell label="O" cell="o" />
         <LegendCell label="H" cell="h" />
         <LegendCell label="L" cell="l" />

@@ -1,13 +1,19 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { allTokenHandles, syncRegistry } from "@/lib/solana/registry";
 import { cn } from "@/lib/terminal-app/lib/cn";
 import { fmtPercent, fmtPrice, fmtSigned } from "@/lib/terminal-app/lib/format";
 import { useProvider } from "@/lib/terminal-app/lib/providers";
+import { useTokenLabel } from "@/lib/terminal-app/lib/token-label";
 import type { TickerStats } from "@/lib/terminal-app/lib/types";
 import { useSettings } from "@/lib/terminal-app/stores/settings";
-import { useWatchlist, type WatchlistSortKey } from "@/lib/terminal-app/stores/watchlist";
+import {
+  ATTENTIONFI_LIST,
+  useWatchlist,
+  type WatchlistSortKey,
+} from "@/lib/terminal-app/stores/watchlist";
 import { Select } from "@/lib/terminal-app/components/ui/Select";
 import { Sparkline } from "./Sparkline";
 
@@ -25,10 +31,25 @@ export function WatchlistPanel() {
   const sortDir = useWatchlist((s) => s.sortDir);
   const setSort = useWatchlist((s) => s.setSort);
 
+  const dismissed = useWatchlist((s) => s.dismissed);
+  const dismiss = useWatchlist((s) => s.dismiss);
+
   const symbol = useSettings((s) => s.symbol);
   const setSymbol = useSettings((s) => s.setSymbol);
+  const onChain = useSettings((s) => s.provider) === "attentionfi";
 
-  const symbols = lists[activeList] ?? [];
+  // Every launched token, so a market that didn't exist when this list was
+  // written still shows up in it. Curation still wins: anything explicitly
+  // added keeps its position, and anything removed stays removed.
+  const discovered = useLaunchedHandles(onChain && activeList === ATTENTIONFI_LIST);
+  // Stable fallback: a fresh `[]` each render would defeat the memo below.
+  const pinned = useMemo(() => lists[activeList] ?? NO_HANDLES, [lists, activeList]);
+  const symbols = useMemo(() => {
+    if (discovered.length === 0) return pinned;
+    const seen = new Set(pinned);
+    return [...pinned, ...discovered.filter((h) => !seen.has(h) && !dismissed.includes(h))];
+  }, [pinned, discovered, dismissed]);
+
   const [adding, setAdding] = useState(false);
   const dragIndex = useRef<number | null>(null);
 
@@ -99,7 +120,9 @@ export function WatchlistPanel() {
             sym={sym}
             stat={stat}
             active={sym === symbol}
-            draggable={sortable}
+            // Reorder indexes into the stored list, so dragging is only
+            // meaningful while every visible row is a stored one.
+            draggable={sortable && symbols.length === pinned.length}
             onDragStart={() => {
               dragIndex.current = i;
             }}
@@ -108,13 +131,17 @@ export function WatchlistPanel() {
               dragIndex.current = null;
             }}
             onSelect={() => setSymbol(sym)}
-            onRemove={() => removeSymbol(sym)}
+            onRemove={() => (pinned.includes(sym) ? removeSymbol(sym) : dismiss(sym))}
           />
         ))}
         {symbols.length === 0 && (
-          <div className="flex flex-col items-center gap-1 px-2 py-6">
-            <span className="text-2xs text-mid">Empty list</span>
-            <span className="text-2xs text-low">Add a symbol below</span>
+          <div className="flex flex-col items-center gap-1 px-2 py-6 text-center">
+            <span className="text-2xs text-mid">
+              {onChain ? "No tokens found" : "Empty list"}
+            </span>
+            <span className="text-2xs text-low">
+              {onChain ? "Launched tokens appear here automatically" : "Add a symbol below"}
+            </span>
           </div>
         )}
       </div>
@@ -123,7 +150,7 @@ export function WatchlistPanel() {
         {adding ? (
           <input
             autoFocus
-            placeholder="Add symbol, e.g. BTCUSDT"
+            placeholder={onChain ? "Add handle, e.g. king_diamonaz" : "Add symbol, e.g. BTCUSDT"}
             className="num h-6 w-full rounded border border-focus bg-tinput px-2 text-2xs text-hi outline-none"
             onKeyDown={(e) => {
               if (e.key === "Enter") {
@@ -147,6 +174,40 @@ export function WatchlistPanel() {
       </div>
     </div>
   );
+}
+
+const NO_HANDLES: string[] = [];
+
+/**
+ * Every AttentionFi handle the registry knows, refreshed while the list is on
+ * screen.
+ *
+ * Polled rather than fetched once: tokens are launched by other people while
+ * the terminal sits open, and a watchlist that only learns about them on
+ * reload is the thing this was meant to fix.
+ */
+function useLaunchedHandles(enabled: boolean): string[] {
+  const [handles, setHandles] = useState<string[]>(NO_HANDLES);
+
+  useEffect(() => {
+    if (!enabled) return;
+    let cancelled = false;
+    const pull = async () => {
+      await syncRegistry().catch(() => undefined);
+      if (cancelled) return;
+      const next = allTokenHandles();
+      // Same set, same reference — otherwise every poll invalidates the rows.
+      setHandles((prev) => (prev.join(" ") === next.join(" ") ? prev : next));
+    };
+    void pull();
+    const id = setInterval(() => void pull(), 30_000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [enabled]);
+
+  return enabled ? handles : NO_HANDLES;
 }
 
 function pick(stat: TickerStats | undefined, key: WatchlistSortKey): number {
@@ -207,6 +268,7 @@ function WatchRow({
   onSelect: () => void;
   onRemove: () => void;
 }) {
+  const { ticker, handle } = useTokenLabel(sym);
   const prevLast = useRef<number | null>(null);
   const flashRef = useRef<HTMLDivElement | null>(null);
 
@@ -244,7 +306,10 @@ function WatchRow({
     >
       <div className="flex min-w-0 flex-col">
         <div className="flex items-center gap-1">
-          <span className="num truncate text-2xs font-medium text-hi">{sym}</span>
+          <span className="num truncate text-2xs font-medium text-hi" title={handle ?? sym}>
+            {ticker}
+          </span>
+          {handle && <span className="num truncate text-2xs text-low">{handle}</span>}
           <button
             type="button"
             title={`Remove ${sym}`}

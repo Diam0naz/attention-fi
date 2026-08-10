@@ -2,25 +2,29 @@
 
 import { ChartWorkspace } from "@/lib/terminal-app/components/chart/ChartWorkspace";
 import { cn } from "@/lib/terminal-app/lib/cn";
-import { useSettings } from "@/lib/terminal-app/stores/settings";
+import { PANE_COUNT, useSettings } from "@/lib/terminal-app/stores/settings";
 
 /**
- * Multi-chart grid: 1, 2-horizontal, 2-vertical or 4 panes. Pane 0 follows the
- * active symbol; the rest use the configured grid symbols (or the active
- * symbol when sync is on).
+ * Multi-chart grid: 1, 2-horizontal, 2-vertical or 4 panes.
+ *
+ * Every pane charts its own symbol, and clicking one focuses it: the search
+ * box, order ticket, book and tape all follow the focused pane. Without that
+ * there was no way to fill a second pane at all — it showed whatever the store
+ * had been seeded with and nothing could change it.
+ *
+ * With sync on, the panes deliberately collapse onto one symbol; that switch
+ * is for comparing timeframes of a single market, not two markets.
  */
 export function ChartArea() {
   const gridLayout = useSettings((s) => s.gridLayout);
   const symbol = useSettings((s) => s.symbol);
-  const gridSymbols = useSettings((s) => s.gridSymbols);
+  const paneSymbols = useSettings((s) => s.paneSymbols);
+  const activePane = useSettings((s) => s.activePane);
+  const setActivePane = useSettings((s) => s.setActivePane);
   const sync = useSettings((s) => s.syncCrosshair);
 
-  const paneSymbol = (i: number): string => {
-    if (i === 0 || sync) return symbol;
-    return gridSymbols[i - 1] ?? symbol;
-  };
-
-  const count = gridLayout === "1" ? 1 : gridLayout === "4" ? 4 : 2;
+  const count = PANE_COUNT[gridLayout];
+  const paneSymbol = (i: number): string => (sync ? symbol : (paneSymbols[i] ?? symbol));
 
   return (
     <div
@@ -33,13 +37,16 @@ export function ChartArea() {
       )}
     >
       {Array.from({ length: count }, (_, i) => (
-        <div key={`${gridLayout}-${i}`} className="min-h-0 min-w-0 overflow-hidden">
-          <ChartWorkspace
-            workspaceId={`g${i}`}
-            symbol={paneSymbol(i)}
-            isPrimary={i === 0}
-          />
-        </div>
+        <ChartWorkspace
+          key={`${gridLayout}-${i}`}
+          workspaceId={`g${i}`}
+          symbol={paneSymbol(i)}
+          // A single pane is always the focused one, so it gets no ring —
+          // highlighting the only thing on screen says nothing.
+          isActive={i === activePane}
+          showFocus={count > 1}
+          onActivate={() => setActivePane(i)}
+        />
       ))}
     </div>
   );

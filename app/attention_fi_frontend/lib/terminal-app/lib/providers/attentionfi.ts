@@ -1,7 +1,7 @@
 import type { PublicKey } from "@solana/web3.js";
 import { fetchAllCurves, fetchGlobal, spotPriceSol, LAMPORTS_PER_SOL, type CurveState } from "@/lib/solana/curve";
 import { getReadonlyProgram } from "@/lib/solana/program";
-import { allTokenHandles, handleToMint, syncRegistry } from "@/lib/solana/registry";
+import { allTokenHandles, handleToMint, launchedMeta, syncRegistry } from "@/lib/solana/registry";
 import {
   TIMEFRAME_SECONDS,
   type Candle,
@@ -524,20 +524,32 @@ export class AttentionFiProvider implements MarketDataProvider {
     };
   }
 
+  /**
+   * Search by handle *or* ticker.
+   *
+   * A market is filed under the subject's handle, but the creator names the
+   * token something else — @king_diamonaz launched GOJO. Matching only the
+   * handle meant typing the name you'd seen in your wallet returned nothing.
+   */
   async searchSymbols(query: string): Promise<SymbolMeta[]> {
     // Without this, search only ever saw this browser's own launches.
     await syncRegistry();
-    const q = query.trim().replace(/^@/, "").toLowerCase();
-    return allTokenHandles()
-      .filter((h) => !q || h.includes(q))
-      .map((h) => ({
+    const q = query.trim().replace(/^[@$]/, "").toLowerCase();
+    const out: SymbolMeta[] = [];
+    for (const h of allTokenHandles()) {
+      const meta = launchedMeta(h);
+      const ticker = meta?.symbol?.trim() || h.toUpperCase();
+      if (q && !h.includes(q) && !ticker.toLowerCase().includes(q)) continue;
+      out.push({
         symbol: h,
-        base: h.toUpperCase().slice(0, 6),
+        base: ticker,
         quote: "SOL",
-        description: `@${h} — AttentionFi bonding curve`,
+        description: `@${h}${meta?.name ? ` — ${meta.name}` : ""}`,
         pricePrecision: 8,
         qtyPrecision: 2,
-      }));
+      });
+    }
+    return out;
   }
 
   async getTickerStats(symbols?: string[]): Promise<TickerStats[]> {

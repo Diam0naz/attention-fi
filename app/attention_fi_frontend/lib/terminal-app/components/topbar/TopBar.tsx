@@ -11,6 +11,7 @@ import { handleToMint } from "@/lib/solana/registry";
 import { cn } from "@/lib/terminal-app/lib/cn";
 import { fmtCompact } from "@/lib/terminal-app/lib/format";
 import { useProvider } from "@/lib/terminal-app/lib/providers";
+import { useTokenLabel } from "@/lib/terminal-app/lib/token-label";
 import { TIMEFRAMES, type ChartType, type ConnectionStatus } from "@/lib/terminal-app/lib/types";
 import { useLayout } from "@/lib/terminal-app/stores/layout";
 import { useSettings, type GridLayout } from "@/lib/terminal-app/stores/settings";
@@ -36,7 +37,7 @@ const GRID_LAYOUTS: { value: GridLayout; label: string }[] = [
   { value: "4", label: "4 Grid" },
 ];
 
-export function TopBar() {
+export function TopBar({ onOpenGuide }: { onOpenGuide: () => void }) {
   const tf = useSettings((s) => s.timeframe);
   const setTf = useSettings((s) => s.setTimeframe);
   const chartType = useSettings((s) => s.chartType);
@@ -156,6 +157,16 @@ export function TopBar() {
         <PanelToggle label="Toggle right rail" onClick={toggleRight} glyph="right" />
       </div>
 
+      <Tooltip label="How this terminal works">
+        <button
+          type="button"
+          className="flex h-6 w-6 items-center justify-center rounded border border-edge bg-tinput text-2xs font-bold text-mid transition-colors duration-150 hover:bg-hover hover:text-hi"
+          onClick={onOpenGuide}
+        >
+          ?
+        </button>
+      </Tooltip>
+
       <Tooltip label={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}>
         <button
           type="button"
@@ -180,6 +191,7 @@ function WalletCluster() {
   const sol = useSolBalance();
   const symbol = useSettings((s) => s.symbol);
   const providerKind = useSettings((s) => s.provider);
+  const { ticker, handle } = useTokenLabel();
   const mint = providerKind === "attentionfi" ? handleToMint(symbol) : null;
   const tokenBalance = useTokenBalance(mint?.toBase58() ?? "");
 
@@ -188,9 +200,12 @@ function WalletCluster() {
       {connected && mint && tokenBalance !== null && (
         <span
           className="num rounded border border-edge bg-tinput px-2 py-1 text-2xs text-mid"
-          title={`Wallet @${symbol} balance`}
+          // The ticker is what's being counted; the handle says whose attention
+          // it tracks. Showing the handle here read as a balance of a token
+          // that doesn't exist under that name.
+          title={`Wallet balance — ${ticker}, the token launched on ${handle}`}
         >
-          {fmtCompact(tokenBalance)} {symbol.toUpperCase()}
+          {fmtCompact(tokenBalance)} {ticker}
         </span>
       )}
       {connected && sol !== null && (

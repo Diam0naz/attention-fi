@@ -14,12 +14,15 @@ import { ChartArea } from "@/lib/terminal-app/components/chart/ChartArea";
 import { CommandPalette } from "@/lib/terminal-app/components/CommandPalette";
 import { RightRail } from "@/lib/terminal-app/components/rightrail/RightRail";
 import { ShortcutsOverlay } from "@/lib/terminal-app/components/ShortcutsOverlay";
+import { TerminalGuide } from "@/lib/terminal-app/components/TerminalGuide";
 import { TopBar } from "@/lib/terminal-app/components/topbar/TopBar";
 import { WatchlistPanel } from "@/lib/terminal-app/components/watchlist/WatchlistPanel";
 import { useKeyboard } from "@/lib/terminal-app/hooks/useKeyboard";
 import { useMarketFeeds } from "@/lib/terminal-app/hooks/useMarketFeeds";
 import { useLayout } from "@/lib/terminal-app/stores/layout";
 import { useSettings } from "@/lib/terminal-app/stores/settings";
+
+const GUIDE_SEEN_KEY = "tt.guide.seen";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -52,6 +55,32 @@ function Workspace({ initialSymbol }: { initialSymbol?: string }) {
   useMarketFeeds();
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  // Shown once, unprompted. The layout doesn't explain itself — which pane a
+  // search retargets, or that a market's ticker and its subject are different
+  // names — and every reader who works that out by trial has already been
+  // confused by it.
+  //
+  // Read in the initializer (the terminal is ssr:false, so there's no server
+  // render to mismatch) and marked seen from an effect. Doing both in the
+  // initializer would break under StrictMode's double invocation: the second
+  // call would see the flag it had just written and decide the guide was
+  // already shown.
+  const [guideOpen, setGuideOpen] = useState(() => {
+    try {
+      return !localStorage.getItem(GUIDE_SEEN_KEY);
+    } catch {
+      return false; // storage unavailable — skip rather than nag every load
+    }
+  });
+  useEffect(() => {
+    if (!guideOpen) return;
+    try {
+      localStorage.setItem(GUIDE_SEEN_KEY, "1");
+    } catch {
+      /* storage unavailable */
+    }
+  }, [guideOpen]);
+
   useKeyboard({
     openPalette: () => setPaletteOpen(true),
     openShortcuts: () => setShortcutsOpen((v) => !v),
@@ -86,7 +115,7 @@ function Workspace({ initialSymbol }: { initialSymbol?: string }) {
 
   return (
     <div className="tt-root flex h-screen flex-col overflow-hidden bg-canvas">
-      <TopBar />
+      <TopBar onOpenGuide={() => setGuideOpen(true)} />
       <div className="min-h-0 flex-1">
         <PanelGroup direction="horizontal" autoSaveId="tt-workspace-h">
           <Panel
@@ -139,6 +168,7 @@ function Workspace({ initialSymbol }: { initialSymbol?: string }) {
       </div>
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
       <ShortcutsOverlay open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
+      <TerminalGuide open={guideOpen} onClose={() => setGuideOpen(false)} />
       <AlertToast />
     </div>
   );

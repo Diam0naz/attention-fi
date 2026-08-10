@@ -21,6 +21,7 @@ import { useSolBalance } from "@/lib/solana/use-sol-balance";
 import { useTokenBalance } from "@/lib/solana/use-token-balance";
 import { cn } from "@/lib/terminal-app/lib/cn";
 import { fmtPrice, fmtQty } from "@/lib/terminal-app/lib/format";
+import { useTokenLabel } from "@/lib/terminal-app/lib/token-label";
 import { useSettings } from "@/lib/terminal-app/stores/settings";
 import { useTrading } from "@/lib/terminal-app/stores/trading";
 
@@ -80,6 +81,7 @@ export function AttentionOrderEntry() {
   const [tx, setTx] = useState<TxState>({ kind: "idle" });
   const [walletModal, setWalletModal] = useState(false);
 
+  const { ticker, handle } = useTokenLabel();
   const mint = handleToMint(symbol);
   const tokenBalance = useTokenBalance(mint?.toBase58() ?? "");
   const solBalance = useSolBalance();
@@ -200,7 +202,12 @@ export function AttentionOrderEntry() {
   return (
     <div className="flex h-full flex-col gap-3 overflow-y-auto p-3">
       <div className="flex items-center justify-between">
-        <span className="num text-xs font-medium text-hi">@{symbol}</span>
+        {/* Ticker first: it's the unit every figure below is denominated in.
+            The handle follows because it's the reason the market exists. */}
+        <span className="flex min-w-0 items-baseline gap-1.5">
+          <span className="num truncate text-xs font-medium text-hi">{ticker}</span>
+          <span className="num truncate text-2xs text-low">{handle}</span>
+        </span>
         <span
           className={cn(
             "rounded px-1.5 py-0.5 text-2xs uppercase",
