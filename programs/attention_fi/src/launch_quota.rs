@@ -51,7 +51,7 @@ pub fn validate_policy(max_launches: u8, window_secs: i64) -> Result<()> {
     // genuinely needs one. The ceiling matters more: a year-long window is
     // indistinguishable from a permanent ban, and should be typed as one.
     require!(
-        window_secs >= 1 && window_secs <= 365 * 86_400,
+        (1..=365 * 86_400).contains(&window_secs),
         AttentionError::InvalidLaunchPolicy
     );
     Ok(())
