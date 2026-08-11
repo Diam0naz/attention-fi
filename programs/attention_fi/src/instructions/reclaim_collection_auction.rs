@@ -5,6 +5,7 @@ use crate::auction::is_perpetual;
 use crate::constants::COLLECTIONAUCTION_SEED;
 use crate::error::AttentionError;
 use crate::events::{CollectionAuctionEvent, NFT_RECLAIMED};
+use crate::nft::move_collection_members;
 use crate::state::CollectionAuction;
 
 /// Return an unsold collection's update authority to its lister once the
@@ -53,7 +54,9 @@ pub struct ReclaimCollectionAuction<'info> {
     pub system_program: Program<'info, System>,
 }
 
-pub fn reclaim_collection_auction_handler(ctx: Context<ReclaimCollectionAuction>) -> Result<()> {
+pub fn reclaim_collection_auction_handler<'info>(
+    ctx: Context<'_, '_, '_, 'info, ReclaimCollectionAuction<'info>>,
+) -> Result<()> {
     // A sold listing has already handed the authority on; nothing to reclaim.
     require!(!ctx.accounts.auction.complete, AttentionError::SoldOut);
 
@@ -84,6 +87,25 @@ pub fn reclaim_collection_auction_handler(ctx: Context<ReclaimCollectionAuction>
         collection_key.as_ref(),
         &[auction.bump],
     ]];
+    // Give the cards back too. The escrow holds them from the listing, so a
+    // reclaim that returned only the authority would strand every member under
+    // a PDA whose only release path had already been spent — the exact
+    // stranding this instruction exists to prevent, moved down one level.
+    //
+    // `payer` funds this but cannot redirect it: `creator` is pinned to
+    // `auction.creator` by the account constraint, so a keeper triggering an
+    // expired listing returns the deck to its lister, not to themselves.
+    move_collection_members(
+        ctx.remaining_accounts,
+        &ctx.accounts.collection.to_account_info(),
+        &ctx.accounts.auction.to_account_info(),
+        &ctx.accounts.creator.to_account_info(),
+        &ctx.accounts.payer.to_account_info(),
+        &ctx.accounts.mpl_core_program.to_account_info(),
+        &ctx.accounts.system_program.to_account_info(),
+        Some(signer_seeds),
+    )?;
+
     UpdateCollectionV1CpiBuilder::new(&ctx.accounts.mpl_core_program.to_account_info())
         .collection(&ctx.accounts.collection.to_account_info())
         .payer(&ctx.accounts.payer.to_account_info())

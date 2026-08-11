@@ -932,7 +932,10 @@ export type AttentionFi = {
     {
       "name": "buyCollection",
       "docs": [
-        "Buy a listed collection at its current descending price."
+        "Buy a listed collection at its current descending price.",
+        "",
+        "Every member must be passed in `remaining_accounts`; they transfer to",
+        "the buyer alongside the collection's authority."
       ],
       "discriminator": [
         235,
@@ -4651,8 +4654,9 @@ export type AttentionFi = {
       "docs": [
         "List a whole mpl-core collection as a descending auction.",
         "",
-        "Sells the collection's update authority — the only thing a collection",
-        "has to give — which carries every member with it."
+        "Sells the collection's update authority and escrows every member asset,",
+        "which must be passed in `remaining_accounts` — the authority alone does",
+        "not carry ownership of the cards with it."
       ],
       "discriminator": [
         122,
@@ -5730,7 +5734,7 @@ export type AttentionFi = {
     {
       "name": "reclaimCollectionAuction",
       "docs": [
-        "Return an unsold collection's update authority to its lister."
+        "Return an unsold collection's update authority and members to its lister."
       ],
       "discriminator": [
         252,
@@ -9243,6 +9247,11 @@ export type AttentionFi = {
       "code": 6046,
       "name": "notDisavowed",
       "msg": "That token is not disavowed"
+    },
+    {
+      "code": 6047,
+      "name": "collectionMembersMismatch",
+      "msg": "Every member of the collection must be passed, and only its members"
     }
   ],
   "types": [

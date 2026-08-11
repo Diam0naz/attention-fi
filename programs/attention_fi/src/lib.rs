@@ -459,10 +459,11 @@ pub mod attention_fi {
 
     /// List a whole mpl-core collection as a descending auction.
     ///
-    /// Sells the collection's update authority — the only thing a collection
-    /// has to give — which carries every member with it.
-    pub fn list_collection_auction(
-        ctx: Context<ListCollectionAuction>,
+    /// Sells the collection's update authority and escrows every member asset,
+    /// which must be passed in `remaining_accounts` — the authority alone does
+    /// not carry ownership of the cards with it.
+    pub fn list_collection_auction<'info>(
+        ctx: Context<'_, '_, '_, 'info, ListCollectionAuction<'info>>,
         start_price: u64,
         floor_price: u64,
         duration: i64,
@@ -476,12 +477,20 @@ pub mod attention_fi {
     }
 
     /// Buy a listed collection at its current descending price.
-    pub fn buy_collection(ctx: Context<BuyCollection>, max_total: u64) -> Result<()> {
+    ///
+    /// Every member must be passed in `remaining_accounts`; they transfer to
+    /// the buyer alongside the collection's authority.
+    pub fn buy_collection<'info>(
+        ctx: Context<'_, '_, '_, 'info, BuyCollection<'info>>,
+        max_total: u64,
+    ) -> Result<()> {
         buy_collection::buy_collection_handler(ctx, max_total)
     }
 
-    /// Return an unsold collection's update authority to its lister.
-    pub fn reclaim_collection_auction(ctx: Context<ReclaimCollectionAuction>) -> Result<()> {
+    /// Return an unsold collection's update authority and members to its lister.
+    pub fn reclaim_collection_auction<'info>(
+        ctx: Context<'_, '_, '_, 'info, ReclaimCollectionAuction<'info>>,
+    ) -> Result<()> {
         reclaim_collection_auction::reclaim_collection_auction_handler(ctx)
     }
 

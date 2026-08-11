@@ -5,7 +5,7 @@ use crate::auction::validate_listing;
 use crate::constants::{COLLECTIONAUCTION_SEED, GLOBAL_SEED};
 use crate::error::AttentionError;
 use crate::events::CollectionListedEvent;
-use crate::nft::collection_size;
+use crate::nft::{collection_size, move_collection_members};
 use crate::state::{CollectionAuction, Global};
 
 /// List an entire mpl-core collection as a descending auction.
@@ -20,11 +20,14 @@ use crate::state::{CollectionAuction, Global};
 /// mint into the collection or change it, because those are exactly the powers
 /// being sold. `reclaim_collection_auction` hands them back if nobody buys.
 ///
-/// The members travel with it implicitly. Each asset stores the collection as
-/// its own `UpdateAuthority`, so the buyer acquires authority over every piece
-/// without a single asset account being touched — which is also why this can't
-/// be done piecemeal, and why `size` is recorded in the event as the count the
-/// buyer was offered.
+/// The members do NOT travel with it implicitly, and assuming they did was a
+/// real bug: an asset's `UpdateAuthority` pointing at the collection is a
+/// separate field from its `owner`, so reassigning the collection handed the
+/// buyer authority over cards that stayed in the seller's wallet — still theirs
+/// to sell again, one by one. So every member is escrowed to this PDA here,
+/// passed in `remaining_accounts`, and released to whoever the listing
+/// resolves to. `size` is both the event's advertised count and the number of
+/// members the instruction requires.
 #[derive(Accounts)]
 pub struct ListCollectionAuction<'info> {
     /// Current update authority of the collection; must sign to hand it over.
@@ -57,8 +60,8 @@ pub struct ListCollectionAuction<'info> {
     pub system_program: Program<'info, System>,
 }
 
-pub fn list_collection_auction_handler(
-    ctx: Context<ListCollectionAuction>,
+pub fn list_collection_auction_handler<'info>(
+    ctx: Context<'_, '_, '_, 'info, ListCollectionAuction<'info>>,
     start_price: u64,
     floor_price: u64,
     duration: i64,
@@ -70,6 +73,21 @@ pub fn list_collection_auction_handler(
     // is advertising.
     let size = collection_size(&ctx.accounts.collection.try_borrow_data()?)
         .ok_or(AttentionError::InvalidAuctionParams)?;
+
+    // Escrow the members BEFORE the authority moves. The seller signs these
+    // transfers as their owner, and they are only the owner while they still
+    // hold the collection — reversing the order would leave the assets behind
+    // with nobody able to sign for them.
+    move_collection_members(
+        ctx.remaining_accounts,
+        &ctx.accounts.collection.to_account_info(),
+        &ctx.accounts.creator.to_account_info(),
+        &ctx.accounts.auction.to_account_info(),
+        &ctx.accounts.creator.to_account_info(),
+        &ctx.accounts.mpl_core_program.to_account_info(),
+        &ctx.accounts.system_program.to_account_info(),
+        None,
+    )?;
 
     UpdateCollectionV1CpiBuilder::new(&ctx.accounts.mpl_core_program.to_account_info())
         .collection(&ctx.accounts.collection.to_account_info())

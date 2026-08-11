@@ -11,16 +11,19 @@ use crate::constants::{COLLECTIONAUCTION_SEED, FEECONFIG_SEED, GLOBAL_SEED, GUAR
 use crate::error::AttentionError;
 use crate::events::{CollectionAuctionEvent, NFT_SOLD};
 use crate::guardians;
-use crate::nft::{collection_has_attributes, last_sale_attributes};
+use crate::nft::{collection_has_attributes, last_sale_attributes, move_collection_members};
 use crate::state::{CollectionAuction, FeeConfig, Global};
 
 /// Buy a listed collection at its current descending price.
 ///
-/// Mirrors `buy_nft`, with the one structural difference that defines the
-/// whole collection lifecycle: the buyer receives the collection's update
-/// authority rather than ownership of an account. That single reassignment
-/// hands over every member at once, since each asset names the collection as
-/// its own authority.
+/// Mirrors `buy_nft`, with the structural difference that defines the whole
+/// collection lifecycle: a collection has no owner to transfer, only an update
+/// authority to reassign. That reassignment alone was once thought to hand over
+/// every member, since each asset names the collection as its authority — it
+/// does not. `owner` is a separate field, and a buyer who got only the
+/// authority got a deck whose cards were still the seller's to sell again. So
+/// the members escrowed at listing are transferred here too, in
+/// `remaining_accounts`, and the buyer must pass all of them.
 ///
 /// The sale price is recorded on the collection's own Attributes plugin — one
 /// write, not one per member, because a collection carries its own plugin
@@ -75,7 +78,10 @@ pub struct BuyCollection<'info> {
     pub system_program: Program<'info, System>,
 }
 
-pub fn buy_collection_handler(ctx: Context<BuyCollection>, max_total: u64) -> Result<()> {
+pub fn buy_collection_handler<'info>(
+    ctx: Context<'_, '_, '_, 'info, BuyCollection<'info>>,
+    max_total: u64,
+) -> Result<()> {
     // Refuses while a guardian has pulled the stop.
     guardians::require_live(&ctx.accounts.guardians.to_account_info())?;
 
@@ -181,6 +187,23 @@ pub fn buy_collection_handler(ctx: Context<BuyCollection>, max_total: u64) -> Re
             .init_authority(PluginAuthority::UpdateAuthority)
             .invoke_signed(signer_seeds)?;
     }
+
+    // Hand over the cards themselves, then the collection.
+    //
+    // Both are needed and neither is sufficient: the collection carries the
+    // right to mint into it and edit it, the members are the things of value.
+    // Transferring only the authority is what let a seller keep a sold deck.
+    // The escrow PDA signs as their owner, having held them since the listing.
+    move_collection_members(
+        ctx.remaining_accounts,
+        &ctx.accounts.collection.to_account_info(),
+        &ctx.accounts.auction.to_account_info(),
+        &ctx.accounts.buyer.to_account_info(),
+        &ctx.accounts.buyer.to_account_info(),
+        &ctx.accounts.mpl_core_program.to_account_info(),
+        &ctx.accounts.system_program.to_account_info(),
+        Some(signer_seeds),
+    )?;
 
     // Hand the collection to the buyer; the escrow PDA signs as the current
     // update authority.

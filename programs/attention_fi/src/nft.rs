@@ -2,7 +2,7 @@
 
 use crate::constants::{DISCOUNT_PER_LEVEL_BPS, LAMPORTS_PER_SOL, MAX_PERK_LEVEL};
 use anchor_lang::prelude::*;
-use mpl_core::instructions::CreateV2CpiBuilder;
+use mpl_core::instructions::{CreateV2CpiBuilder, TransferV1CpiBuilder};
 use mpl_core::types::{
     Attribute, Attributes, DataState, PermanentFreezeDelegate, Plugin, PluginAuthorityPair,
     PluginType,
@@ -191,6 +191,86 @@ pub fn has_attributes_plugin(account_data: &[u8]) -> bool {
     false
 }
 
+/// Whether `account_data` is a Core asset whose update authority is `collection`.
+///
+/// `BaseAssetV1` is key(1) + owner(32) + UpdateAuthority, and that enum is a
+/// tag byte followed by a pubkey for both of its populated variants. Tag 2 is
+/// `Collection`, which is the only one that makes an asset a member — tag 1 is
+/// `Address`, a standalone asset that merely happens to be pointed somewhere.
+pub fn is_member_of(account_data: &[u8], collection: &Pubkey) -> bool {
+    const KEY_ASSET_V1: u8 = 1;
+    const AUTHORITY_COLLECTION: u8 = 2;
+    if account_data.first() != Some(&KEY_ASSET_V1) {
+        return false;
+    }
+    if account_data.get(33) != Some(&AUTHORITY_COLLECTION) {
+        return false;
+    }
+    match account_data.get(34..66) {
+        Some(bytes) => Pubkey::try_from(bytes).is_ok_and(|key| key == *collection),
+        None => false,
+    }
+}
+
+/// Move every member of a collection to `new_owner`.
+///
+/// This is what makes selling a collection mean anything. A Core collection
+/// has only an update authority, so reassigning it hands over the right to
+/// change the collection and its members' metadata — but each member is a
+/// separate account with its own `owner`, and that field is untouched by any
+/// amount of authority juggling. Without this, a buyer paid for a deck whose
+/// cards stayed in the seller's wallet, free to be sold again individually.
+///
+/// **All or nothing.** `members` must be exactly the collection's live set:
+/// the count is checked against `current_size` and each account is checked to
+/// be a member of this collection specifically. A partial escrow would be the
+/// worst of both worlds — a listing that looks whole and delivers some of it.
+/// The practical ceiling is the transaction, which bounds how large a deck can
+/// be listed; refusing loudly at that edge is better than selling a fraction.
+///
+/// Duplicates need no separate check: the second transfer of the same asset
+/// finds `authority` is no longer its owner, and mpl-core rejects it.
+#[allow(clippy::too_many_arguments)]
+pub fn move_collection_members<'info>(
+    members: &[AccountInfo<'info>],
+    collection: &AccountInfo<'info>,
+    authority: &AccountInfo<'info>,
+    new_owner: &AccountInfo<'info>,
+    payer: &AccountInfo<'info>,
+    core_program: &AccountInfo<'info>,
+    system_program: &AccountInfo<'info>,
+    signer_seeds: Option<&[&[&[u8]]]>,
+) -> Result<()> {
+    let expected = collection_size(&collection.try_borrow_data()?)
+        .ok_or(crate::error::AttentionError::InvalidAuctionParams)?;
+    require!(
+        members.len() == expected as usize,
+        crate::error::AttentionError::CollectionMembersMismatch
+    );
+
+    let collection_key = collection.key();
+    for member in members {
+        require!(
+            is_member_of(&member.try_borrow_data()?, &collection_key),
+            crate::error::AttentionError::CollectionMembersMismatch
+        );
+
+        let mut transfer = TransferV1CpiBuilder::new(core_program);
+        transfer
+            .asset(member)
+            .collection(Some(collection))
+            .payer(payer)
+            .authority(Some(authority))
+            .new_owner(new_owner)
+            .system_program(Some(system_program));
+        match signer_seeds {
+            Some(seeds) => transfer.invoke_signed(seeds)?,
+            None => transfer.invoke()?,
+        };
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -204,6 +284,59 @@ mod tests {
         // never claims a higher price than was paid.
         assert_eq!(lamports_to_sol_string(1_999_999), "0.001");
         assert_eq!(lamports_to_sol_string(999_999), "0.000");
+    }
+
+    /// Build a `BaseAssetV1` header: key + owner + UpdateAuthority(tag, pubkey).
+    fn asset_bytes(key: u8, tag: u8, authority: &Pubkey) -> Vec<u8> {
+        let mut data = vec![key];
+        data.extend_from_slice(&[7u8; 32]); // owner, deliberately not the authority
+        data.push(tag);
+        data.extend_from_slice(authority.as_ref());
+        data
+    }
+
+    #[test]
+    fn a_collection_member_is_recognised() {
+        let collection = Pubkey::new_unique();
+        assert!(is_member_of(&asset_bytes(1, 2, &collection), &collection));
+    }
+
+    #[test]
+    fn membership_is_specific_to_one_collection() {
+        let collection = Pubkey::new_unique();
+        let other = Pubkey::new_unique();
+        // The check that stops a seller escrowing eight assets from a deck
+        // nobody bought and passing the count test with them.
+        assert!(!is_member_of(&asset_bytes(1, 2, &other), &collection));
+    }
+
+    #[test]
+    fn a_standalone_asset_is_not_a_member() {
+        let collection = Pubkey::new_unique();
+        // Tag 1 is UpdateAuthority::Address — an asset pointed at an address
+        // that merely happens to be a collection's. Accepting it would let an
+        // unrelated asset be counted toward the deck.
+        assert!(!is_member_of(&asset_bytes(1, 1, &collection), &collection));
+        // Tag 0 is None, with no pubkey following at all.
+        assert!(!is_member_of(&[1u8; 34], &collection));
+    }
+
+    #[test]
+    fn a_collection_account_is_not_its_own_member() {
+        let collection = Pubkey::new_unique();
+        // Key 5 is BaseCollectionV1. Passing the collection itself among the
+        // members would otherwise read its authority bytes as an asset's.
+        assert!(!is_member_of(&asset_bytes(5, 2, &collection), &collection));
+    }
+
+    #[test]
+    fn truncated_data_is_not_a_member() {
+        let collection = Pubkey::new_unique();
+        let full = asset_bytes(1, 2, &collection);
+        // One byte short of a full authority pubkey: must refuse rather than
+        // read past the end or match on a prefix.
+        assert!(!is_member_of(&full[..full.len() - 1], &collection));
+        assert!(!is_member_of(&[], &collection));
     }
 
     /// Build a `BaseCollectionV1` body: key + authority + name + uri +

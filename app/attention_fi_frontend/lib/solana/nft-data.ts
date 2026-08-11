@@ -894,3 +894,29 @@ export async function collectionListingFor(
   const info = await program.provider.connection.getAccountInfo(pda).catch(() => null);
   return info ? pda : null;
 }
+
+/**
+ * A collection's members, as `remainingAccounts` for the escrow instructions.
+ *
+ * `list_collection_auction`, `buy_collection` and `reclaim_collection_auction`
+ * each move every member, and the program checks the count against the
+ * collection's own `current_size` — so a partial list is refused rather than
+ * silently escrowing some of the deck. Passing them from one query keeps the
+ * three call sites in step; building the list by hand at each was how the
+ * counts drifted in the first place.
+ *
+ * Writable and non-signing: mpl-core mutates each asset's owner, and the
+ * authority to do so is the seller's signature or the escrow PDA's seeds, never
+ * the asset itself.
+ */
+export async function collectionMemberAccounts(
+  program: Program<AttentionFi>,
+  collection: PublicKey,
+): Promise<{ pubkey: PublicKey; isSigner: boolean; isWritable: boolean }[]> {
+  const members = await fetchCollectionAssets(program, collection);
+  return members.map((m) => ({
+    pubkey: new PublicKey(m.asset),
+    isSigner: false,
+    isWritable: true,
+  }));
+}

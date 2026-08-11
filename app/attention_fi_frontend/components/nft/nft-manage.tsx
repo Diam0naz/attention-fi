@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Keypair, PublicKey, Transaction } from "@solana/web3.js";
+import { ComputeBudgetProgram, Keypair, PublicKey, Transaction } from "@solana/web3.js";
 import { BN } from "@anchor-lang/core";
 import {
   Rocket, ArrowLeft, BadgeCheck, Boxes, Gavel, Gift, Layers, Loader2, Lock, Plus, Trash2, TrendingUp, X } from "lucide-react";
@@ -56,7 +56,14 @@ import {
   type NftPortfolio,
   type OwnedAsset,
   type PerkGrantData,
+  collectionMemberAccounts,
 } from "@/lib/solana/nft-data";
+
+/** Moving a whole deck is many CPIs; the 200k default is not enough.
+ *  Sized for a deck at the transaction's practical ceiling. */
+const COLLECTION_MOVE_CU = 800_000;
+const computeBudget = () =>
+  ComputeBudgetProgram.setComputeUnitLimit({ units: COLLECTION_MOVE_CU });
 
 /**
  * A worn skin as the cards need it: the id selects a palette, the URI carries
@@ -585,6 +592,12 @@ export function NftManage({ section }: { section: Section }) {
           creator: new PublicKey(c.creator),
           collection: new PublicKey(c.collection),
         })
+        // Every member, or the program refuses: buying a deck has to deliver
+        // the cards, not just authority over them.
+        .remainingAccounts(
+          await collectionMemberAccounts(signProgram, new PublicKey(c.collection)),
+        )
+        .preInstructions([computeBudget()])
         .rpc();
       setTx({
         state: "confirmed",
@@ -615,6 +628,10 @@ export function NftManage({ section }: { section: Section }) {
           creator: new PublicKey(c.creator),
           collection: new PublicKey(c.collection),
         })
+        .remainingAccounts(
+          await collectionMemberAccounts(signProgram, new PublicKey(c.collection)),
+        )
+        .preInstructions([computeBudget()])
         .rpc();
       setTx({
         state: "confirmed",

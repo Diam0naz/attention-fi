@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { PublicKey, Transaction } from "@solana/web3.js";
+import { ComputeBudgetProgram, PublicKey, Transaction } from "@solana/web3.js";
 import { BN } from "@anchor-lang/core";
 import { ChevronDown, Loader2, PackageOpen, Plus, Tag, Trash2, Undo2 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -17,7 +17,14 @@ import {
   type CollectionAuctionData,
   type CollectionData,
   type OwnedAsset,
+  collectionMemberAccounts,
 } from "@/lib/solana/nft-data";
+
+/** Moving a whole deck is many CPIs; the 200k default is not enough.
+ *  Sized for a deck at the transaction's practical ceiling. */
+const COLLECTION_MOVE_CU = 800_000;
+const computeBudget = () =>
+  ComputeBudgetProgram.setComputeUnitLimit({ units: COLLECTION_MOVE_CU });
 
 /**
  * A collection, shown as the thing it is rather than as a row in a table.
@@ -203,10 +210,12 @@ export function CollectionShelf({
   /**
    * List the whole collection.
    *
-   * Hands the collection's update authority to the escrow PDA, which is what a
-   * buyer is actually buying — it carries every member, since each asset names
-   * the collection as its own authority. While listed the wallet can no longer
-   * mint into it or change it, because those are precisely the powers on sale.
+   * Hands the collection's update authority to the escrow PDA *and* every
+   * member asset with it. The authority alone was not enough: an asset's owner
+   * is a separate field from the authority pointing at its collection, so a
+   * sale that moved only the authority left the cards in the seller's wallet.
+   * While listed the wallet can no longer mint into it or change it, because
+   * those are precisely the powers on sale.
    */
   async function listCollection() {
     if (!program) return;
@@ -226,6 +235,10 @@ export function CollectionShelf({
           creator: new PublicKey(owner),
           collection: new PublicKey(collection.address),
         })
+        .remainingAccounts(
+          await collectionMemberAccounts(program, new PublicKey(collection.address)),
+        )
+        .preInstructions([computeBudget()])
         .rpc();
       setListOpen(false);
       onChanged();
@@ -249,6 +262,10 @@ export function CollectionShelf({
           creator: new PublicKey(owner),
           collection: new PublicKey(collection.address),
         })
+        .remainingAccounts(
+          await collectionMemberAccounts(program, new PublicKey(collection.address)),
+        )
+        .preInstructions([computeBudget()])
         .rpc();
       onChanged();
     } catch (e) {

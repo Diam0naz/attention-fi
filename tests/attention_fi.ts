@@ -3838,3 +3838,231 @@ describe("attention_fi disavowal", () => {
     await buyIx(0.5).rpc();
   });
 });
+
+/**
+ * A collection sale has to deliver the cards, not just authority over them.
+ *
+ * This is the test that was missing when the bug shipped. A Core asset has an
+ * `owner` and, separately, an `UpdateAuthority` that may point at a collection.
+ * Selling the collection reassigns the latter; for a while the code assumed
+ * that carried the former with it. It does not — buyers received authority
+ * over a deck whose cards were still in the seller's wallet, free to be sold
+ * again individually. Asserting on the auction PDA alone would still pass
+ * against that bug, so every assertion here reads the member assets' `owner`
+ * byte range straight from the chain.
+ */
+describe("attention_fi collection sale moves the cards", () => {
+  const provider = anchor.AnchorProvider.env();
+  anchor.setProvider(provider);
+  const program = anchor.workspace.AttentionFi as Program<AttentionFi>;
+  const wallet = provider.wallet.publicKey;
+
+  const collectionKp = Keypair.generate();
+  const memberKps = [Keypair.generate(), Keypair.generate()];
+  const buyer = Keypair.generate();
+
+  const START = 0.4 * LAMPORTS_PER_SOL;
+  const FLOOR = 0.1 * LAMPORTS_PER_SOL;
+
+  function collectionAuctionPda(collection: PublicKey): PublicKey {
+    return PublicKey.findProgramAddressSync(
+      [Buffer.from("colauction"), collection.toBuffer()],
+      program.programId
+    )[0];
+  }
+
+  /** The `owner` field of a Core asset: key(1) then 32 bytes. */
+  async function ownerOf(asset: PublicKey): Promise<string> {
+    const info = await provider.connection.getAccountInfo(asset);
+    assert.ok(info, "asset account should exist");
+    return new PublicKey(info!.data.subarray(1, 33)).toBase58();
+  }
+
+  /** Members as remaining accounts, in the order the program will move them. */
+  function memberAccounts() {
+    return memberKps.map((kp) => ({
+      pubkey: kp.publicKey,
+      isSigner: false,
+      isWritable: true,
+    }));
+  }
+
+  before(async () => {
+    const sig = await provider.connection.requestAirdrop(
+      buyer.publicKey,
+      5 * LAMPORTS_PER_SOL
+    );
+    await provider.connection.confirmTransaction(sig, "confirmed");
+
+    await program.methods
+      .createCollection("Deck", "https://attention.fi/deck.json")
+      .accountsStrict({
+        payer: wallet,
+        collection: collectionKp.publicKey,
+        mplCoreProgram: MPL_CORE_PROGRAM_ID,
+        systemProgram: SystemProgram.programId,
+      })
+      .signers([collectionKp])
+      .rpc();
+
+    for (const [i, kp] of memberKps.entries()) {
+      await program.methods
+        .mintNft(`Card ${i + 1}`, "https://attention.fi/card.json")
+        .accountsPartial({
+          payer: wallet,
+          recipient: wallet,
+          asset: kp.publicKey,
+          collection: collectionKp.publicKey,
+          mplCoreProgram: MPL_CORE_PROGRAM_ID,
+          systemProgram: SystemProgram.programId,
+        })
+        .signers([kp])
+        .rpc();
+    }
+  });
+
+  it("escrows every card when the collection is listed", async () => {
+    for (const kp of memberKps) {
+      assert.equal(
+        await ownerOf(kp.publicKey),
+        wallet.toBase58(),
+        "the seller owns the cards before listing"
+      );
+    }
+
+    await program.methods
+      .listCollectionAuction(
+        new anchor.BN(START),
+        new anchor.BN(FLOOR),
+        new anchor.BN(3600)
+      )
+      .accountsPartial({
+        creator: wallet,
+        collection: collectionKp.publicKey,
+        mplCoreProgram: MPL_CORE_PROGRAM_ID,
+        systemProgram: SystemProgram.programId,
+      })
+      .remainingAccounts(memberAccounts())
+      .preInstructions([
+        anchor.web3.ComputeBudgetProgram.setComputeUnitLimit({ units: 800_000 }),
+      ])
+      .rpc();
+
+    const escrow = collectionAuctionPda(collectionKp.publicKey).toBase58();
+    for (const kp of memberKps) {
+      assert.equal(
+        await ownerOf(kp.publicKey),
+        escrow,
+        "the escrow holds the cards while listed, so the seller cannot sell them twice"
+      );
+    }
+  });
+
+  it("refuses a listing that does not carry every member", async () => {
+    // The count is checked against the collection's own current_size, so a
+    // caller cannot escrow half a deck and advertise a whole one.
+    const otherCollection = Keypair.generate();
+    const lonelyCard = Keypair.generate();
+    await program.methods
+      .createCollection("Partial", "https://attention.fi/partial.json")
+      .accountsStrict({
+        payer: wallet,
+        collection: otherCollection.publicKey,
+        mplCoreProgram: MPL_CORE_PROGRAM_ID,
+        systemProgram: SystemProgram.programId,
+      })
+      .signers([otherCollection])
+      .rpc();
+    for (const kp of [lonelyCard, Keypair.generate()]) {
+      await program.methods
+        .mintNft("Card", "https://attention.fi/card.json")
+        .accountsPartial({
+          payer: wallet,
+          recipient: wallet,
+          asset: kp.publicKey,
+          collection: otherCollection.publicKey,
+          mplCoreProgram: MPL_CORE_PROGRAM_ID,
+          systemProgram: SystemProgram.programId,
+        })
+        .signers([kp])
+        .rpc();
+    }
+
+    try {
+      await program.methods
+        .listCollectionAuction(
+          new anchor.BN(START),
+          new anchor.BN(FLOOR),
+          new anchor.BN(3600)
+        )
+        .accountsPartial({
+          creator: wallet,
+          collection: otherCollection.publicKey,
+          mplCoreProgram: MPL_CORE_PROGRAM_ID,
+          systemProgram: SystemProgram.programId,
+        })
+        // One of two — deliberately short.
+        .remainingAccounts([
+          { pubkey: lonelyCard.publicKey, isSigner: false, isWritable: true },
+        ])
+        .rpc();
+      assert.fail("a partial deck should not be listable");
+    } catch (e: any) {
+      assert.include(
+        e.toString(),
+        "CollectionMembersMismatch",
+        "the count must be checked against the collection's real size"
+      );
+    }
+  });
+
+  it("hands the cards to the buyer, not just the collection", async () => {
+    const global = PublicKey.findProgramAddressSync(
+      [Buffer.from("global")],
+      program.programId
+    )[0];
+    const treasury = (await program.account.global.fetch(global)).treasury;
+
+    await program.methods
+      .buyCollection(new anchor.BN(START * 2))
+      .accountsPartial({
+        buyer: buyer.publicKey,
+        treasury,
+        creator: wallet,
+        collection: collectionKp.publicKey,
+        mplCoreProgram: MPL_CORE_PROGRAM_ID,
+        systemProgram: SystemProgram.programId,
+        guardians: guardiansPda(program.programId),
+        feeConfig: feeConfigPda(program.programId),
+      })
+      .remainingAccounts(memberAccounts())
+      .preInstructions([
+        anchor.web3.ComputeBudgetProgram.setComputeUnitLimit({ units: 800_000 }),
+      ])
+      .signers([buyer])
+      .rpc();
+
+    // The assertion the old code would fail. Authority moving is not enough.
+    for (const kp of memberKps) {
+      assert.equal(
+        await ownerOf(kp.publicKey),
+        buyer.publicKey.toBase58(),
+        "the buyer owns the cards outright, not merely authority over them"
+      );
+    }
+
+    const collectionInfo = await provider.connection.getAccountInfo(
+      collectionKp.publicKey
+    );
+    assert.equal(
+      new PublicKey(collectionInfo!.data.subarray(1, 33)).toBase58(),
+      buyer.publicKey.toBase58(),
+      "and the collection's update authority as well"
+    );
+
+    const auction = await program.account.collectionAuction.fetch(
+      collectionAuctionPda(collectionKp.publicKey)
+    );
+    assert.isTrue(auction.complete, "the listing is closed");
+  });
+});

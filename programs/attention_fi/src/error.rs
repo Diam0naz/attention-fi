@@ -99,4 +99,6 @@ pub enum AttentionError {
     TokenDisavowed,
     #[msg("That token is not disavowed")]
     NotDisavowed,
+    #[msg("Every member of the collection must be passed, and only its members")]
+    CollectionMembersMismatch,
 }
