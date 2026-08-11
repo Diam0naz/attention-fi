@@ -82,6 +82,18 @@ export function appOrigin(): string {
 export const verificationMetadataUri = (subject: string) =>
   `${appOrigin()}/api/verification/${subject}`;
 
+/**
+ * Metadata URI written into a launched token's on-chain record.
+ *
+ * Permanent in a stronger sense than the verification badge: launch metadata is
+ * created `is_mutable = false`, so this string is fixed for the life of the
+ * token and no authority can rewrite it. Keep the deployment's
+ * NEXT_PUBLIC_APP_URL right before launching anything you intend to keep — the
+ * program caps the field at 200 characters, which an origin plus a 44-character
+ * mint leaves enormous room under, but a wrong host is unfixable.
+ */
+export const tokenMetadataUri = (mint: string) => `${appOrigin()}/api/token/${mint}`;
+
 const explorerSuffix = CLUSTER === "mainnet-beta" ? "" : `?cluster=${CLUSTER}`;
 
 export const explorerTx = (sig: string) => `https://explorer.solana.com/tx/${sig}${explorerSuffix}`;

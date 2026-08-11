@@ -16,7 +16,7 @@ import { metadataPda } from "@/lib/solana/program";
 import { useQueryClient } from "@tanstack/react-query";
 import { nftPortfolioKey } from "@/components/nft/use-nft-portfolio";
 import { registerToken, syncRegistry } from "@/lib/solana/registry";
-import { explorerTx, verificationMetadataUri } from "@/lib/solana/config";
+import { explorerTx, tokenMetadataUri, verificationMetadataUri } from "@/lib/solana/config";
 import { verificationPda } from "@/lib/solana/program";
 import { mindshareFeedEnabled, launchFromFeed } from "@/lib/solana/mindshare-feed";
 import { verifyMessage } from "@/lib/sas/config";
@@ -225,12 +225,18 @@ export function LaunchFlow() {
       // has never heard of AttentionFi still shows a name rather than an
       // address. The program bounds these at 32/10/200 characters.
       //
-      // `uri` is deliberately empty: the launch image is a data: URI held in
-      // the browser registry, which is both far past the on-chain limit and the
-      // wrong kind of thing — Metaplex wants a URL to a JSON document. Hosting
-      // that document is the follow-up; an empty uri is valid meanwhile and
-      // leaves the name and symbol correct.
-      const metadataArg = { name: name.slice(0, 32), symbol: ticker.slice(0, 10), uri: "" };
+      // `uri` points at our own metadata route rather than a hosted file. The
+      // launch image is a data: URI — far past the on-chain limit and the wrong
+      // kind of thing, since Metaplex wants a URL to a JSON document — and this
+      // metadata is written immutable, so a URL that resolves at read time is
+      // the only version of this that stays correctable. The route derives
+      // everything from the mint, which is why it can be built before the token
+      // or its registry row exists.
+      const metadataArg = {
+        name: name.slice(0, 32),
+        symbol: ticker.slice(0, 10),
+        uri: tokenMetadataUri(mint.publicKey.toBase58()),
+      };
       const metadata = metadataPda(mint.publicKey);
       let sig: string;
       if (mech === "bonding") {
