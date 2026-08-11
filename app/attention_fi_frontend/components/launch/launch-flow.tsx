@@ -19,6 +19,7 @@ import { registerToken, syncRegistry } from "@/lib/solana/registry";
 import { explorerTx, tokenMetadataUri, verificationMetadataUri } from "@/lib/solana/config";
 import { verificationPda } from "@/lib/solana/program";
 import { mindshareFeedEnabled, launchFromFeed } from "@/lib/solana/mindshare-feed";
+import { useHandleMindshare } from "@/components/launch/use-handle-mindshare";
 import { verifyMessage } from "@/lib/sas/config";
 
 type MechId = "bonding" | "dutch" | "conviction" | "revenue";
@@ -197,8 +198,14 @@ export function LaunchFlow() {
   const [txSig, setTxSig] = useState<string | null>(null);
   const [txErr, setTxErr] = useState<string | null>(null);
 
-  const mindshare = 0.98; // mock: fetched from Kaito for the handle
-  const t = tierFor(mindshare);
+  // Priced from the trailing 24h average, not the spot reading: a launch can be
+  // timed against a spike, which is the same reason the on-chain oracle reads
+  // the average. Until the lookup answers, the tier stays at the floor — a
+  // failed read must not be able to hand someone a Top 10 seed, since off the
+  // oracle path this tier *is* what the program is told.
+  const { data: ms, isFetching: msLoading } = useHandleMindshare(handle);
+  const mindshare = ms?.mindshare24h ?? null;
+  const t = tierFor(mindshare ?? 0);
   const mechName = MECHANISMS.find((m) => m.id === mech)!.name;
   // Bonding launches seed their tier from the on-chain Switchboard mindshare
   // feed when one is configured — a decentralized oracle, not a keeper arg.
@@ -590,9 +597,30 @@ export function LaunchFlow() {
           <div className="rounded-sm border border-white/[0.08] bg-[#0f1620] p-5">
             <div className="text-[13px] font-bold">Seed & review</div>
             <p className="mt-1 text-[11px] text-[#6B6B6B]">
-              @{handle} sits at {mindshare}% mindshare → tier <span className="text-signal">{t.tier}</span>.
-              The curve seeds at that price instead of zero.
+              {mindshare === null ? (
+                msLoading ? (
+                  <>Reading @{handle}&apos;s mindshare…</>
+                ) : (
+                  <>
+                    @{handle}&apos;s mindshare couldn&apos;t be read, so this seeds at the{" "}
+                    <span className="text-signal">{t.tier}</span> tier — the floor. Retry rather
+                    than launch if you expect higher.
+                  </>
+                )
+              ) : (
+                <>
+                  @{handle} averaged {mindshare.toFixed(2)}% mindshare over 24h → tier{" "}
+                  <span className="text-signal">{t.tier}</span>. The curve seeds at that price
+                  instead of zero.
+                </>
+              )}
             </p>
+            {mindshare !== null && ms && ms.coverage24h < 0.5 && (
+              <p className="mt-2 text-[10.5px] leading-relaxed text-[#9a9a9a]">
+                History covers only {Math.round(ms.coverage24h * 100)}% of the last 24 hours, so
+                this average is drawn from a short record and may move once a full day exists.
+              </p>
+            )}
             {feedActive && (
               <p className="mt-2 inline-flex items-center gap-1.5 rounded-sm border border-signal/30 bg-signal/6 px-2 py-1 text-[10px] font-mono text-signal">
                 ◈ Tier read on-chain from the live 𝕏 mindshare oracle at launch
