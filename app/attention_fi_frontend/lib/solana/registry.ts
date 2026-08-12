@@ -63,7 +63,14 @@ export function syncRegistry(force = false): Promise<void> {
       const next: Record<string, RegistryEntry> = {};
       for (const t of body.tokens ?? []) {
         if (!t?.handle || !t?.mint) continue;
-        next[norm(t.handle)] = {
+        const key = norm(t.handle);
+        // A handle can carry several launches, and this map holds one. The
+        // server returns them newest-first, so the first sighting wins and the
+        // rest are skipped — assigning unconditionally would have let the
+        // OLDEST token win, which is the opposite of what a reader expects
+        // when they search a handle and get "its" token.
+        if (key in next) continue;
+        next[key] = {
           mint: t.mint,
           ...(t.name ? { name: t.name } : {}),
           ...(t.symbol ? { symbol: t.symbol } : {}),
@@ -96,8 +103,10 @@ export function syncRegistry(force = false): Promise<void> {
  * reconciling against the chain — the chain knows the mint but never knew the
  * name.
  *
- * Best-effort and idempotent: `/api/tokens` upserts on handle, so replaying an
- * entry the server already has is a no-op.
+ * Best-effort and idempotent: `/api/tokens` upserts on mint, so replaying an
+ * entry the server already has is a no-op. It used to upsert on handle, which
+ * made replay actively harmful — a second launch under the same handle
+ * overwrote the first rather than joining it.
  */
 async function replayUnsynced(): Promise<void> {
   const local = launchedRegistry();
