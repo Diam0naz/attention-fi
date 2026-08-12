@@ -4065,4 +4065,85 @@ describe("attention_fi collection sale moves the cards", () => {
     );
     assert.isTrue(auction.complete, "the listing is closed");
   });
+
+  it("lets the buyer list again what they just bought", async () => {
+    // The first sale used to be the last one possible. The auction PDA was
+    // opened with `init` and nothing ever closed it, so the seeds — derived
+    // from the collection — were spent permanently: whoever bought a deck
+    // owned something they could never sell on, and a delisted collection
+    // could never be relisted either.
+    await program.methods
+      .listCollectionAuction(
+        new anchor.BN(START),
+        new anchor.BN(FLOOR),
+        new anchor.BN(3600)
+      )
+      .accountsPartial({
+        creator: buyer.publicKey,
+        collection: collectionKp.publicKey,
+        mplCoreProgram: MPL_CORE_PROGRAM_ID,
+        systemProgram: SystemProgram.programId,
+      })
+      .remainingAccounts(memberAccounts())
+      .preInstructions([
+        anchor.web3.ComputeBudgetProgram.setComputeUnitLimit({ units: 800_000 }),
+      ])
+      .signers([buyer])
+      .rpc();
+
+    const relisted = await program.account.collectionAuction.fetch(
+      collectionAuctionPda(collectionKp.publicKey)
+    );
+    assert.equal(
+      relisted.creator.toBase58(),
+      buyer.publicKey.toBase58(),
+      "the new listing belongs to the buyer, not the wallet that sold to them"
+    );
+    assert.isFalse(
+      relisted.complete,
+      "and is live rather than inheriting the settled flag of the listing before it"
+    );
+
+    const escrow = collectionAuctionPda(collectionKp.publicKey).toBase58();
+    for (const kp of memberKps) {
+      assert.equal(
+        await ownerOf(kp.publicKey),
+        escrow,
+        "the cards are escrowed again under the new listing"
+      );
+    }
+  });
+
+  it("refuses to relist while a listing is still live", async () => {
+    // Reuse is only safe once the previous listing is settled. Without the
+    // guard, relisting would reset price and clock under a live auction and
+    // strand whatever the escrow still held.
+    try {
+      await program.methods
+        .listCollectionAuction(
+          new anchor.BN(START),
+          new anchor.BN(FLOOR),
+          new anchor.BN(3600)
+        )
+        .accountsPartial({
+          creator: buyer.publicKey,
+          collection: collectionKp.publicKey,
+          mplCoreProgram: MPL_CORE_PROGRAM_ID,
+          systemProgram: SystemProgram.programId,
+        })
+        .remainingAccounts(memberAccounts())
+        .preInstructions([
+          anchor.web3.ComputeBudgetProgram.setComputeUnitLimit({ units: 800_000 }),
+        ])
+        .signers([buyer])
+        .rpc();
+      assert.fail("a live listing should not be overwritable");
+    } catch (e: any) {
+      assert.include(
+        e.toString(),
+        "AlreadyListed",
+        "the guard must fire before anything is moved"
+      );
+    }
+  });
 });

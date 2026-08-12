@@ -101,4 +101,6 @@ pub enum AttentionError {
     NotDisavowed,
     #[msg("Every member of the collection must be passed, and only its members")]
     CollectionMembersMismatch,
+    #[msg("This is already listed — settle or reclaim the current listing first")]
+    AlreadyListed,
 }

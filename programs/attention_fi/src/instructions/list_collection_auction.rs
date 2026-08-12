@@ -37,8 +37,15 @@ pub struct ListCollectionAuction<'info> {
     #[account(seeds = [GLOBAL_SEED], bump = global.bump)]
     pub global: Account<'info, Global>,
 
+    /// `init_if_needed`, not `init` — a settled listing leaves this PDA behind.
+    ///
+    /// The seeds are derived from the collection, so `init` refused forever once a
+    /// collection had been listed even once — delist it and it could never be
+    /// relisted, sell it and the buyer could never sell it on. The
+    /// handler rejects reuse while a listing is still live, and rewrites every
+    /// field when it isn't, so nothing carries over from the previous one.
     #[account(
-        init,
+        init_if_needed,
         payer = creator,
         space = 8 + CollectionAuction::INIT_SPACE,
         seeds = [COLLECTIONAUCTION_SEED, collection.key().as_ref()],
@@ -67,6 +74,16 @@ pub fn list_collection_auction_handler<'info>(
     duration: i64,
 ) -> Result<()> {
     validate_listing(start_price, floor_price, duration)?;
+
+    // Reuse is only safe once the previous listing is settled. A zeroed
+    // `collection` means `init_if_needed` just created this account; anything else
+    // is a prior listing, and it must be finished. Without this, relisting
+    // would silently overwrite a live auction — resetting its price and clock
+    // out from under a bidder, and stranding whatever the escrow still held.
+    require!(
+        ctx.accounts.auction.collection == Pubkey::default() || ctx.accounts.auction.complete,
+        AttentionError::AlreadyListed
+    );
 
     // Read the size before handing over authority — afterwards this instruction
     // no longer speaks for the collection, and the number is what the listing

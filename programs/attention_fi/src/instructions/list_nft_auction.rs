@@ -26,8 +26,15 @@ pub struct ListNftAuction<'info> {
     #[account(seeds = [GLOBAL_SEED], bump = global.bump)]
     pub global: Account<'info, Global>,
 
+    /// `init_if_needed`, not `init` — a settled listing leaves this PDA behind.
+    ///
+    /// The seeds are derived from the asset, so `init` refused forever once an
+    /// asset had been listed even once — the first sale was the last, because
+    /// the buyer could never list what they had just bought. The
+    /// handler rejects reuse while a listing is still live, and rewrites every
+    /// field when it isn't, so nothing carries over from the previous one.
     #[account(
-        init,
+        init_if_needed,
         payer = creator,
         space = 8 + NftAuction::INIT_SPACE,
         seeds = [NFTAUCTION_SEED, asset.key().as_ref()],
@@ -74,6 +81,16 @@ pub fn list_nft_auction_handler(
     duration: i64,
 ) -> Result<()> {
     validate_listing(start_price, floor_price, duration)?;
+
+    // Reuse is only safe once the previous listing is settled. A zeroed
+    // `asset` means `init_if_needed` just created this account; anything else
+    // is a prior listing, and it must be finished. Without this, relisting
+    // would silently overwrite a live auction — resetting its price and clock
+    // out from under a bidder, and stranding whatever the escrow still held.
+    require!(
+        ctx.accounts.auction.asset == Pubkey::default() || ctx.accounts.auction.complete,
+        AttentionError::AlreadyListed
+    );
 
     // Refuse to list a piece whose collection is itself on the block.
     //
