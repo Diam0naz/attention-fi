@@ -274,6 +274,16 @@ export const disavowalPda = (mint: PublicKey): PublicKey =>
 export const launchPolicyPda = (): PublicKey =>
   PublicKey.findProgramAddressSync([enc.encode("launchpolicy")], PROGRAM_ID)[0];
 
+/**
+ * One wallet's recent launch times. Absent until their first launch, which is
+ * indistinguishable from an empty ring — both mean the full allowance is free.
+ */
+export const launchQuotaPda = (creator: PublicKey): PublicKey =>
+  PublicKey.findProgramAddressSync(
+    [enc.encode("launchquota"), creator.toBytes()],
+    PROGRAM_ID,
+  )[0];
+
 /** A 1-of-1 asset's listing. */
 export const nftAuctionPda = (asset: PublicKey): PublicKey =>
   PublicKey.findProgramAddressSync([enc.encode("nftauction"), asset.toBytes()], PROGRAM_ID)[0];

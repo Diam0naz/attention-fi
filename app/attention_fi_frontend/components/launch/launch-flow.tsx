@@ -11,7 +11,7 @@ import { TxStatus, type TxState } from "@/components/wallet/tx-status";
 import { PageBackground } from "@/components/reactbits/page-background";
 import { Keypair, PublicKey } from "@solana/web3.js";
 import { BN } from "@anchor-lang/core";
-import { useProgram } from "@/lib/solana/use-program";
+import { useProgram, useReadonlyProgram } from "@/lib/solana/use-program";
 import { metadataPda } from "@/lib/solana/program";
 import { useQueryClient } from "@tanstack/react-query";
 import { nftPortfolioKey } from "@/components/nft/use-nft-portfolio";
@@ -20,6 +20,12 @@ import { explorerTx, tokenMetadataUri, verificationMetadataUri } from "@/lib/sol
 import { verificationPda } from "@/lib/solana/program";
 import { mindshareFeedEnabled, launchFromFeed } from "@/lib/solana/mindshare-feed";
 import { useHandleMindshare } from "@/components/launch/use-handle-mindshare";
+import {
+  fetchLaunchQuota,
+  formatWait,
+  formatWindow,
+  type LaunchQuota,
+} from "@/lib/solana/launch-quota";
 import { verifyMessage } from "@/lib/sas/config";
 
 type MechId = "bonding" | "dutch" | "conviction" | "revenue";
@@ -204,6 +210,37 @@ export function LaunchFlow() {
   // failed read must not be able to hand someone a Top 10 seed, since off the
   // oracle path this tier *is* what the program is told.
   const { data: ms, isFetching: msLoading } = useHandleMindshare(handle);
+
+  // What the rate limit will say before it says it.
+  //
+  // The program refuses a fourth launch with `LaunchRateLimited` and nothing
+  // else — no indication of when it lifts. `seconds_until_next` exists on-chain
+  // precisely so a client can answer that, and nothing was calling it, so a
+  // creator who hit the cap mid-launch got a bare error at the worst moment.
+  //
+  // Re-read on a timer as well as after a launch: the limit is a trailing
+  // window, so it lifts on its own with no transaction to notice.
+  const readProgram = useReadonlyProgram();
+  // Stored against the wallet it was read for, and matched during render.
+  // Switching wallets then shows nothing rather than briefly showing the
+  // previous wallet's allowance as if it were yours — the same shape
+  // use-holdings uses, and the reason it uses it.
+  const [quotaFor, setQuotaFor] = useState<{ owner: string; quota: LaunchQuota } | null>(null);
+  const quota = quotaFor?.owner === address ? quotaFor.quota : null;
+  useEffect(() => {
+    if (!address) return;
+    let cancelled = false;
+    const read = async () => {
+      const q = await fetchLaunchQuota(readProgram, new PublicKey(address)).catch(() => null);
+      if (!cancelled && q) setQuotaFor({ owner: address, quota: q });
+    };
+    void read();
+    const id = setInterval(read, 30_000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [address, readProgram, txSig]);
   const mindshare = ms?.mindshare24h ?? null;
   const t = tierFor(mindshare ?? 0);
   const mechName = MECHANISMS.find((m) => m.id === mech)!.name;
@@ -677,12 +714,30 @@ export function LaunchFlow() {
                 )}
               </div>
             ) : (
-              <button
-                onClick={launch}
-                className="mt-4 w-full rounded-sm bg-signal py-3 font-mono text-[13px] font-bold text-[#0A0A0A]"
-              >
-                LAUNCH ${ticker}
-              </button>
+              <>
+                <button
+                  onClick={launch}
+                  disabled={quota?.remaining === 0}
+                  className="mt-4 w-full rounded-sm bg-signal py-3 font-mono text-[13px] font-bold text-[#0A0A0A] disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  {quota?.remaining === 0 ? "LAUNCH LIMIT REACHED" : `LAUNCH $${ticker}`}
+                </button>
+                {quota && (
+                  <p className="mt-2 text-center font-mono text-[10.5px] text-[#6B6B6B]">
+                    {quota.remaining === 0 ? (
+                      <span className="text-noise">
+                        {quota.max} launches per {formatWindow(quota.windowSecs)} reached — next in{" "}
+                        {formatWait(quota.secondsUntilNext)}
+                      </span>
+                    ) : (
+                      <>
+                        {quota.remaining} of {quota.max} launches left this{" "}
+                        {formatWindow(quota.windowSecs)}
+                      </>
+                    )}
+                  </p>
+                )}
+              </>
             )}
           </div>
         )}
