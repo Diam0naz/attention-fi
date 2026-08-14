@@ -4697,6 +4697,15 @@ export type AttentionFi = {
         },
         {
           "name": "auction",
+          "docs": [
+            "`init_if_needed`, not `init` — a settled listing leaves this PDA behind.",
+            "",
+            "The seeds are derived from the collection, so `init` refused forever once a",
+            "collection had been listed even once — delist it and it could never be",
+            "relisted, sell it and the buyer could never sell it on. The",
+            "handler rejects reuse while a listing is still live, and rewrites every",
+            "field when it isn't, so nothing carries over from the previous one."
+          ],
           "writable": true,
           "pda": {
             "seeds": [
@@ -4946,6 +4955,15 @@ export type AttentionFi = {
         },
         {
           "name": "auction",
+          "docs": [
+            "`init_if_needed`, not `init` — a settled listing leaves this PDA behind.",
+            "",
+            "The seeds are derived from the asset, so `init` refused forever once an",
+            "asset had been listed even once — the first sale was the last, because",
+            "the buyer could never list what they had just bought. The",
+            "handler rejects reuse while a listing is still live, and rewrites every",
+            "field when it isn't, so nothing carries over from the previous one."
+          ],
           "writable": true,
           "pda": {
             "seeds": [
@@ -9252,6 +9270,11 @@ export type AttentionFi = {
       "code": 6047,
       "name": "collectionMembersMismatch",
       "msg": "Every member of the collection must be passed, and only its members"
+    },
+    {
+      "code": 6048,
+      "name": "alreadyListed",
+      "msg": "This is already listed — settle or reclaim the current listing first"
     }
   ],
   "types": [
