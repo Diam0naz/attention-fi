@@ -506,7 +506,16 @@ export async function fetchOwnedNfts(program: Program<AttentionFi>, owner: Publi
       if (!info) continue;
       const decoded = decodeAsset(info.data);
       const entry = genesisAssets[i];
-      if (decoded?.collection && entry) genesisCollections.set(entry.card, decoded.collection);
+      if (!decoded || !entry) continue;
+      if (decoded.collection) genesisCollections.set(entry.card, decoded.collection);
+      // The same read already has the asset's artwork, and dropping it was why
+      // one genesis NFT looked like two different things: /nft built its cards
+      // from the Core asset and showed the picture, the profile built them from
+      // the PDA alone and fell back to the generated face. A holder seeing a
+      // card they'd skinned render blank elsewhere reasonably concludes the
+      // skin came off.
+      const artwork = artworkUrl(decoded.uri);
+      if (artwork && entry.card.kind === "genesis") entry.card.image = artwork;
     }
   }
 
