@@ -44,14 +44,19 @@ export async function launchFromFeed(
   mint: Keypair,
   metadata: { name: string; symbol: string; uri: string },
 ): Promise<string> {
+  console.log("[launchFromFeed] Started for mint:", mint.publicKey.toBase58());
   const feed = mindshareFeedPubkey();
-  if (!feed) throw new Error("Live-mindshare launch is not configured (NEXT_PUBLIC_MINDSHARE_FEED).");
+  if (!feed) {
+    console.log("[launchFromFeed] No feed configured");
+    throw new Error("Live-mindshare launch is not configured (NEXT_PUBLIC_MINDSHARE_FEED).");
+  }
 
   const provider = program.provider as AnchorProvider;
   const { connection } = provider;
   const wallet = provider.wallet as AnchorWalletLike;
   const creator = wallet.publicKey;
 
+  console.log("[launchFromFeed] Building instruction...");
   // The launch instruction reads the feed; it must come *after* the refresh.
   const launchIx = await program.methods
     .launchFromFeed(metadata)
@@ -62,17 +67,22 @@ export async function launchFromFeed(
       metadata: metadataPda(mint.publicKey),
     })
     .instruction();
+  console.log("[launchFromFeed] Instruction built.");
 
-  // Fresh signed oracle update (Ed25519 verify + feed write). numSuccess < 1
-  // means the oracles didn't respond — fail loudly rather than launch stale.
+  console.log("[launchFromFeed] Loading Switchboard...");
   const sb = await import("@switchboard-xyz/on-demand");
   const sbProgram = await sb.AnchorUtils.loadProgramFromConnection(connection);
   const pullFeed = new sb.PullFeed(sbProgram, feed);
+  
+  console.log("[launchFromFeed] Fetching update ix for feed...");
   const [updateIxs, , numSuccess, luts] = await pullFeed.fetchUpdateIx({ payer: creator });
+  console.log("[launchFromFeed] fetchUpdateIx returned. numSuccess:", numSuccess, "updateIxs:", updateIxs?.length);
   if (!updateIxs || updateIxs.length === 0 || numSuccess < 1) {
+    console.log("[launchFromFeed] Throwing error due to no fresh oracle response");
     throw new Error("Mindshare feed has no fresh oracle response yet — try again shortly.");
   }
 
+  console.log("[launchFromFeed] Building v0 tx...");
   const tx = await sb.asV0Tx({
     connection,
     ixs: [...updateIxs, launchIx],
@@ -81,8 +91,12 @@ export async function launchFromFeed(
     lookupTables: luts,
   });
 
+  console.log("[launchFromFeed] Prompting wallet to sign tx...");
   const signed = await wallet.signTransaction(tx);
-  const sig = await connection.sendTransaction(signed, { skipPreflight: false });
+  console.log("[launchFromFeed] Tx signed! Sending...");
+  const sig = await connection.sendRawTransaction(signed.serialize());
+  console.log("[launchFromFeed] Sent! Confirming...");
   await connection.confirmTransaction(sig, "confirmed");
+  console.log("[launchFromFeed] Confirmed!");
   return sig;
 }

@@ -187,6 +187,14 @@ export function LaunchFlow() {
         if (cancelled) return;
         if (record) {
           setVerifiedHandle(record.handle);
+          // The Verification PDA is init — one per wallet, permanently bound to
+          // the handle it was created with. Force the handle state to match so
+          // every downstream step (mindshare lookup, token name, registry, launch)
+          // all refer to the same handle the credential is actually for.
+          // Without this, a user who types a different handle in step 1 would
+          // see their typed handle used for the token while the on-chain
+          // credential (and creator fees) stay bound to the old one.
+          setHandle(record.handle);
           setVerifyStep(3); // already verified — skip the sign step
         } else {
           setVerifiedHandle(null);
@@ -257,7 +265,11 @@ export function LaunchFlow() {
   }
 
   async function launch() {
-    if (!program || !address) return setWalletOpen(true);
+    console.log("[launch] Started. mech:", mech, "ticker:", ticker);
+    if (!program || !address) {
+      console.log("[launch] Aborting and opening wallet modal. program:", !!program, "address:", !!address);
+      return setWalletOpen(true);
+    }
     setTxErr(null);
     setTx("pending");
     try {
@@ -359,12 +371,18 @@ export function LaunchFlow() {
   // That attestation is what verifyHandle checks on-chain before minting the
   // soulbound credential NFT — no step here is mocked.
   async function signAndVerify() {
-    if (!program || !address) return setWalletOpen(true);
+    console.log("[signAndVerify] Started");
+    if (!program || !address) {
+      console.log("[signAndVerify] Aborting and opening wallet modal. program:", !!program, "address:", !!address);
+      return setWalletOpen(true);
+    }
     const signer = getSigner();
     if (!signer?.signMessage) {
+      console.log("[signAndVerify] Wallet lacks signMessage");
       setVerifyErr("This wallet doesn't support message signing.");
       return;
     }
+    console.log("[signAndVerify] Prompting for signature");
     setVerifying(true);
     setVerifyErr(null);
     try {
@@ -575,8 +593,8 @@ export function LaunchFlow() {
                   Verified as <span className="text-signal">@{verifiedHandle}</span>
                 </div>
                 <p className="mx-auto mt-1.5 max-w-xs text-[11px] leading-relaxed text-[#6B6B6B]">
-                  This wallet already holds its soulbound verification credential — a one-time step.
-                  You can launch straight away.
+                  This wallet is permanently bound to <span className="text-[#F5F4F0]">@{verifiedHandle}</span> on-chain.
+                  That's the handle this token will launch under — connect a different wallet to launch as someone else.
                 </p>
               </div>
             ) : X_OAUTH_ENABLED && !xVerified ? (

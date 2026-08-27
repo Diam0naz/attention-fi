@@ -13,9 +13,20 @@ export function useProgram() {
   const { address, getSigner } = useWallet();
 
   return useMemo(() => {
-    if (!address) return null;
+    if (!address) {
+      console.log("[useProgram] null because no address");
+      return null;
+    }
     const provider = getSigner();
-    if (!provider?.signTransaction) return null;
+    if (!provider) {
+      console.log("[useProgram] null because getSigner() returned falsy");
+      return null;
+    }
+    if (!provider.signTransaction) {
+      console.log("[useProgram] null because provider lacks signTransaction! Keys:", Object.keys(provider));
+      return null;
+    }
+    console.log("[useProgram] Successfully initialized provider");
 
     const wallet: AnchorWalletLike = {
       publicKey: new PublicKey(address),
