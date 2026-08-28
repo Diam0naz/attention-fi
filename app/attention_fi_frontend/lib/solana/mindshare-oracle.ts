@@ -5,7 +5,7 @@ import type { AnchorProvider, Program } from "@anchor-lang/core";
 import type { AttentionFi } from "@/lib/idl/attention_fi";
 import type { AnchorWalletLike } from "./program";
 import { mindsharePda } from "./program";
-import { mindshareFeedPubkey } from "./mindshare-feed";
+import { feedForHandle } from "./mindshare-feed";
 
 /** Tier names, indexed by the program's `MindshareTier::as_u8`. */
 const TIER_NAMES = ["New entrant", "Emerging", "Top 100", "Top 10"] as const;
@@ -81,14 +81,18 @@ export async function fetchOnchainMindshare(
  * a pull feed holds no value until a signed oracle response is written to it,
  * so `update_mindshare` on its own reads whatever was left from the last
  * crank — or fails outright on a feed nobody has touched.
+ *
+ * @param handle - The X handle this token represents, used to look up the
+ *                 correct per-handle feed (falls back to the global feed).
  */
 export async function refreshOnchainMindshare(
   program: Program<AttentionFi>,
   mint: PublicKey,
+  handle: string,
 ): Promise<string> {
-  const feed = mindshareFeedPubkey();
+  const feed = feedForHandle(handle);
   if (!feed) {
-    throw new Error("No mindshare feed is configured (NEXT_PUBLIC_MINDSHARE_FEED).");
+    throw new Error("No mindshare feed is configured for this handle (NEXT_PUBLIC_MINDSHARE_FEEDS / NEXT_PUBLIC_MINDSHARE_FEED).");
   }
 
   const provider = program.provider as AnchorProvider;

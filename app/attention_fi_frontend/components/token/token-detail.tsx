@@ -349,7 +349,7 @@ export function TokenDetailTerminal({ token: tokenProp }: { token: TokenDetail }
                   disagree by design — the app's figure is live, the chain's was
                   written by whoever last cranked the oracle — and only the
                   latter is something the protocol could act on. */}
-              <OnchainMindshare mint={handleToMint(token.handle)?.toBase58() ?? null} />
+              <OnchainMindshare mint={handleToMint(token.handle)?.toBase58() ?? null} handle={token.handle} />
               <MindshareView token={token} />
             </div>
           )}

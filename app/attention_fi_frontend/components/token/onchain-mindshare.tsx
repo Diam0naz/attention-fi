@@ -5,7 +5,7 @@ import { PublicKey } from "@solana/web3.js";
 import { Radio, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useProgram, useReadonlyProgram } from "@/lib/solana/use-program";
-import { mindshareFeedEnabled } from "@/lib/solana/mindshare-feed";
+import { feedEnabledForHandle } from "@/lib/solana/mindshare-feed";
 import {
   MAX_STALENESS_SLOTS,
   fetchOnchainMindshare,
@@ -27,7 +27,7 @@ import {
  * Until this shipped, `update_mindshare` had no caller and `MindshareState` had
  * no reader — the oracle wrote to an account nothing consumed.
  */
-export function OnchainMindshare({ mint }: { mint: string | null }) {
+export function OnchainMindshare({ mint, handle }: { mint: string | null; handle: string }) {
   const readProgram = useReadonlyProgram();
   const signProgram = useProgram();
   const [state, setState] = useState<OnchainMindshare | null>(null);
@@ -64,7 +64,7 @@ export function OnchainMindshare({ mint }: { mint: string | null }) {
     setBusy(true);
     setErr(null);
     try {
-      await refreshOnchainMindshare(signProgram, new PublicKey(mint));
+      await refreshOnchainMindshare(signProgram, new PublicKey(mint), handle);
       await load();
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e));
@@ -73,7 +73,7 @@ export function OnchainMindshare({ mint }: { mint: string | null }) {
     }
   }
 
-  const feedOn = mindshareFeedEnabled();
+  const feedOn = feedEnabledForHandle(handle);
 
   return (
     <div className="rounded-sm border border-white/[0.08] bg-[#0f1620] p-3.5">
@@ -133,8 +133,9 @@ export function OnchainMindshare({ mint }: { mint: string | null }) {
         </button>
       ) : (
         <p className="mt-3 font-mono text-[10px] leading-relaxed text-[#4b5563]">
-          No feed configured on this deployment, so nothing can write here. Provision one with{" "}
-          <code>scripts/create-feed.ts</code> and set <code>NEXT_PUBLIC_MINDSHARE_FEED</code>.
+          No feed configured for @{handle} on this deployment, so nothing can write here.
+          Provision one with <code>scripts/create-feed.ts</code> and add it to{" "}
+          <code>NEXT_PUBLIC_MINDSHARE_FEEDS</code>.
         </p>
       )}
 

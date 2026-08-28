@@ -18,7 +18,7 @@ import { nftPortfolioKey } from "@/components/nft/use-nft-portfolio";
 import { registerToken, syncRegistry } from "@/lib/solana/registry";
 import { explorerTx, tokenMetadataUri, verificationMetadataUri } from "@/lib/solana/config";
 import { verificationPda } from "@/lib/solana/program";
-import { mindshareFeedEnabled, launchFromFeed } from "@/lib/solana/mindshare-feed";
+import { feedEnabledForHandle, launchFromFeed } from "@/lib/solana/mindshare-feed";
 import { useHandleMindshare } from "@/components/launch/use-handle-mindshare";
 import {
   fetchLaunchQuota,
@@ -253,8 +253,9 @@ export function LaunchFlow() {
   const t = tierFor(mindshare ?? 0);
   const mechName = MECHANISMS.find((m) => m.id === mech)!.name;
   // Bonding launches seed their tier from the on-chain Switchboard mindshare
-  // feed when one is configured — a decentralized oracle, not a keeper arg.
-  const feedActive = mech === "bonding" && mindshareFeedEnabled();
+  // feed when one is configured for this handle — a decentralized oracle,
+  // not a keeper arg. Falls back to the keeper tier when no feed is found.
+  const feedActive = mech === "bonding" && feedEnabledForHandle(handle);
   // Symbol defaults to the token name (or handle) if the creator leaves it blank.
   const ticker = (symbol || name || handle).replace(/[^a-zA-Z0-9]/g, "").slice(0, 6).toUpperCase();
   const canContinue = step !== 0 || (handle.trim().length > 0 && name.trim().length > 0);
@@ -296,15 +297,18 @@ export function LaunchFlow() {
       const metadata = metadataPda(mint.publicKey);
       let sig: string;
       if (mech === "bonding") {
-        // When a Switchboard mindshare feed is configured, seed the tier from
-        // the on-chain oracle (decentralized) rather than the keeper tier arg.
-        sig = mindshareFeedEnabled()
-          ? await launchFromFeed(program, mint, metadataArg)
-          : await program.methods
-              .launchToken(tierArg, metadataArg)
-              .accounts({ creator, mint: mint.publicKey, metadata })
-              .signers([mint])
-              .rpc();
+        // launchFromFeed picks the best path automatically:
+        //  - oracle path if a Switchboard feed is configured for this handle
+        //  - keeper-tier path (launchToken) otherwise, or on any oracle failure
+        // Both paths produce the same on-chain result; the oracle path just
+        // derives the tier trustlessly on-chain rather than from this argument.
+        const result = await launchFromFeed(program, mint, metadataArg, tierArg, handle);
+        if (result.path === "oracle") {
+          console.log("[launch] Oracle path used. sig:", result.sig);
+        } else {
+          console.log("[launch] Keeper-tier path used. sig:", result.sig);
+        }
+        sig = result.sig;
       } else if (mech === "dutch") {
         sig = await program.methods
           .startAuction(
@@ -681,6 +685,11 @@ export function LaunchFlow() {
                 ◈ Tier read on-chain from the live 𝕏 mindshare oracle at launch
               </p>
             )}
+            {!feedActive && mech === "bonding" && (
+              <p className="mt-2 inline-flex items-center gap-1.5 rounded-sm border border-white/10 bg-white/[0.03] px-2 py-1 text-[10px] font-mono text-[#6B6B6B]">
+                ◇ Tier supplied by keeper — no oracle feed configured for @{handle || "this handle"}
+              </p>
+            )}
             <dl className="mt-4 flex flex-col gap-2.5 font-mono text-[12px]">
               {[
                 ["Token", `${name || handle} ($${ticker})`],
@@ -706,7 +715,12 @@ export function LaunchFlow() {
             <p className="mt-1 text-[11px] text-[#6B6B6B]">
               Launching <span className="text-[#F5F4F0]">{name || handle} (${ticker})</span>, a{" "}
               <span className="text-[#F5F4F0]">{mechName}</span> token for{" "}
-              <span className="text-[#F5F4F0]">@{handle}</span>, seeded at {t.seed}.
+              <span className="text-[#F5F4F0]">@{handle}</span>, seeded at {t.seed}.{" "}
+              {mech === "bonding" && (
+                feedActive
+                  ? <span className="text-signal">Tier derived on-chain from the oracle.</span>
+                  : <span className="text-[#6B6B6B]">Tier from mindshare API (keeper path).</span>
+              )}
             </p>
 
             {tx ? (
