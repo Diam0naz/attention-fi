@@ -433,6 +433,8 @@ export function NftManage({ section }: { section: Section }) {
           treasury: treasuryKey,
           creator: new PublicKey(a.creator),
           asset: new PublicKey(a.asset),
+          // Core refuses to move a collection member without its collection.
+          collection: a.collection ? new PublicKey(a.collection) : null,
         })
         .rpc();
       setTx({
@@ -660,6 +662,7 @@ export function NftManage({ section }: { section: Section }) {
           payer: new PublicKey(address),
           creator: new PublicKey(a.creator),
           asset: new PublicKey(a.asset),
+          collection: a.collection ? new PublicKey(a.collection) : null,
         })
         .rpc();
       setTx({
@@ -711,6 +714,7 @@ export function NftManage({ section }: { section: Section }) {
                 payer: me,
                 creator: new PublicKey(a.creator),
                 asset: new PublicKey(a.asset),
+                collection: a.collection ? new PublicKey(a.collection) : null,
               })
               .instruction(),
           ),

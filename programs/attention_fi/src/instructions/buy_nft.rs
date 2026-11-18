@@ -59,6 +59,14 @@ pub struct BuyNft<'info> {
     pub guardians: UncheckedAccount<'info>,
 
     pub system_program: Program<'info, System>,
+
+    /// The asset's collection when it is a collection member: Core refuses to
+    /// move a member without it. Optional and last, so a client that omits it
+    /// keeps working for standalone assets.
+    ///
+    /// CHECK: mpl-core validates it against the asset's update authority.
+    #[account(mut)]
+    pub collection: Option<UncheckedAccount<'info>>,
 }
 
 pub fn buy_nft_handler(ctx: Context<BuyNft>, max_total: u64) -> Result<()> {
@@ -149,9 +157,11 @@ pub fn buy_nft_handler(ctx: Context<BuyNft>, max_total: u64) -> Result<()> {
     // wallets and marketplaces that have never heard of AttentionFi; the
     // authoritative price is in NftAuctionEvent either way. A missing nicety
     // must never cost someone a sale.
+    let collection_info = ctx.accounts.collection.as_ref().map(|c| c.to_account_info());
     if has_attributes_plugin(&ctx.accounts.asset.try_borrow_data()?) {
         UpdatePluginV1CpiBuilder::new(&ctx.accounts.mpl_core_program.to_account_info())
             .asset(&ctx.accounts.asset.to_account_info())
+            .collection(collection_info.as_ref())
             .payer(&ctx.accounts.buyer.to_account_info())
             .authority(Some(&ctx.accounts.auction.to_account_info()))
             .system_program(&ctx.accounts.system_program.to_account_info())
@@ -162,6 +172,7 @@ pub fn buy_nft_handler(ctx: Context<BuyNft>, max_total: u64) -> Result<()> {
     // Transfer the escrowed NFT to the buyer; auction PDA (owner) signs.
     TransferV1CpiBuilder::new(&ctx.accounts.mpl_core_program.to_account_info())
         .asset(&ctx.accounts.asset.to_account_info())
+        .collection(collection_info.as_ref())
         .payer(&ctx.accounts.buyer.to_account_info())
         .authority(Some(&ctx.accounts.auction.to_account_info()))
         .new_owner(&ctx.accounts.buyer.to_account_info())

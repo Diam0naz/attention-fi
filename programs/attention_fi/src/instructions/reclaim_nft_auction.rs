@@ -53,6 +53,14 @@ pub struct ReclaimNftAuction<'info> {
     pub mpl_core_program: UncheckedAccount<'info>,
 
     pub system_program: Program<'info, System>,
+
+    /// The asset's collection when it is a collection member: Core refuses to
+    /// move a member without it. Optional and last, so a client that omits it
+    /// keeps working for standalone assets.
+    ///
+    /// CHECK: mpl-core validates it against the asset's update authority.
+    #[account(mut)]
+    pub collection: Option<UncheckedAccount<'info>>,
 }
 
 pub fn reclaim_nft_auction_handler(ctx: Context<ReclaimNftAuction>) -> Result<()> {
@@ -85,8 +93,10 @@ pub fn reclaim_nft_auction_handler(ctx: Context<ReclaimNftAuction>) -> Result<()
     // Return the escrowed NFT to its lister; the auction PDA (owner) signs.
     let asset_key = ctx.accounts.asset.key();
     let signer_seeds: &[&[&[u8]]] = &[&[NFTAUCTION_SEED, asset_key.as_ref(), &[auction.bump]]];
+    let collection_info = ctx.accounts.collection.as_ref().map(|c| c.to_account_info());
     TransferV1CpiBuilder::new(&ctx.accounts.mpl_core_program.to_account_info())
         .asset(&ctx.accounts.asset.to_account_info())
+        .collection(collection_info.as_ref())
         .payer(&ctx.accounts.payer.to_account_info())
         .authority(Some(&ctx.accounts.auction.to_account_info()))
         .new_owner(&ctx.accounts.creator.to_account_info())

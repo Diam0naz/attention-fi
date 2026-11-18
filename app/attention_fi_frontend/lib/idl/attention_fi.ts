@@ -1870,6 +1870,16 @@ export type AttentionFi = {
         {
           "name": "systemProgram",
           "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "collection",
+          "docs": [
+            "The asset's collection when it is a collection member: Core refuses to",
+            "move a member without it. Optional and last, so a client that omits it",
+            "keeps working for standalone assets."
+          ],
+          "writable": true,
+          "optional": true
         }
       ],
       "args": [
@@ -5970,6 +5980,16 @@ export type AttentionFi = {
         {
           "name": "systemProgram",
           "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "collection",
+          "docs": [
+            "The asset's collection when it is a collection member: Core refuses to",
+            "move a member without it. Optional and last, so a client that omits it",
+            "keeps working for standalone assets."
+          ],
+          "writable": true,
+          "optional": true
         }
       ],
       "args": []
