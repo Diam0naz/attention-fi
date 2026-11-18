@@ -20,8 +20,13 @@ pub struct BuyQuote {
     pub tokens_out: u64,
     /// Fee (lamports) routed to the protocol treasury.
     pub fee: u64,
-    /// Lamports added to the curve reserves (`sol_amount - fee`).
+    /// Lamports added to the curve reserves (`sol_amount - fee`, or less when
+    /// the buy is clamped to the remaining supply).
     pub sol_into_curve: u64,
+    /// Lamports actually taken from the buyer: `sol_into_curve + fee`. Equal to
+    /// `sol_amount` unless the buy was clamped, in which case the buyer pays
+    /// only for the tokens delivered.
+    pub sol_charged: u64,
 }
 
 /// SOL the seller receives and the fee skimmed from the gross proceeds.
@@ -37,7 +42,12 @@ pub struct SellQuote {
 /// Quote a buy: spend `sol_amount` lamports, receive tokens along the curve.
 ///
 /// The fee is taken off the top; the remainder moves the curve. `tokens_out` is
-/// clamped to `real_token` so the vault can never be over-drawn.
+/// clamped to `real_token` so the vault can never be over-drawn, and a clamped
+/// buy is charged only for the tokens it delivers: the SOL that moves the curve
+/// to exactly `real_token` sold, plus the fee on that. Crediting the full
+/// payment instead would let `real_sol` run past what the sold supply is worth
+/// on the curve, and past the graduation threshold with no tokens left to seed
+/// the pool.
 pub fn buy_quote(
     virtual_sol: u64,
     virtual_token: u64,
@@ -59,18 +69,52 @@ pub fn buy_quote(
     // Constant product: keep product >= k by rounding the new reserve UP, so the
     // buyer receives slightly fewer tokens and rounding never favours the trader.
     let new_virtual_token = ceil_div(k, new_virtual_sol)?;
-    let mut tokens_out = u128::from(virtual_token)
+    let tokens_out = u128::from(virtual_token)
         .checked_sub(new_virtual_token)
         .ok_or(AttentionError::MathOverflow)?;
 
-    if tokens_out > u128::from(real_token) {
-        tokens_out = u128::from(real_token);
+    if tokens_out <= u128::from(real_token) {
+        return Ok(BuyQuote {
+            tokens_out: to_u64(tokens_out)?,
+            fee: to_u64(fee)?,
+            sol_into_curve: to_u64(sol_in)?,
+            sol_charged: sol_amount,
+        });
     }
+
+    // Clamped: sell exactly `real_token`. The SOL that moves the curve there is
+    // `ceil(k / (virtual_token - real_token)) - virtual_sol` (rounded up, so k
+    // never decreases), and it is never more than `sol_in`, since the
+    // unclamped buy went further.
+    let tokens_out = u128::from(real_token);
+    let target_virtual_token = u128::from(virtual_token)
+        .checked_sub(tokens_out)
+        .ok_or(AttentionError::MathOverflow)?;
+    let needed = ceil_div(k, target_virtual_token)?
+        .checked_sub(u128::from(virtual_sol))
+        .ok_or(AttentionError::MathOverflow)?;
+    // Gross the fee up on what's needed, so the fee rate is the same as on an
+    // unclamped buy: charged - fee(charged) >= needed. Rounded up for the
+    // protocol, and never above what the buyer offered.
+    let keep = BPS_DENOMINATOR
+        .checked_sub(u128::from(fee_bps))
+        .ok_or(AttentionError::MathOverflow)?;
+    let charged = ceil_div(
+        needed
+            .checked_mul(BPS_DENOMINATOR)
+            .ok_or(AttentionError::MathOverflow)?,
+        keep,
+    )?
+    .min(u128::from(sol_amount));
+    let fee = charged
+        .checked_sub(needed)
+        .ok_or(AttentionError::MathOverflow)?;
 
     Ok(BuyQuote {
         tokens_out: to_u64(tokens_out)?,
         fee: to_u64(fee)?,
-        sol_into_curve: to_u64(sol_in)?,
+        sol_into_curve: to_u64(needed)?,
+        sol_charged: to_u64(charged)?,
     })
 }
 
@@ -183,6 +227,34 @@ mod tests {
         let low = price_num_den(500_000_000, V_TOKEN); // ~new entrant
         let high = price_num_den(100_000_000_000, V_TOKEN); // ~top 10
         assert!(high.0 * low.1 > low.0 * high.1);
+    }
+
+    #[test]
+    fn clamped_buy_pays_only_for_what_it_receives() {
+        // A curve with 1M tokens left, and a buy big enough to want far more.
+        let left = 1_000_000_000_000;
+        let v_token = left + 73_000_000_000_000;
+        let q = buy_quote(V_SOL, v_token, left, 100 * ONE_SOL, 100).unwrap();
+        assert_eq!(q.tokens_out, left);
+        assert!(q.sol_charged < 100 * ONE_SOL, "the excess is never taken");
+        assert_eq!(q.sol_charged, q.sol_into_curve + q.fee);
+        // The curve moves exactly to `left` sold, and k never decreases.
+        let k0 = u128::from(V_SOL) * u128::from(v_token);
+        let k1 = u128::from(V_SOL + q.sol_into_curve) * u128::from(v_token - left);
+        assert!(k1 >= k0);
+        // ...and not by more than rounding: one lamport less wouldn't get there.
+        let k_short = u128::from(V_SOL + q.sol_into_curve - 1) * u128::from(v_token - left);
+        assert!(k_short < k0);
+        // Same fee as an unclamped buy of `sol_charged` would pay (1%), rounded
+        // up by at most a lamport.
+        let unclamped_fee = q.sol_charged / 100;
+        assert!(q.fee >= unclamped_fee && q.fee <= unclamped_fee + 1);
+    }
+
+    #[test]
+    fn unclamped_buy_charges_the_full_amount() {
+        let q = buy_quote(V_SOL, V_TOKEN, REAL_TOKEN, ONE_SOL, 100).unwrap();
+        assert_eq!(q.sol_charged, ONE_SOL);
     }
 
     #[test]

@@ -77,6 +77,9 @@ pub fn graduate_handler(ctx: Context<Graduate>) -> Result<()> {
 
     let sol = ctx.accounts.curve.real_sol_reserves;
     let tokens = ctx.accounts.curve.real_token_reserves;
+    // A constant-product pool with an empty side has k = 0, and the first
+    // trade into it takes everything on the other side.
+    require!(sol > 0 && tokens > 0, AttentionError::NotReadyToGraduate);
     let mint_key = ctx.accounts.mint.key();
 
     // Move the remaining tokens: curve vault -> pool vault (curve PDA signs).

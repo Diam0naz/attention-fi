@@ -187,6 +187,12 @@ pub fn swap_handler<'info>(
         ctx.accounts.pool.sol_reserves,
         ctx.accounts.pool.token_reserves,
     );
+    // Never price against an empty reserve: with k = 0, one unit in takes the
+    // whole other side.
+    require!(
+        sol_reserves > 0 && token_reserves > 0,
+        AttentionError::InsufficientReserves
+    );
 
     let now = Clock::get()?.unix_timestamp;
 

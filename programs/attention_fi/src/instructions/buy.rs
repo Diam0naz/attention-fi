@@ -250,7 +250,7 @@ pub fn buy_handler<'info>(
         mint: curve.mint,
         user: buyer_key,
         is_buy: true,
-        sol_amount,
+        sol_amount: quote.sol_charged,
         token_amount: quote.tokens_out,
         fee: quote.fee,
         virtual_sol_reserves: curve.virtual_sol_reserves,
@@ -277,7 +277,7 @@ pub fn buy_handler<'info>(
             .as_deref_mut()
             .map(|stats| &mut **stats),
         buyer_key,
-        sol_amount,
+        quote.sol_charged,
         0,
     )?;
 

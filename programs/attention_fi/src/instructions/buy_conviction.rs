@@ -207,7 +207,7 @@ pub fn buy_conviction_handler(
             .map(|stats| &mut **stats),
         ctx.accounts.buyer.key(),
         0,
-        sol_amount,
+        quote.sol_charged,
     )?;
 
     Ok(())
