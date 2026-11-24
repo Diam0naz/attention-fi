@@ -3524,6 +3524,11 @@ describe("attention_fi emergency pause", () => {
       });
   }
 
+  // Every step here waits for "confirmed". The guardian and stranger transactions
+  // go through sendAndConfirmTransaction, which simulates against confirmed
+  // state; a preceding .rpc() returns at the provider's default "processed",
+  // so without this a guardian could act before the set or pause it depends on
+  // was visible to it, and the test saw the wrong error.
   async function signedBy(kp: Keypair, build: () => any) {
     const tx = await build().transaction();
     return anchor.web3.sendAndConfirmTransaction(provider.connection, tx, [kp], {
@@ -3540,7 +3545,7 @@ describe("attention_fi emergency pause", () => {
       await program.methods
         .initialize()
         .accountsPartial({ authority: wallet, treasury })
-        .rpc();
+        .rpc({ commitment: "confirmed" });
     }
     for (const who of [g1, g2, g3, outsider]) {
       const sig = await provider.connection.requestAirdrop(who.publicKey, LAMPORTS_PER_SOL);
@@ -3557,7 +3562,7 @@ describe("attention_fi emergency pause", () => {
         rent: SYSVAR_RENT_PUBKEY,
       })
       .signers([mintKp])
-      .rpc();
+      .rpc({ commitment: "confirmed" });
   });
 
   it("trades normally before any guardian set exists", async () => {
@@ -3566,7 +3571,7 @@ describe("attention_fi emergency pause", () => {
     // until set_guardians ran.
     const info = await provider.connection.getAccountInfo(guardians);
     assert.isNull(info, "no guardian set installed yet");
-    await buyIx(1).rpc();
+    await buyIx(1).rpc({ commitment: "confirmed" });
   });
 
   it("installs a 2-of-3 set, and refuses a set that could never resume", async () => {
@@ -3574,7 +3579,7 @@ describe("attention_fi emergency pause", () => {
       await program.methods
         .setGuardians([g1.publicKey, g2.publicKey], 3)
         .accountsPartial({ authority: wallet, guardians })
-        .rpc();
+        .rpc({ commitment: "confirmed" });
       assert.fail("accepted a threshold above the member count");
     } catch (e) {
       assert.include(String(e), "InvalidGuardianSet");
@@ -3584,7 +3589,7 @@ describe("attention_fi emergency pause", () => {
       await program.methods
         .setGuardians([g1.publicKey, g1.publicKey, g2.publicKey], 2)
         .accountsPartial({ authority: wallet, guardians })
-        .rpc();
+        .rpc({ commitment: "confirmed" });
       assert.fail("accepted a duplicated guardian");
     } catch (e) {
       assert.include(String(e), "InvalidGuardianSet");
@@ -3593,7 +3598,7 @@ describe("attention_fi emergency pause", () => {
     await program.methods
       .setGuardians([g1.publicKey, g2.publicKey, g3.publicKey], 2)
       .accountsPartial({ authority: wallet, guardians })
-      .rpc();
+      .rpc({ commitment: "confirmed" });
 
     const s = await state();
     assert.equal(s.count, 3);
@@ -3620,7 +3625,7 @@ describe("attention_fi emergency pause", () => {
 
   it("refuses trades, swaps and migrations while paused", async () => {
     try {
-      await buyIx(1).rpc();
+      await buyIx(1).rpc({ commitment: "confirmed" });
       assert.fail("bought while paused");
     } catch (e) {
       assert.include(String(e), "ProtocolPaused");
@@ -3664,7 +3669,7 @@ describe("attention_fi emergency pause", () => {
     const s = await state();
     assert.isFalse(s.paused);
     assert.equal(s.resumeCount, 0, "approvals are cleared once spent");
-    await buyIx(0.5).rpc();
+    await buyIx(0.5).rpc({ commitment: "confirmed" });
   });
 
   it("clears stale approvals when a fresh pause is pulled", async () => {
@@ -3706,7 +3711,7 @@ describe("attention_fi emergency pause", () => {
       await program.methods
         .pause()
         .accountsPartial({ guardian: wallet, guardians })
-        .rpc();
+        .rpc({ commitment: "confirmed" });
       assert.fail("the authority paused without being a guardian");
     } catch (e) {
       assert.include(String(e), "NotGuardian");
@@ -3766,7 +3771,7 @@ describe("attention_fi launch rate limit", () => {
       await program.methods
         .initialize()
         .accountsPartial({ authority: wallet, treasury: Keypair.generate().publicKey })
-        .rpc();
+        .rpc({ commitment: "confirmed" });
     }
     const sig = await provider.connection.requestAirdrop(
       creator.publicKey,
@@ -3784,7 +3789,7 @@ describe("attention_fi launch rate limit", () => {
     await program.methods
       .setLaunchPolicy(3, new anchor.BN(86_400))
       .accountsPartial({ authority: wallet, policy })
-      .rpc();
+      .rpc({ commitment: "confirmed" });
 
     await launch();
     await launch();
@@ -3846,7 +3851,7 @@ describe("attention_fi launch rate limit", () => {
       await program.methods
         .setLaunchPolicy(200, new anchor.BN(86_400))
         .accountsPartial({ authority: wallet, policy })
-        .rpc();
+        .rpc({ commitment: "confirmed" });
       assert.fail("accepted a cap larger than the ring can remember");
     } catch (e) {
       assert.include(String(e), "InvalidLaunchPolicy");
@@ -3856,7 +3861,7 @@ describe("attention_fi launch rate limit", () => {
     await program.methods
       .setLaunchPolicy(5, new anchor.BN(86_400))
       .accountsPartial({ authority: wallet, policy })
-      .rpc();
+      .rpc({ commitment: "confirmed" });
     const p = await program.account.launchPolicy.fetch(policy);
     assert.equal(p.maxLaunches, 5);
 
@@ -3871,7 +3876,7 @@ describe("attention_fi launch rate limit", () => {
     await program.methods
       .setLaunchPolicy(8, new anchor.BN(1))
       .accountsPartial({ authority: wallet, policy })
-      .rpc();
+      .rpc({ commitment: "confirmed" });
   });
 
   it("will not let a non-authority set the policy", async () => {
