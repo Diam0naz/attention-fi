@@ -1222,6 +1222,8 @@ describe("attention_fi NFT-as-asset auction", () => {
         systemProgram: SystemProgram.programId,
         feeConfig: feeConfigPda(program.programId),
         guardians: guardiansPda(program.programId),
+        // A standalone 1-of-1, so there is no collection to forward to Core.
+        collection: null,
       })
       .signers([buyer])
       .rpc();

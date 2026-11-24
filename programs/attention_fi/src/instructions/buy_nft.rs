@@ -157,7 +157,11 @@ pub fn buy_nft_handler(ctx: Context<BuyNft>, max_total: u64) -> Result<()> {
     // wallets and marketplaces that have never heard of AttentionFi; the
     // authoritative price is in NftAuctionEvent either way. A missing nicety
     // must never cost someone a sale.
-    let collection_info = ctx.accounts.collection.as_ref().map(|c| c.to_account_info());
+    let collection_info = ctx
+        .accounts
+        .collection
+        .as_ref()
+        .map(|c| c.to_account_info());
     if has_attributes_plugin(&ctx.accounts.asset.try_borrow_data()?) {
         UpdatePluginV1CpiBuilder::new(&ctx.accounts.mpl_core_program.to_account_info())
             .asset(&ctx.accounts.asset.to_account_info())

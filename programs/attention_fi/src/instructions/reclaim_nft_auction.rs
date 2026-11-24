@@ -93,7 +93,11 @@ pub fn reclaim_nft_auction_handler(ctx: Context<ReclaimNftAuction>) -> Result<()
     // Return the escrowed NFT to its lister; the auction PDA (owner) signs.
     let asset_key = ctx.accounts.asset.key();
     let signer_seeds: &[&[&[u8]]] = &[&[NFTAUCTION_SEED, asset_key.as_ref(), &[auction.bump]]];
-    let collection_info = ctx.accounts.collection.as_ref().map(|c| c.to_account_info());
+    let collection_info = ctx
+        .accounts
+        .collection
+        .as_ref()
+        .map(|c| c.to_account_info());
     TransferV1CpiBuilder::new(&ctx.accounts.mpl_core_program.to_account_info())
         .asset(&ctx.accounts.asset.to_account_info())
         .collection(collection_info.as_ref())
