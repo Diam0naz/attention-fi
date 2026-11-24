@@ -13,7 +13,7 @@ use crate::constants::{
 };
 use crate::error::AttentionError;
 use crate::events::GenesisUnitSoldEvent;
-use crate::genesis::{record_allocation, record_sale};
+use crate::genesis::{record_allocation, record_sale, validate_added_share};
 use crate::guardians;
 use crate::revenue::accrued;
 use crate::state::{FeeConfig, GenesisAllocation, GenesisGroup, GenesisNft, GenesisPool, Global};
@@ -162,6 +162,17 @@ pub fn buy_genesis_unit_handler(ctx: Context<BuyGenesisUnit>, max_total: u64) ->
         asset_collection == ctx.accounts.group.collection,
         AttentionError::AssetNotInGroup
     );
+
+    // Listing checked the cap, but it reserves nothing in the pool, so a
+    // one-off `mint_genesis` between grouped sales can take headroom the group
+    // was counting on. Without a recheck here the group's remaining units push
+    // the committed stream past 100%, and `split_genesis_fee` silently clamps
+    // the payout so whoever claims last absorbs the shortfall. Checked before
+    // any SOL moves, so a refused unit costs the buyer nothing.
+    validate_added_share(
+        ctx.accounts.pool.total_share_bps,
+        ctx.accounts.group.share_bps,
+    )?;
 
     let fee = u128::from(price)
         .checked_mul(u128::from(ctx.accounts.fee_config.nft_fee_bps))

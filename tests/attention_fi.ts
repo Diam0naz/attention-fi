@@ -2045,6 +2045,245 @@ describe("attention_fi genesis group", () => {
   });
 });
 
+// Regression for the pre-audit fuzz finding: listing checks the 100% cap but
+// reserves nothing, so a one-off `mint_genesis` between grouped sales could eat
+// the group's headroom and its remaining units would push the committed stream
+// past 100%. `buy_genesis_unit` must now refuse the unit that would overflow.
+describe("attention_fi genesis group — share cap across both paths", () => {
+  anchor.setProvider(anchor.AnchorProvider.env());
+  const provider = anchor.getProvider() as anchor.AnchorProvider;
+  const program = anchor.workspace.attentionFi as Program<AttentionFi>;
+  const wallet = provider.wallet.publicKey;
+
+  const [globalPda] = PublicKey.findProgramAddressSync(
+    [Buffer.from("global")],
+    program.programId
+  );
+  const [feeConfigPda] = PublicKey.findProgramAddressSync(
+    [Buffer.from("feeconfig")],
+    program.programId
+  );
+
+  // 3 units × 30% = 90% of the stream, inside the cap when listed.
+  const TOTAL_UNITS = 3;
+  const SHARE_BPS = 3_000;
+  const PRICE = LAMPORTS_PER_SOL / 10;
+  const TOTAL = PRICE + (PRICE * NFT_FEE_BPS) / 10_000;
+  // Exactly the headroom left after one grouped sale: 3,000 + 7,000 = 100%.
+  const ONE_OFF_BPS = 7_000;
+
+  // Its own creator, so this suite spends none of the shared wallet's launch quota.
+  const creator = Keypair.generate();
+  const buyer = Keypair.generate();
+  const mintKp = Keypair.generate();
+  const collectionKp = Keypair.generate();
+  const subjectMint = mintKp.publicKey;
+  const [curvePda] = PublicKey.findProgramAddressSync(
+    [Buffer.from("curve"), subjectMint.toBuffer()],
+    program.programId
+  );
+  const [groupPda] = PublicKey.findProgramAddressSync(
+    [Buffer.from("gengroup"), subjectMint.toBuffer()],
+    program.programId
+  );
+  const poolPda = genesisPoolPda(subjectMint, program.programId);
+  const genesisPda = (asset: PublicKey) =>
+    PublicKey.findProgramAddressSync(
+      [Buffer.from("genesis"), asset.toBuffer()],
+      program.programId
+    )[0];
+  const allocationPda = (who: PublicKey) =>
+    PublicKey.findProgramAddressSync(
+      [Buffer.from("genalloc"), subjectMint.toBuffer(), who.toBuffer()],
+      program.programId
+    )[0];
+
+  // Setup lands at "processed" by default, but the buyer's own transaction
+  // simulates against "confirmed" state, so each step waits for that first.
+  let treasury: PublicKey;
+  const units: PublicKey[] = [];
+  const totalShare = async () =>
+    (await program.account.genesisPool.fetch(poolPda)).totalShareBps.toNumber();
+
+  async function buyUnit(asset: PublicKey): Promise<void> {
+    const tx = await program.methods
+      .buyGenesisUnit(new anchor.BN(TOTAL))
+      .accountsStrict({
+        buyer: buyer.publicKey,
+        global: globalPda,
+        feeConfig: feeConfigPda,
+        treasury,
+        creator: creator.publicKey,
+        subjectMint,
+        group: groupPda,
+        collection: collectionKp.publicKey,
+        asset,
+        genesis: genesisPda(asset),
+        pool: poolPda,
+        allocation: allocationPda(buyer.publicKey),
+        mplCoreProgram: MPL_CORE_PROGRAM_ID,
+        systemProgram: SystemProgram.programId,
+        guardians: guardiansPda(program.programId),
+      })
+      .transaction();
+    await anchor.web3.sendAndConfirmTransaction(provider.connection, tx, [buyer], {
+      commitment: "confirmed",
+    });
+  }
+
+  before(async () => {
+    const existing = await program.account.global.fetchNullable(globalPda);
+    if (existing) {
+      treasury = existing.treasury;
+    } else {
+      treasury = Keypair.generate().publicKey;
+      await program.methods
+        .initialize()
+        .accountsStrict({
+          authority: wallet,
+          global: globalPda,
+          feeConfig: feeConfigPda,
+          treasury,
+          systemProgram: SystemProgram.programId,
+        })
+        .rpc({ commitment: "confirmed" });
+    }
+
+    for (const who of [creator, buyer]) {
+      const sig = await provider.connection.requestAirdrop(
+        who.publicKey,
+        5 * LAMPORTS_PER_SOL
+      );
+      await provider.connection.confirmTransaction(sig, "confirmed");
+    }
+
+    await program.methods
+      .launchToken(
+        { emerging: {} },
+        { name: "Cap Subject", symbol: "CAP", uri: "https://attention.fi/cap.json" }
+      )
+      .accountsStrict({
+        creator: creator.publicKey,
+        global: globalPda,
+        mint: subjectMint,
+        curve: curvePda,
+        vault: ata(curvePda, subjectMint),
+        metadata: PublicKey.findProgramAddressSync(
+          [
+            Buffer.from("metadata"),
+            TOKEN_METADATA_PROGRAM_ID.toBuffer(),
+            subjectMint.toBuffer(),
+          ],
+          TOKEN_METADATA_PROGRAM_ID
+        )[0],
+        tokenMetadataProgram: TOKEN_METADATA_PROGRAM_ID,
+        systemProgram: SystemProgram.programId,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+        rent: SYSVAR_RENT_PUBKEY,
+        launchPolicy: launchPolicyPda(program.programId),
+        launchQuota: launchQuotaPda(creator.publicKey, program.programId),
+      })
+      .signers([creator, mintKp])
+      .rpc({ commitment: "confirmed" });
+
+    await program.methods
+      .createCollection("Cap Run", "https://attention.fi/cap-run.json")
+      .accountsStrict({
+        payer: creator.publicKey,
+        collection: collectionKp.publicKey,
+        mplCoreProgram: MPL_CORE_PROGRAM_ID,
+        systemProgram: SystemProgram.programId,
+      })
+      .signers([creator, collectionKp])
+      .rpc({ commitment: "confirmed" });
+
+    await program.methods
+      .listGenesisGroup(TOTAL_UNITS, SHARE_BPS, new anchor.BN(PRICE), TOTAL_UNITS)
+      .accountsStrict({
+        creator: creator.publicKey,
+        subjectMint,
+        curve: curvePda,
+        group: groupPda,
+        pool: poolPda,
+        collection: collectionKp.publicKey,
+        mplCoreProgram: MPL_CORE_PROGRAM_ID,
+        systemProgram: SystemProgram.programId,
+      })
+      .signers([creator])
+      .rpc({ commitment: "confirmed" });
+
+    const batch = [Keypair.generate(), Keypair.generate(), Keypair.generate()];
+    await program.methods
+      .mintGenesisBatch("https://attention.fi/cap-unit.json")
+      .accountsStrict({
+        creator: creator.publicKey,
+        subjectMint,
+        group: groupPda,
+        collection: collectionKp.publicKey,
+        mplCoreProgram: MPL_CORE_PROGRAM_ID,
+        systemProgram: SystemProgram.programId,
+      })
+      .remainingAccounts(
+        batch.map((kp) => ({ pubkey: kp.publicKey, isSigner: true, isWritable: true }))
+      )
+      .preInstructions([
+        anchor.web3.ComputeBudgetProgram.setComputeUnitLimit({ units: 600_000 }),
+      ])
+      .signers([creator, ...batch])
+      .rpc({ commitment: "confirmed" });
+    units.push(...batch.map((kp) => kp.publicKey));
+  });
+
+  it("refuses a grouped unit once a one-off mint has taken its headroom", async () => {
+    await buyUnit(units[0]);
+    assert.strictEqual(await totalShare(), SHARE_BPS, "first grouped sale commits 30%");
+
+    // The one-off mint is checked only against what has sold, so it fits.
+    const oneOff = Keypair.generate();
+    await program.methods
+      .mintGenesis(ONE_OFF_BPS, "https://attention.fi/cap-oneoff.json")
+      .accountsStrict({
+        authority: creator.publicKey,
+        global: globalPda,
+        recipient: creator.publicKey,
+        subjectMint,
+        curve: curvePda,
+        genesis: genesisPda(oneOff.publicKey),
+        pool: poolPda,
+        asset: oneOff.publicKey,
+        mplCoreProgram: MPL_CORE_PROGRAM_ID,
+        systemProgram: SystemProgram.programId,
+      })
+      .signers([creator, oneOff])
+      .rpc({ commitment: "confirmed" });
+    assert.strictEqual(await totalShare(), 10_000, "the stream is now fully committed");
+
+    // Before the fix this sold and left the pool at 130%.
+    const before = await provider.connection.getBalance(buyer.publicKey);
+    let threw = false;
+    try {
+      await buyUnit(units[1]);
+    } catch (err) {
+      threw = true;
+      assert.include(String(err), "ShareOversubscribed");
+    }
+    assert.isTrue(threw, "a unit past 100% of the stream is refused");
+    assert.strictEqual(await totalShare(), 10_000, "never committed past 100%");
+    assert.strictEqual(
+      await provider.connection.getBalance(buyer.publicKey),
+      before,
+      "a refused unit costs the buyer nothing"
+    );
+    const unit = await provider.connection.getAccountInfo(units[1]);
+    assert.strictEqual(
+      new PublicKey(unit!.data.subarray(1, 33)).toBase58(),
+      groupPda.toBase58(),
+      "the refused unit stays in the group's escrow"
+    );
+  });
+});
+
 describe("attention_fi protocol config", () => {
   anchor.setProvider(anchor.AnchorProvider.env());
   const provider = anchor.getProvider() as anchor.AnchorProvider;
