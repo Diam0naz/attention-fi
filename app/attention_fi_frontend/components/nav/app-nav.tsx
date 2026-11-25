@@ -11,14 +11,16 @@ import { NotificationsBell } from "@/components/notifications/notifications-bell
 import { refreshSolUsd } from "@/lib/solana/sol-usd";
 import { syncRegistry } from "@/lib/solana/registry";
 import { cn } from "@/lib/utils";
+import { SCOPE } from "@/lib/scope";
 import { useAppAccess } from "@/components/wallet/use-app-access";
 
-const APP_LINKS = [
+// NFT is listed only while it is in scope (lib/scope.ts); its routes 404 otherwise.
+const APP_LINKS: readonly { label: string; href: string }[] = [
   { label: "Discover", href: "/discover" },
   { label: "Terminal", href: "/terminal" },
   { label: "Launch", href: "/launch" },
-  { label: "NFT", href: "/nft" },
-] as const;
+  ...(SCOPE.nft ? [{ label: "NFT", href: "/nft" }] : []),
+];
 
 /** What a visitor sees before connecting: the story, not the product. Also what
  *  the gated deployment shows, where the app surfaces redirect — offering a link

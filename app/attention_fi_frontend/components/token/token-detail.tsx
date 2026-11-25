@@ -30,6 +30,7 @@ import { useSolUsd } from "@/lib/solana/sol-usd";
 import { useTokenBalance } from "@/lib/solana/use-token-balance";
 import { handleToMint } from "@/lib/solana/registry";
 import { useVenue } from "@/lib/solana/use-venue";
+import { mechanismInScope } from "@/lib/scope";
 import { useTokenHolders, useTokenTrades } from "@/lib/solana/use-token-activity";
 import {
   graduateToken,
@@ -529,7 +530,18 @@ export function TokenDetailTerminal({ token: tokenProp }: { token: TokenDetail }
         {/* right: order panel — a Dutch auction gets its own controls rather
             than buy/sell tabs, which would misdescribe what it does. */}
         <div className="p-5 sm:p-7">
-          {token.mechanism === "dutch" ? (
+          {token.mechanism && !mechanismInScope(token.mechanism) ? (
+            // Launched before the scope was narrowed (lib/scope.ts). Its panel
+            // stays in the code but isn't offered, so nothing here can send one
+            // of that mechanism's instructions.
+            <div className="rounded-sm border border-white/[0.08] bg-[#0f1620] p-4">
+              <div className="text-[13px] font-bold">{mechLabel}</div>
+              <p className="mt-1.5 text-[11px] leading-relaxed text-[#9aa4af]">
+                This token uses a launch mechanism that isn&apos;t available in this
+                version of AttentionFi, so it can&apos;t be traded here.
+              </p>
+            </div>
+          ) : token.mechanism === "dutch" ? (
             <AuctionPanel mint={tokenMint} symbol={token.symbol} />
           ) : token.mechanism === "conviction" ? (
             <ConvictionPanel mint={tokenMint} symbol={token.symbol} />

@@ -11,6 +11,7 @@ import {
   type CurveState,
 } from "./curve";
 import { hasTraderStats } from "./perks";
+import { SCOPE } from "@/lib/scope";
 import { ata, curvePda, genesisPoolPda, globalPda, traderStatsPda } from "./program";
 
 /**
@@ -190,7 +191,9 @@ export async function tradeOnVenue(
   const [global, venue, keepsStats] = await Promise.all([
     program.account.global.fetch(globalPda()),
     resolveVenue(program, mint),
-    hasTraderStats(program, trader),
+    // Perk progress is outside the current scope (lib/scope.ts), so the
+    // optional stats record isn't probed or passed; the program accepts none.
+    SCOPE.perks ? hasTraderStats(program, trader) : Promise.resolve(false),
   ]);
   // Unlike the genesis pool, this one really is probed — Anchor deserialises an
   // Option account when it's supplied, so passing the address of a record the

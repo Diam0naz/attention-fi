@@ -24,6 +24,7 @@ import {
   type ClaimedPerkData,
   type PerkGrantData,
 } from "@/lib/solana/admin-data";
+import { SCOPE } from "@/lib/scope";
 
 const MAX_LEVEL = 5;
 const LAMPORTS_PER_SOL = 1_000_000_000;
@@ -113,8 +114,9 @@ export function AdminView() {
         const [g, f, gr, cl] = await Promise.all([
           fetchGlobal(readProgram),
           fetchFeeConfig(readProgram),
-          fetchPerkGrants(readProgram),
-          fetchClaimedPerks(readProgram),
+          // Perks are outside the current scope (lib/scope.ts): not read.
+          SCOPE.perks ? fetchPerkGrants(readProgram) : Promise.resolve([] as PerkGrantData[]),
+          SCOPE.perks ? fetchClaimedPerks(readProgram) : Promise.resolve([] as ClaimedPerkData[]),
         ]);
         if (cancelled) return;
         setConfig(g);
@@ -450,6 +452,8 @@ export function AdminView() {
             v={`${(Number(config.graduationSol) / LAMPORTS_PER_SOL).toFixed(2)} SOL`}
           />
           <Row k="TOKENS LAUNCHED" v={config.tokensLaunched.toString()} />
+          {SCOPE.nft && (
+          <>
           <Row
             k="NFT SALE FEE"
             v={fees ? `${(fees.nftFeeBps / 100).toFixed(2)}%` : "not set"}
@@ -463,6 +467,8 @@ export function AdminView() {
                 : "not set"
             }
           />
+          </>
+          )}
         </dl>
       ) : (
         <p className="mt-2 font-mono text-[11px] text-noise">Couldn&apos;t read Global.</p>
@@ -476,7 +482,7 @@ export function AdminView() {
         controls, and a one-click version here would only be able to weaken it.
       </Notice>
 
-      {!fees && (
+      {SCOPE.nft && !fees && (
         <Notice tone="caution" title="THE NFT MARKET HAS NO FEE SCHEDULE YET" className="mt-2 max-w-2xl">
           <code>FeeConfig</code> doesn&apos;t exist on this deployment, and the instructions that
           charge it — buying an asset or a collection, buying a genesis unit, promoting a listing
@@ -527,7 +533,9 @@ export function AdminView() {
         {savingConfig ? "SAVING…" : "SAVE ECONOMICS"}
       </button>
 
-      {/* ── nft market ─────────────────────────────────────────── */}
+      {/* ── nft market ── outside the current scope (lib/scope.ts) ── */}
+      {SCOPE.nft && (
+      <>
       <h2 className="mt-8 text-[13px] font-bold">NFT market</h2>
       <p className="mt-1 max-w-2xl text-[11px] leading-relaxed text-[#6B6B6B]">
         Priced apart from trading on purpose. A trading fee is charged over and over on the same
@@ -557,6 +565,8 @@ export function AdminView() {
       >
         {savingFees ? "SAVING…" : fees ? "SAVE NFT FEES" : "CREATE FEE SCHEDULE"}
       </button>
+      </>
+      )}
 
       {config && config.authority === config.treasury && (
         <Notice tone="caution" title="AUTHORITY AND TREASURY ARE THE SAME WALLET" className="mt-2 max-w-2xl">
@@ -566,7 +576,9 @@ export function AdminView() {
         </Notice>
       )}
 
-      {/* ── perk grants ────────────────────────────────────────── */}
+      {/* ── perk grants ── outside the current scope (lib/scope.ts) ── */}
+      {SCOPE.perks && (
+      <>
       <h2 className="mt-8 text-[13px] font-bold">Grant perks</h2>
       <p className="mt-1 max-w-2xl text-[11px] leading-relaxed text-[#6B6B6B]">
         Authorises each wallet to claim a perk at the chosen level. You pay only for the small
@@ -716,6 +728,8 @@ export function AdminView() {
           )}
         </div>
       </div>
+      </>
+      )}
 
       {/* ── issuer ─────────────────────────────────────────────── */}
       <h2 className="mt-8 text-[13px] font-bold">Attestation issuer</h2>

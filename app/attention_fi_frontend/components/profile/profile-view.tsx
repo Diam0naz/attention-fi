@@ -20,6 +20,7 @@ import { useReadonlyProgram } from "@/lib/solana/use-program";
 import { useHoldings } from "@/lib/solana/use-holdings";
 import { CreatorFeesPanel } from "@/components/profile/creator-fees-panel";
 import { useNftPortfolio } from "@/components/nft/use-nft-portfolio";
+import { SCOPE } from "@/lib/scope";
 import { RefreshButton } from "@/components/ui/refresh-button";
 import { syncRegistry } from "@/lib/solana/registry";
 
@@ -154,7 +155,7 @@ export function ProfileView() {
           <div className="rounded-sm border border-white/[0.08] bg-[#0f1620] p-8 text-center">
             <div className="text-[15px] font-bold">Connect a wallet to view your profile</div>
             <p className="mx-auto mt-2 max-w-xs text-[12px] leading-relaxed text-[#6B6B6B]">
-              Your holdings, launched tokens, claimable creator fees, and NFTs live here.
+              Your holdings, launched tokens, and claimable creator fees live here.
             </p>
             <button
               onClick={() => setWalletOpen(true)}
@@ -363,7 +364,8 @@ export function ProfileView() {
           )}
         </Section>
 
-        {/* NFTs — the actual issued assets */}
+        {/* NFTs — the actual issued assets. Outside the current scope (lib/scope.ts). */}
+        {SCOPE.nft && (
         <Section title="Your NFTs" action={<RefreshButton onRefresh={refreshProfile} />}>
           {ownedOnchain.status === "loading" ? (
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
@@ -393,11 +395,12 @@ export function ProfileView() {
             <Sparkles className="h-3.5 w-3.5" /> Manage NFTs & auctions →
           </Link>
         </Section>
+        )}
       </div>
 
       <Footer />
       <WalletConnectModal open={walletOpen} onClose={() => setWalletOpen(false)} />
-      <NftLanyard data={selectedNft} onClose={() => setSelectedNft(null)} />
+      {SCOPE.nft && <NftLanyard data={selectedNft} onClose={() => setSelectedNft(null)} />}
     </div>
   );
 }

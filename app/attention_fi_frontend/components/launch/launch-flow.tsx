@@ -27,15 +27,19 @@ import {
   type LaunchQuota,
 } from "@/lib/solana/launch-quota";
 import { verifyMessage } from "@/lib/sas/config";
+import { mechanismInScope, type MechanismId } from "@/lib/scope";
 
-type MechId = "bonding" | "dutch" | "conviction" | "revenue";
+type MechId = MechanismId;
 
-const MECHANISMS: { id: MechId; name: string; badge?: string; desc: string }[] = [
+const ALL_MECHANISMS: { id: MechId; name: string; badge?: string; desc: string }[] = [
   { id: "bonding", name: "Bonding Curve", badge: "DEFAULT", desc: "Mindshare-seeded price, graduates to a native AMM." },
   { id: "dutch", name: "Dutch Auction", desc: "Price starts high and descends until the allocation fills — no front-running edge." },
   { id: "conviction", name: "Conviction Curve", desc: "Slower rise with a time-lock; early exits forfeit a penalty." },
   { id: "revenue", name: "Revenue Share", desc: "The token is a pro-rata claim on the subject's fee stream." },
 ];
+
+// Only the mechanisms in the current product scope are offered (lib/scope.ts).
+const MECHANISMS = ALL_MECHANISMS.filter((m) => mechanismInScope(m.id));
 
 // Mindshare tier → seed market cap (mirrors the program's seed tiers).
 const TIERS = [
@@ -270,6 +274,13 @@ export function LaunchFlow() {
     if (!program || !address) {
       console.log("[launch] Aborting and opening wallet modal. program:", !!program, "address:", !!address);
       return setWalletOpen(true);
+    }
+    // The picker only offers in-scope mechanisms; this stops anything else from
+    // being sent even if the state got there another way.
+    if (!mechanismInScope(mech)) {
+      setTxErr("This launch mechanism isn't available in this version.");
+      setTx(null);
+      return;
     }
     setTxErr(null);
     setTx("pending");

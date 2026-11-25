@@ -12,6 +12,7 @@
  * payment buys exactly one change and a replayed signature does nothing.
  */
 import { NextResponse } from "next/server";
+import { SCOPE } from "@/lib/scope";
 import { Connection, PublicKey } from "@solana/web3.js";
 import bs58 from "bs58";
 import nacl from "tweetnacl";
@@ -75,6 +76,11 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  // Skins sit outside the current product scope (lib/scope.ts). GET still
+  // serves artwork for assets that already exist; nothing new is changed.
+  if (!SCOPE.nft) {
+    return NextResponse.json({ error: "Not available in this version." }, { status: 404 });
+  }
   try {
     if (!skinDbConfigured()) {
       return NextResponse.json(

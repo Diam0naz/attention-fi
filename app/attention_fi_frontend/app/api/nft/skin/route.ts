@@ -12,6 +12,7 @@
  * this only ever applies an entitlement that already exists.
  */
 import { NextResponse } from "next/server";
+import { SCOPE } from "@/lib/scope";
 import { PublicKey } from "@solana/web3.js";
 import bs58 from "bs58";
 import nacl from "tweetnacl";
@@ -70,6 +71,11 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  // Skins sit outside the current product scope (lib/scope.ts). GET still
+  // serves artwork for assets that already exist; nothing new is changed.
+  if (!SCOPE.nft) {
+    return NextResponse.json({ error: "Not available in this version." }, { status: 404 });
+  }
   try {
     // Before the signature check: verifying ed25519 and reading the asset from
     // chain both cost more than turning the request away does.

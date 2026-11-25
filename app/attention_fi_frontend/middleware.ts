@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { isGatedPath, V0_GATE } from "@/lib/v0-gate";
 import { BLOCKED_PATH, isBlockedCountry } from "@/lib/geo-block";
+import { isOutOfScopePath } from "@/lib/scope";
 
 /**
  * v0 gate — redirects v1 app surfaces back to the landing page.
@@ -36,6 +37,15 @@ export function middleware(request: NextRequest) {
     url.search = "";
     url.hash = "";
     return NextResponse.redirect(url);
+  }
+
+  // Outside the current product scope (lib/scope.ts). A rewrite to a route that
+  // doesn't exist renders the not-found page with a real 404 status; notFound()
+  // in the segment's layout alone returned the page with a 200 for /nft.
+  if (isOutOfScopePath(request.nextUrl.pathname)) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/__out-of-scope";
+    return NextResponse.rewrite(url);
   }
 
   if (!V0_GATE) return NextResponse.next();

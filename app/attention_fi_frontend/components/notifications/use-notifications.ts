@@ -12,6 +12,7 @@ import {
   fetchPerkGrant,
   type NftOutcome,
 } from "@/lib/solana/nft-data";
+import { SCOPE } from "@/lib/scope";
 import type { AppNotification } from "@/components/notifications/notifications-panel";
 
 /**
@@ -219,11 +220,15 @@ export function useNotifications(): Notifications {
       // Independent sources: the PDAs say what happened, the events say for how
       // much, and the grant is a separate entitlement. Losing one must not cost
       // the others, so each settles on its own.
+      // NFT sales, skins and perk grants are outside the current scope
+      // (lib/scope.ts): they aren't fetched, so the bell never links to them.
       const [outcomes, facts, grant, signatureUnlocked, positions] = await Promise.all([
-        fetchNftOutcomes(program, owner).catch(() => [] as NftOutcome[]),
-        fetchSaleFacts(),
-        fetchPerkGrant(program, owner).catch(() => null),
-        fetchSignatureUnlocked(address!),
+        SCOPE.nft
+          ? fetchNftOutcomes(program, owner).catch(() => [] as NftOutcome[])
+          : Promise.resolve([] as NftOutcome[]),
+        SCOPE.nft ? fetchSaleFacts() : Promise.resolve(new Map<string, SaleFact>()),
+        SCOPE.perks ? fetchPerkGrant(program, owner).catch(() => null) : Promise.resolve(null),
+        SCOPE.nft ? fetchSignatureUnlocked(address!) : Promise.resolve(false),
         fetchWalletPositions(program, getConnection(), owner)
           .then((r) => r.positions)
           .catch(() => [] as WalletPosition[]),

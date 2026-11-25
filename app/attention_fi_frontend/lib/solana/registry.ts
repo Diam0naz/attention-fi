@@ -1,5 +1,6 @@
 import { PublicKey } from "@solana/web3.js";
 import { staticRegistry } from "./static-registry";
+import { mechanismInScope } from "@/lib/scope";
 
 /**
  * Maps an X handle to its on-chain token mint. Seeded from the shared static
@@ -58,11 +59,22 @@ export function syncRegistry(force = false): Promise<void> {
       const res = await fetch("/api/tokens");
       if (!res.ok) return;
       const body = (await res.json()) as {
-        tokens?: { handle: string; mint: string; name?: string; symbol?: string; image?: string }[];
+        tokens?: {
+          handle: string;
+          mint: string;
+          name?: string;
+          symbol?: string;
+          image?: string;
+          mechanism?: string | null;
+        }[];
       };
       const next: Record<string, RegistryEntry> = {};
       for (const t of body.tokens ?? []) {
         if (!t?.handle || !t?.mint) continue;
+        // Tokens launched under a mechanism outside the current scope
+        // (lib/scope.ts) aren't listed. Skipping them here also lets an older
+        // in-scope launch under the same handle be the one a search finds.
+        if (t.mechanism && !mechanismInScope(t.mechanism)) continue;
         const key = norm(t.handle);
         // A handle can carry several launches, and this map holds one. The
         // server returns them newest-first, so the first sighting wins and the
@@ -234,7 +246,14 @@ export function mintToToken(
  * that first.
  */
 export function allTokenHandles(): string[] {
-  return Object.keys({ ...staticRegistry(), ...remoteRegistry(), ...launchedRegistry() });
+  // This browser's own launches carry their mechanism; out-of-scope ones stay
+  // out of listings, as they do in the server registry (see syncRegistry).
+  const local = Object.fromEntries(
+    Object.entries(launchedRegistry()).filter(
+      ([, e]) => typeof e === "string" || !e.mechanism || mechanismInScope(e.mechanism),
+    ),
+  );
+  return Object.keys({ ...staticRegistry(), ...remoteRegistry(), ...local });
 }
 
 /** Handles launched from this browser (i.e. tokens the user created). */

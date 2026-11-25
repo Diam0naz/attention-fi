@@ -13,6 +13,7 @@
  * so one payment unlocks exactly one skin and a replay does nothing.
  */
 import { NextResponse } from "next/server";
+import { SCOPE } from "@/lib/scope";
 import { Connection, PublicKey } from "@solana/web3.js";
 import { getReadonlyProgram } from "@/lib/solana/program";
 import { PROGRAM_ID, RPC_ENDPOINT } from "@/lib/solana/config";
@@ -28,6 +29,11 @@ const GLOBAL_SEED = Buffer.from("global");
 const FEE_TOLERANCE_LAMPORTS = 1_000;
 
 export async function POST(request: Request) {
+  // Skins sit outside the current product scope (lib/scope.ts). GET still
+  // serves artwork for assets that already exist; nothing new is changed.
+  if (!SCOPE.nft) {
+    return NextResponse.json({ error: "Not available in this version." }, { status: 404 });
+  }
   try {
     // Ahead of the body parse, because everything below is expensive: two RPC
     // round trips to fetch the treasury and the payment transaction, before

@@ -4,12 +4,13 @@ import { X_HANDLE, X_URL } from "@/lib/config";
 import { Logo } from "@/components/brand/logo";
 import { useAppAccess } from "@/components/wallet/use-app-access";
 import { RiskDisclaimer } from "@/components/ui/risk-disclaimer";
+import { SCOPE } from "@/lib/scope";
 
 const APP_PRODUCT = [
   { label: "Discover", href: "/discover" },
   { label: "Terminal", href: "/terminal" },
   { label: "Launch", href: "/launch" },
-  { label: "NFT", href: "/nft" },
+  ...(SCOPE.nft ? [{ label: "NFT", href: "/nft" }] : []),
   { label: "Profile", href: "/profile" },
 ];
 

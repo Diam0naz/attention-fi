@@ -1,13 +1,18 @@
 import Link from "next/link";
 import { Reveal } from "@/components/brand/reveal";
+import { mechanismInScope, type MechanismId } from "@/lib/scope";
 
 // Copy sourced from components/attentionfi-strategy.html (mechanism-design section).
-const LAUNCH_TYPES = [
-  { name: "Bonding Curve", badge: "DEFAULT", best: "KOL reputation tokens", desc: "Price rises continuously with buys — the Pump model, but seeded by real mindshare instead of zero." },
-  { name: "Dutch Auction", badge: "FAIR", best: "Narrative / project launches", desc: "Price starts high and drops until the allocation sells. Kills front-running and bot advantage." },
-  { name: "Conviction Curve", badge: "SLOW", best: "Niche verticals (music, gaming)", desc: "Slower acceleration with mandatory time-locks. Loyalty matters more than exit speed." },
-  { name: "Revenue Share", badge: "NEW", best: "Creator economy tokens", desc: "Token = a claim on a share of the subject's future fees. Price is a DCF on attention revenue." },
+const ALL_LAUNCH_TYPES: { id: MechanismId; name: string; badge: string; best: string; desc: string }[] = [
+  { id: "bonding", name: "Bonding Curve", badge: "DEFAULT", best: "KOL reputation tokens", desc: "Price rises continuously with buys — the Pump model, but seeded by real mindshare instead of zero." },
+  { id: "dutch", name: "Dutch Auction", badge: "FAIR", best: "Narrative / project launches", desc: "Price starts high and drops until the allocation sells. Kills front-running and bot advantage." },
+  { id: "conviction", name: "Conviction Curve", badge: "SLOW", best: "Niche verticals (music, gaming)", desc: "Slower acceleration with mandatory time-locks. Loyalty matters more than exit speed." },
+  { id: "revenue", name: "Revenue Share", badge: "NEW", best: "Creator economy tokens", desc: "Token = a claim on a share of the subject's future fees. Price is a DCF on attention revenue." },
 ];
+
+// Only what a creator can actually launch today is advertised (lib/scope.ts).
+const LAUNCH_TYPES = ALL_LAUNCH_TYPES.filter((m) => mechanismInScope(m.id));
+const SINGLE_MECHANISM = LAUNCH_TYPES.length === 1;
 
 const TIERS = [
   ["Top 10", "@vitalik, major KOL", "~$15,000"],
@@ -31,11 +36,12 @@ export function Mechanism() {
           Mechanism design
         </div>
         <h2 className="mt-3 max-w-2xl text-[clamp(26px,4vw,40px)] font-bold leading-[1.1] tracking-[-0.02em]">
-          The right curve for the right asset
+          {SINGLE_MECHANISM ? "One curve, seeded by real mindshare" : "The right curve for the right asset"}
         </h2>
         <p className="mt-4 max-w-xl text-[15px] leading-relaxed text-[#9aa4af]">
-          Pump uses one mechanism for everything. AttentionFi picks the mechanism to fit the
-          underlying social primitive — four launch types, chosen at creation.
+          {SINGLE_MECHANISM
+            ? "Pump starts every token at zero. AttentionFi starts it at a price set by the subject's measured mindshare, and the real account owner opts in before anything trades."
+            : "Pump uses one mechanism for everything. AttentionFi picks the mechanism to fit the underlying social primitive — four launch types, chosen at creation."}
         </p>
       </Reveal>
 
