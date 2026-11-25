@@ -196,6 +196,14 @@ export function DrawingLayer({
     };
   }, [chart, feed, scheduleDraw, container]);
 
+  // The pointer handlers below only need makeSpace when an event fires, so they
+  // read the latest one through a ref. With makeSpace itself as a dependency the
+  // effect tore down and re-bound every listener on every render.
+  const makeSpaceRef = useRef(makeSpace);
+  useEffect(() => {
+    makeSpaceRef.current = makeSpace;
+  });
+
   /* ----- pointer interaction --------------------------------------------- */
 
   useEffect(() => {
@@ -216,7 +224,7 @@ export function DrawingLayer({
 
     const onDown = (e: PointerEvent) => {
       if (e.button !== 0) return;
-      const space = makeSpace();
+      const space = makeSpaceRef.current();
       if (!space) return;
       const p = localPoint(e);
       if (p.x > space.width || p.y > space.height) return; // axis area
@@ -270,7 +278,7 @@ export function DrawingLayer({
     };
 
     const onMove = (e: PointerEvent) => {
-      const space = makeSpace();
+      const space = makeSpaceRef.current();
       if (!space) return;
       const p = localPoint(e);
       const drag = dragRef.current;
@@ -345,7 +353,7 @@ export function DrawingLayer({
     };
 
     const onDblClick = (e: MouseEvent) => {
-      const space = makeSpace();
+      const space = makeSpaceRef.current();
       if (!space) return;
       const r = el.getBoundingClientRect();
       const p = { x: e.clientX - r.left, y: e.clientY - r.top };
@@ -377,7 +385,7 @@ export function DrawingLayer({
       el.removeEventListener("dblclick", onDblClick, true);
       window.removeEventListener("keydown", onKey);
     };
-  }, [container, makeSpace, symbol, scheduleDraw]);
+  }, [container, symbol, scheduleDraw]);
 
   /* clear any in-progress draft when the tool changes */
   useEffect(() => {

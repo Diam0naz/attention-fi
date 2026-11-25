@@ -1,7 +1,7 @@
 "use client";
 
 import type { IChartApi, ISeriesApi, Logical, SeriesType } from "lightweight-charts";
-import { useEffect, useRef, type RefObject } from "react";
+import { useCallback, useEffect, useRef, type RefObject } from "react";
 import type { CandleFeed } from "@/lib/terminal-app/lib/chart/feed";
 import { INDICATORS } from "@/lib/terminal-app/lib/indicators/registry";
 import type { LinePoint } from "@/lib/terminal-app/lib/indicators/compute";
@@ -116,17 +116,27 @@ export function IndicatorPaintLayer({
     ctx.restore();
   };
 
-  const schedule = () => {
+  // Same arrangement as DrawingLayer's scheduleDraw. The compiler isn't enabled
+  // in next.config, so a plain `schedule` was a new function every render, and
+  // the effects below re-subscribed (and cancelled the pending frame) on every
+  // render. A stable schedule reads the current paint through a ref instead,
+  // assigned after commit; it's only dereferenced inside a rAF callback.
+  const paintRef = useRef<() => void>(() => {});
+  useEffect(() => {
+    paintRef.current = paint;
+  });
+  const schedule = useCallback(() => {
     if (rafRef.current) return;
     rafRef.current = requestAnimationFrame(() => {
       rafRef.current = 0;
-      paint();
+      paintRef.current();
     });
-  };
+  }, []);
 
+  // Repaint when anything paint reads changes, including a recreated series.
   useEffect(() => {
     schedule();
-  }, [instances, schedule]);
+  }, [instances, chart, series, feed, schedule]);
 
   useEffect(() => {
     const onRange = () => schedule();

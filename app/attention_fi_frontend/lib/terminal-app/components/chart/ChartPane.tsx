@@ -156,11 +156,13 @@ export function ChartPane({ paneId, feed, symbol, sync, isPrimary }: ChartPanePr
       },
     });
     chartRef.current = chart;
+    // The overlay map is created once and never reassigned; capture it for the cleanup.
+    const overlays = overlaySeriesRef.current;
     return () => {
       chartRef.current = null;
       seriesRef.current = null;
       volumeRef.current = null;
-      overlaySeriesRef.current.clear();
+      overlays.clear();
       chart.remove();
     };
   }, []);

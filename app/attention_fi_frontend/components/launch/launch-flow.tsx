@@ -598,7 +598,7 @@ export function LaunchFlow() {
                 </div>
                 <p className="mx-auto mt-1.5 max-w-xs text-[11px] leading-relaxed text-[#6B6B6B]">
                   This wallet is permanently bound to <span className="text-[#F5F4F0]">@{verifiedHandle}</span> on-chain.
-                  That's the handle this token will launch under — connect a different wallet to launch as someone else.
+                  That&apos;s the handle this token will launch under — connect a different wallet to launch as someone else.
                 </p>
               </div>
             ) : X_OAUTH_ENABLED && !xVerified ? (

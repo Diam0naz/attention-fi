@@ -82,9 +82,11 @@ export function SubPane({
       localization: { priceFormatter: (p: number) => fmtPrice(p) },
     });
     chartRef.current = chart;
+    // The map is created once and never reassigned; capture it for the cleanup.
+    const series = seriesRef.current;
     return () => {
       chartRef.current = null;
-      seriesRef.current.clear();
+      series.clear();
       chart.remove();
     };
   }, []);
