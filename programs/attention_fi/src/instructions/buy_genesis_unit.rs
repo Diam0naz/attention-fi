@@ -7,12 +7,14 @@ use mpl_core::instructions::TransferV1CpiBuilder;
 // from every account in this file.
 use mpl_core::types::UpdateAuthority;
 
+use crate::constants::FEATUREGATE_SEED;
 use crate::constants::{
     FEECONFIG_SEED, GENALLOC_SEED, GENESIS_SEED, GENGROUP_SEED, GENPOOL_SEED, GLOBAL_SEED,
     GUARDIANS_SEED,
 };
 use crate::error::AttentionError;
 use crate::events::GenesisUnitSoldEvent;
+use crate::features::{self, FEATURE_NFT};
 use crate::genesis::{record_allocation, record_sale, validate_added_share};
 use crate::guardians;
 use crate::revenue::accrued;
@@ -117,9 +119,18 @@ pub struct BuyGenesisUnit<'info> {
     pub guardians: UncheckedAccount<'info>,
 
     pub system_program: Program<'info, System>,
+
+    /// Whether this feature still accepts new entries. Unchecked because an
+    /// empty account is the legitimate "no gate installed, everything enabled"
+    /// state rather than an error.
+    ///
+    /// CHECK: seeds pin the address; `features::require_enabled` validates it.
+    #[account(seeds = [FEATUREGATE_SEED], bump)]
+    pub feature_gate: UncheckedAccount<'info>,
 }
 
 pub fn buy_genesis_unit_handler(ctx: Context<BuyGenesisUnit>, max_total: u64) -> Result<()> {
+    features::require_enabled(&ctx.accounts.feature_gate.to_account_info(), FEATURE_NFT)?;
     // Refuses while a guardian has pulled the stop.
     guardians::require_live(&ctx.accounts.guardians.to_account_info())?;
 

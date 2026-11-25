@@ -2,8 +2,10 @@ use anchor_lang::prelude::*;
 use mpl_core::instructions::CreateV2CpiBuilder;
 use mpl_core::types::{DataState, PermanentFreezeDelegate, Plugin, PluginAuthorityPair};
 
+use crate::constants::FEATUREGATE_SEED;
 use crate::constants::{GLOBAL_SEED, PERK_AUTH_SEED, PERK_SEED};
 use crate::error::AttentionError;
+use crate::features::{self, FEATURE_PERKS};
 use crate::nft::{perk_attributes, perk_discount_bps};
 use crate::state::{Global, PerkNft};
 
@@ -42,9 +44,18 @@ pub struct MintPerk<'info> {
     pub mpl_core_program: UncheckedAccount<'info>,
 
     pub system_program: Program<'info, System>,
+
+    /// Whether this feature still accepts new entries. Unchecked because an
+    /// empty account is the legitimate "no gate installed, everything enabled"
+    /// state rather than an error.
+    ///
+    /// CHECK: seeds pin the address; `features::require_enabled` validates it.
+    #[account(seeds = [FEATUREGATE_SEED], bump)]
+    pub feature_gate: UncheckedAccount<'info>,
 }
 
 pub fn mint_perk_handler(ctx: Context<MintPerk>, uri: String) -> Result<()> {
+    features::require_enabled(&ctx.accounts.feature_gate.to_account_info(), FEATURE_PERKS)?;
     let level: u8 = 1;
 
     // Soulbound, mirroring `verify_handle`. A perk's value is a trading-fee

@@ -4,8 +4,10 @@ use anchor_spl::associated_token::AssociatedToken;
 use anchor_spl::token::{self, Mint, Token, TokenAccount, Transfer};
 
 use crate::auction::{auction_quote, current_price};
+use crate::constants::FEATUREGATE_SEED;
 use crate::constants::{AUCTION_SEED, DISAVOW_SEED, GLOBAL_SEED, GUARDIANS_SEED};
 use crate::error::AttentionError;
+use crate::features::{self, FEATURE_DUTCH};
 use crate::guardians;
 use crate::instructions::disavow_token::require_not_disavowed;
 use crate::state::{DutchAuction, Global};
@@ -68,11 +70,20 @@ pub struct Bid<'info> {
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,
     pub associated_token_program: Program<'info, AssociatedToken>,
+
+    /// Whether this feature still accepts new entries. Unchecked because an
+    /// empty account is the legitimate "no gate installed, everything enabled"
+    /// state rather than an error.
+    ///
+    /// CHECK: seeds pin the address; `features::require_enabled` validates it.
+    #[account(seeds = [FEATUREGATE_SEED], bump)]
+    pub feature_gate: UncheckedAccount<'info>,
 }
 
 /// Buy `amount` base units at the auction's current descending price.
 /// `max_price_per_token` guards against paying more than expected.
 pub fn bid_handler(ctx: Context<Bid>, amount: u64, max_price_per_token: u64) -> Result<()> {
+    features::require_enabled(&ctx.accounts.feature_gate.to_account_info(), FEATURE_DUTCH)?;
     // A disowned token can be sold, not bought.
     require_not_disavowed(&ctx.accounts.disavowal.to_account_info())?;
 

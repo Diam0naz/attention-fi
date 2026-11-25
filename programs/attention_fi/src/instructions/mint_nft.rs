@@ -2,7 +2,9 @@ use anchor_lang::prelude::*;
 use mpl_core::instructions::CreateV2CpiBuilder;
 use mpl_core::types::DataState;
 
+use crate::constants::FEATUREGATE_SEED;
 use crate::error::AttentionError;
+use crate::features::{self, FEATURE_NFT};
 
 /// Mint a plain Metaplex Core NFT (name + uri, no role/plugins) — a
 /// collectible minted directly to the owner, standalone or straight into one
@@ -29,9 +31,18 @@ pub struct MintNft<'info> {
     pub mpl_core_program: UncheckedAccount<'info>,
 
     pub system_program: Program<'info, System>,
+
+    /// Whether this feature still accepts new entries. Unchecked because an
+    /// empty account is the legitimate "no gate installed, everything enabled"
+    /// state rather than an error.
+    ///
+    /// CHECK: seeds pin the address; `features::require_enabled` validates it.
+    #[account(seeds = [FEATUREGATE_SEED], bump)]
+    pub feature_gate: UncheckedAccount<'info>,
 }
 
 pub fn mint_nft_handler(ctx: Context<MintNft>, name: String, uri: String) -> Result<()> {
+    features::require_enabled(&ctx.accounts.feature_gate.to_account_info(), FEATURE_NFT)?;
     require!(
         !name.is_empty() && name.len() <= 64,
         AttentionError::InvalidAuctionParams

@@ -2,10 +2,12 @@ use anchor_lang::prelude::*;
 use anchor_lang::system_program;
 
 use crate::auction::auction_quote;
+use crate::constants::FEATUREGATE_SEED;
 use crate::constants::{
     DISAVOW_SEED, GLOBAL_SEED, GUARDIANS_SEED, REVENUE_SEED, REVSTAKE_SEED, TRADER_SEED,
 };
 use crate::error::AttentionError;
+use crate::features::{self, FEATURE_REVENUE};
 use crate::guardians;
 use crate::instructions::disavow_token::require_not_disavowed;
 use crate::perks;
@@ -79,9 +81,21 @@ pub struct BuyRevenue<'info> {
     pub guardians: UncheckedAccount<'info>,
 
     pub system_program: Program<'info, System>,
+
+    /// Whether this feature still accepts new entries. Unchecked because an
+    /// empty account is the legitimate "no gate installed, everything enabled"
+    /// state rather than an error.
+    ///
+    /// CHECK: seeds pin the address; `features::require_enabled` validates it.
+    #[account(seeds = [FEATUREGATE_SEED], bump)]
+    pub feature_gate: UncheckedAccount<'info>,
 }
 
 pub fn buy_revenue_handler(ctx: Context<BuyRevenue>, amount: u64) -> Result<()> {
+    features::require_enabled(
+        &ctx.accounts.feature_gate.to_account_info(),
+        FEATURE_REVENUE,
+    )?;
     // A disowned token can be sold, not bought.
     require_not_disavowed(&ctx.accounts.disavowal.to_account_info())?;
 

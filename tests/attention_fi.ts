@@ -52,6 +52,11 @@ function guardiansPda(programId: PublicKey): PublicKey {
   return PublicKey.findProgramAddressSync([Buffer.from("guardians")], programId)[0];
 }
 
+/** Which features accept new entries. Empty until `set_feature_gate` runs. */
+function featureGatePda(programId: PublicKey): PublicKey {
+  return PublicKey.findProgramAddressSync([Buffer.from("featuregate")], programId)[0];
+}
+
 /** A token's disavowal record. Empty unless someone has disowned it. */
 function disavowalPda(mint: PublicKey, programId: PublicKey): PublicKey {
   return PublicKey.findProgramAddressSync(
@@ -366,6 +371,7 @@ describe("attention_fi dutch auction", () => {
         META
       )
       .accountsStrict({
+        featureGate: featureGatePda(program.programId),
         creator: wallet,
         global: globalPda,
         mint: mintKp.publicKey,
@@ -396,6 +402,7 @@ describe("attention_fi dutch auction", () => {
       await program.methods
         .bid(new anchor.BN(1_000_000), new anchor.BN(FLOOR_PRICE - 1)) // cap below current price
         .accountsStrict({
+          featureGate: featureGatePda(program.programId),
           bidder: wallet,
           global: globalPda,
           treasury,
@@ -442,6 +449,7 @@ describe("attention_fi dutch auction", () => {
     await program.methods
       .bid(new anchor.BN(total.toString()), new anchor.BN(START_PRICE))
       .accountsStrict({
+        featureGate: featureGatePda(program.programId),
         bidder: wallet,
         global: globalPda,
         treasury,
@@ -521,6 +529,7 @@ describe("attention_fi conviction curve", () => {
         META
       )
       .accountsStrict({
+        featureGate: featureGatePda(program.programId),
         creator: wallet,
         global: globalPda,
         mint: mintKp.publicKey,
@@ -540,6 +549,7 @@ describe("attention_fi conviction curve", () => {
     await program.methods
       .buyConviction(new anchor.BN(2 * LAMPORTS_PER_SOL), new anchor.BN(0))
       .accountsStrict({
+        featureGate: featureGatePda(program.programId),
         buyer: wallet,
         global: globalPda,
         treasury,
@@ -670,6 +680,7 @@ describe("attention_fi revenue share", () => {
     await program.methods
       .launchRevenue({ emerging: {} }, new anchor.BN(SHARE_PRICE), META)
       .accountsStrict({
+        featureGate: featureGatePda(program.programId),
         creator: wallet,
         global: globalPda,
         mint: mintKp.publicKey,
@@ -696,6 +707,7 @@ describe("attention_fi revenue share", () => {
     await program.methods
       .buyRevenue(new anchor.BN(3_000_000))
       .accountsStrict({
+        featureGate: featureGatePda(program.programId),
         buyer: wallet,
         global: globalPda,
         treasury,
@@ -713,6 +725,7 @@ describe("attention_fi revenue share", () => {
     await program.methods
       .buyRevenue(new anchor.BN(1_000_000))
       .accountsStrict({
+        featureGate: featureGatePda(program.programId),
         buyer: holder2.publicKey,
         global: globalPda,
         treasury,
@@ -929,6 +942,7 @@ describe("attention_fi perk & genesis NFTs", () => {
     await program.methods
       .mintPerk("https://attention.fi/perk.json")
       .accountsStrict({
+        featureGate: featureGatePda(program.programId),
         authority: wallet,
         global: globalPda,
         recipient,
@@ -949,6 +963,7 @@ describe("attention_fi perk & genesis NFTs", () => {
       await program.methods
         .levelUp()
         .accountsStrict({
+          featureGate: featureGatePda(program.programId),
           owner: wallet,
           stats: PublicKey.findProgramAddressSync(
             [Buffer.from("trader"), wallet.toBuffer()],
@@ -1026,6 +1041,7 @@ describe("attention_fi perk & genesis NFTs", () => {
     await program.methods
       .mintGenesis(500, "https://attention.fi/genesis.json")
       .accountsStrict({
+        featureGate: featureGatePda(program.programId),
         authority: wallet,
         global: globalPda,
         recipient,
@@ -1077,6 +1093,7 @@ describe("attention_fi perk & genesis NFTs", () => {
       await program.methods
         .mintGenesis(shareBps, "https://attention.fi/g.json")
         .accountsStrict({
+          featureGate: featureGatePda(program.programId),
           authority: wallet,
           global: globalPda,
           recipient,
@@ -1187,6 +1204,7 @@ describe("attention_fi NFT-as-asset auction", () => {
     await program.methods
       .startNftAuction(startPrice, floorPrice, new anchor.BN(3600), "AttentionFi 1/1", "https://attention.fi/art.json")
       .accountsStrict({
+        featureGate: featureGatePda(program.programId),
         creator: wallet,
         global: globalPda,
         auction: auctionPda,
@@ -1212,6 +1230,7 @@ describe("attention_fi NFT-as-asset auction", () => {
       // transaction actually spends.
       .buyNft(startPrice.add(startPrice.muln(NFT_FEE_BPS).divn(10_000)))
       .accountsStrict({
+        featureGate: featureGatePda(program.programId),
         buyer: buyer.publicKey,
         global: globalPda,
         treasury,
@@ -1290,6 +1309,7 @@ describe("attention_fi perk fee discount", () => {
     await program.methods
       .mintPerk("https://attention.fi/perk.json")
       .accountsStrict({
+        featureGate: featureGatePda(program.programId),
         authority: wallet,
         global: globalPda,
         recipient: wallet,
@@ -1753,6 +1773,7 @@ describe("attention_fi genesis group", () => {
     const tx = await program.methods
       .buyGenesisUnit(new anchor.BN(TOTAL))
       .accountsStrict({
+        featureGate: featureGatePda(program.programId),
         buyer: who.publicKey,
         global: globalPda,
         feeConfig: feeConfigPda,
@@ -1827,6 +1848,7 @@ describe("attention_fi genesis group", () => {
     await program.methods
       .createCollection("Genesis Run", "https://attention.fi/run.json")
       .accountsStrict({
+        featureGate: featureGatePda(program.programId),
         payer: wallet,
         collection: collectionKp.publicKey,
         mplCoreProgram: MPL_CORE_PROGRAM_ID,
@@ -1853,6 +1875,7 @@ describe("attention_fi genesis group", () => {
         PER_WALLET_CAP
       )
       .accountsStrict({
+        featureGate: featureGatePda(program.programId),
         creator: wallet,
         subjectMint,
         curve: curvePda,
@@ -1897,6 +1920,7 @@ describe("attention_fi genesis group", () => {
     await program.methods
       .mintGenesisBatch("https://attention.fi/unit.json")
       .accountsStrict({
+        featureGate: featureGatePda(program.programId),
         creator: wallet,
         subjectMint,
         group: groupPda,
@@ -1935,6 +1959,7 @@ describe("attention_fi genesis group", () => {
       await program.methods
         .mintGenesisBatch("https://attention.fi/unit.json")
         .accountsStrict({
+          featureGate: featureGatePda(program.programId),
           creator: wallet,
           subjectMint,
           group: groupPda,
@@ -2109,6 +2134,7 @@ describe("attention_fi genesis group — share cap across both paths", () => {
     const tx = await program.methods
       .buyGenesisUnit(new anchor.BN(TOTAL))
       .accountsStrict({
+        featureGate: featureGatePda(program.programId),
         buyer: buyer.publicKey,
         global: globalPda,
         feeConfig: feeConfigPda,
@@ -2159,7 +2185,7 @@ describe("attention_fi genesis group — share cap across both paths", () => {
 
     await program.methods
       .launchToken(
-        { emerging: {} },
+        { newEntrant: {} },
         { name: "Cap Subject", symbol: "CAP", uri: "https://attention.fi/cap.json" }
       )
       .accountsStrict({
@@ -2190,6 +2216,7 @@ describe("attention_fi genesis group — share cap across both paths", () => {
     await program.methods
       .createCollection("Cap Run", "https://attention.fi/cap-run.json")
       .accountsStrict({
+        featureGate: featureGatePda(program.programId),
         payer: creator.publicKey,
         collection: collectionKp.publicKey,
         mplCoreProgram: MPL_CORE_PROGRAM_ID,
@@ -2201,6 +2228,7 @@ describe("attention_fi genesis group — share cap across both paths", () => {
     await program.methods
       .listGenesisGroup(TOTAL_UNITS, SHARE_BPS, new anchor.BN(PRICE), TOTAL_UNITS)
       .accountsStrict({
+        featureGate: featureGatePda(program.programId),
         creator: creator.publicKey,
         subjectMint,
         curve: curvePda,
@@ -2217,6 +2245,7 @@ describe("attention_fi genesis group — share cap across both paths", () => {
     await program.methods
       .mintGenesisBatch("https://attention.fi/cap-unit.json")
       .accountsStrict({
+        featureGate: featureGatePda(program.programId),
         creator: creator.publicKey,
         subjectMint,
         group: groupPda,
@@ -2244,6 +2273,7 @@ describe("attention_fi genesis group — share cap across both paths", () => {
     await program.methods
       .mintGenesis(ONE_OFF_BPS, "https://attention.fi/cap-oneoff.json")
       .accountsStrict({
+        featureGate: featureGatePda(program.programId),
         authority: creator.publicKey,
         global: globalPda,
         recipient: creator.publicKey,
@@ -2629,6 +2659,7 @@ describe("attention_fi genesis group — reclaim and close", () => {
     await program.methods
       .createCollection("Reclaim Run", "https://attention.fi/run.json")
       .accountsStrict({
+        featureGate: featureGatePda(program.programId),
         payer: wallet,
         collection: collectionKp.publicKey,
         mplCoreProgram: MPL_CORE_PROGRAM_ID,
@@ -2641,6 +2672,7 @@ describe("attention_fi genesis group — reclaim and close", () => {
     await program.methods
       .listGenesisGroup(3, SHARE_BPS, new anchor.BN(PRICE), 1)
       .accountsStrict({
+        featureGate: featureGatePda(program.programId),
         creator: wallet,
         subjectMint,
         curve: curvePda,
@@ -2656,6 +2688,7 @@ describe("attention_fi genesis group — reclaim and close", () => {
     await program.methods
       .mintGenesisBatch("https://attention.fi/unit.json")
       .accountsStrict({
+        featureGate: featureGatePda(program.programId),
         creator: wallet,
         subjectMint,
         group: groupPda,
@@ -2683,6 +2716,7 @@ describe("attention_fi genesis group — reclaim and close", () => {
     const tx = await program.methods
       .buyGenesisUnit(new anchor.BN(TOTAL))
       .accountsStrict({
+        featureGate: featureGatePda(program.programId),
         buyer: buyer.publicKey,
         global: globalPda,
         feeConfig: feeConfigPda,
@@ -2971,6 +3005,7 @@ describe("attention_fi security fixes", () => {
     await program.methods
       .mintGenesis(1_000, "https://attention.fi/g.json")
       .accountsStrict({
+        featureGate: featureGatePda(program.programId),
         authority: wallet,
         global: globalPda,
         recipient: holderA.publicKey,
@@ -3048,6 +3083,7 @@ describe("attention_fi security fixes", () => {
       return program.methods
         .mintGenesis(shareBps, "https://attention.fi/g.json")
         .accountsStrict({
+          featureGate: featureGatePda(program.programId),
           authority: wallet,
           global: globalPda,
           recipient: wallet,
@@ -3750,7 +3786,7 @@ describe("attention_fi launch rate limit", () => {
       program.programId
     );
     const tx = await program.methods
-      .launchToken({ emerging: {} }, META)
+      .launchToken({ newEntrant: {} }, META)
       .accountsPartial({
         creator: creator.publicKey,
         mint: kp.publicKey,
@@ -4143,6 +4179,7 @@ describe("attention_fi collection sale moves the cards", () => {
     await program.methods
       .createCollection("Deck", "https://attention.fi/deck.json")
       .accountsStrict({
+        featureGate: featureGatePda(program.programId),
         payer: wallet,
         collection: collectionKp.publicKey,
         mplCoreProgram: MPL_CORE_PROGRAM_ID,
@@ -4212,6 +4249,7 @@ describe("attention_fi collection sale moves the cards", () => {
     await program.methods
       .createCollection("Partial", "https://attention.fi/partial.json")
       .accountsStrict({
+        featureGate: featureGatePda(program.programId),
         payer: wallet,
         collection: otherCollection.publicKey,
         mplCoreProgram: MPL_CORE_PROGRAM_ID,
@@ -4391,5 +4429,260 @@ describe("attention_fi collection sale moves the cards", () => {
         "the guard must fire before anything is moved"
       );
     }
+  });
+});
+
+// The on-chain scope switch. A disabled feature refuses new entries and leaves
+// exits open; the kept loop (launch on the bonding curve, buy) never reads it.
+describe("attention_fi feature gate", () => {
+  anchor.setProvider(anchor.AnchorProvider.env());
+  const provider = anchor.getProvider() as anchor.AnchorProvider;
+  const program = anchor.workspace.attentionFi as Program<AttentionFi>;
+  const wallet = provider.wallet.publicKey;
+
+  const [globalPda] = PublicKey.findProgramAddressSync(
+    [Buffer.from("global")],
+    program.programId
+  );
+  const gate = featureGatePda(program.programId);
+
+  // Mirrors features.rs.
+  const FEATURE_DUTCH = 1 << 0;
+  const FEATURE_CONVICTION = 1 << 1;
+  const FEATURE_REVENUE = 1 << 2;
+  const FEATURE_NFT = 1 << 3;
+  const FEATURE_PERKS = 1 << 4;
+  const ALL = FEATURE_DUTCH | FEATURE_CONVICTION | FEATURE_REVENUE | FEATURE_NFT | FEATURE_PERKS;
+
+  const confirmed = { commitment: "confirmed" as const };
+  const setGate = (disabled: number) =>
+    program.methods
+      .setFeatureGate(disabled)
+      .accountsPartial({ authority: wallet, global: globalPda, featureGate: gate })
+      .rpc(confirmed);
+
+  const createCollection = (kp: Keypair) =>
+    program.methods
+      .createCollection("Gate Run", "https://attention.fi/gate.json")
+      .accountsStrict({
+        featureGate: gate,
+        payer: wallet,
+        collection: kp.publicKey,
+        mplCoreProgram: MPL_CORE_PROGRAM_ID,
+        systemProgram: SystemProgram.programId,
+      })
+      .signers([kp])
+      .rpc(confirmed);
+
+  before(async () => {
+    const existing = await program.account.global.fetchNullable(globalPda);
+    if (!existing) {
+      await program.methods
+        .initialize()
+        .accountsPartial({ authority: wallet, treasury: Keypair.generate().publicKey })
+        .rpc(confirmed);
+    }
+  });
+
+  // Every later run, and the rest of this one, expects the program ungated.
+  after(async () => {
+    await setGate(0);
+  });
+
+  it("is only set by the authority, and only with bits the program defines", async () => {
+    const stranger = Keypair.generate();
+    const sig = await provider.connection.requestAirdrop(stranger.publicKey, LAMPORTS_PER_SOL);
+    await provider.connection.confirmTransaction(sig, "confirmed");
+    try {
+      const tx = await program.methods
+        .setFeatureGate(FEATURE_NFT)
+        .accountsPartial({ authority: stranger.publicKey, global: globalPda, featureGate: gate })
+        .transaction();
+      await anchor.web3.sendAndConfirmTransaction(provider.connection, tx, [stranger], confirmed);
+      assert.fail("a stranger set the gate");
+    } catch (e) {
+      assert.include(String(e), "Unauthorized");
+    }
+
+    try {
+      await setGate(1 << 5);
+      assert.fail("accepted a bit the program doesn't define");
+    } catch (e) {
+      assert.include(String(e), "InvalidFeatureMask");
+    }
+  });
+
+  it("refuses new entries into a disabled feature and leaves its exits open", async () => {
+    // Made while NFTs are enabled, so there's something to exit from.
+    const before = Keypair.generate();
+    await createCollection(before);
+
+    await setGate(FEATURE_NFT);
+    assert.strictEqual(
+      (await program.account.featureGate.fetch(gate, "confirmed")).disabled,
+      FEATURE_NFT
+    );
+
+    try {
+      await createCollection(Keypair.generate());
+      assert.fail("created a collection with NFTs switched off");
+    } catch (e) {
+      assert.include(String(e), "FeatureDisabled");
+    }
+
+    // The exit: burning what already exists still works.
+    await program.methods
+      .burnCollection()
+      .accountsStrict({
+        authority: wallet,
+        collection: before.publicKey,
+        mplCoreProgram: MPL_CORE_PROGRAM_ID,
+        systemProgram: SystemProgram.programId,
+      })
+      .rpc(confirmed);
+    // Core doesn't close a burned collection: it leaves a one-byte tombstone
+    // (Key::Uninitialized) so the address can't be reused.
+    const burned = await provider.connection.getAccountInfo(before.publicKey, "confirmed");
+    assert.isTrue(
+      burned === null || (burned.data.length === 1 && burned.data[0] === 0),
+      "the collection was burned while NFTs were off"
+    );
+
+    // Switching it back on restores entries.
+    await setGate(0);
+    await createCollection(Keypair.generate());
+  });
+
+  it("never touches the kept loop: launch and buy work with every feature off", async () => {
+    await setGate(ALL);
+
+    // Its own creator, so this spends none of the shared wallet's launch quota.
+    const creator = Keypair.generate();
+    const sig = await provider.connection.requestAirdrop(creator.publicKey, 5 * LAMPORTS_PER_SOL);
+    await provider.connection.confirmTransaction(sig, "confirmed");
+
+    const mintKp = Keypair.generate();
+    const mint = mintKp.publicKey;
+    const [curvePda] = PublicKey.findProgramAddressSync(
+      [Buffer.from("curve"), mint.toBuffer()],
+      program.programId
+    );
+    const treasury = (await program.account.global.fetch(globalPda)).treasury;
+
+    await program.methods
+      .launchToken({ newEntrant: {} }, { name: "Gate Loop", symbol: "LOOP", uri: "" })
+      .accountsPartial({
+        creator: creator.publicKey,
+        mint,
+        curve: curvePda,
+        vault: ata(curvePda, mint),
+        metadata: PublicKey.findProgramAddressSync(
+          [Buffer.from("metadata"), TOKEN_METADATA_PROGRAM_ID.toBuffer(), mint.toBuffer()],
+          TOKEN_METADATA_PROGRAM_ID
+        )[0],
+        tokenMetadataProgram: TOKEN_METADATA_PROGRAM_ID,
+        rent: SYSVAR_RENT_PUBKEY,
+        launchPolicy: launchPolicyPda(program.programId),
+        launchQuota: launchQuotaPda(creator.publicKey, program.programId),
+      })
+      .signers([creator, mintKp])
+      .rpc(confirmed);
+
+    await program.methods
+      .buy(new anchor.BN(LAMPORTS_PER_SOL / 10), new anchor.BN(0))
+      .accountsPartial({
+        buyer: wallet,
+        treasury,
+        curve: curvePda,
+        mint,
+        vault: ata(curvePda, mint),
+        buyerTokenAccount: ata(wallet, mint),
+        perk: null,
+        traderStats: null,
+        genesisPool: genesisPoolPda(mint, program.programId),
+        guardians: guardiansPda(program.programId),
+        disavowal: disavowalPda(mint, program.programId),
+      })
+      .rpc(confirmed);
+
+    const curve = await program.account.bondingCurve.fetch(curvePda, "confirmed");
+    assert.isTrue(curve.realSolReserves.gtn(0), "the buy landed with every feature off");
+  });
+});
+
+// launch_token takes its tier from the caller, so only the protocol authority
+// may pick a seeded one; everyone else gets the flat start. A seeded price for
+// anyone else has to come from launch_from_feed, where the oracle sets it.
+describe("attention_fi launch tier", () => {
+  anchor.setProvider(anchor.AnchorProvider.env());
+  const provider = anchor.getProvider() as anchor.AnchorProvider;
+  const program = anchor.workspace.attentionFi as Program<AttentionFi>;
+  const wallet = provider.wallet.publicKey;
+  const [globalPda] = PublicKey.findProgramAddressSync(
+    [Buffer.from("global")],
+    program.programId
+  );
+  const confirmed = { commitment: "confirmed" as const };
+  const creator = Keypair.generate();
+
+  const launch = (tier: object) => {
+    const mintKp = Keypair.generate();
+    const mint = mintKp.publicKey;
+    const [curvePda] = PublicKey.findProgramAddressSync(
+      [Buffer.from("curve"), mint.toBuffer()],
+      program.programId
+    );
+    return {
+      curvePda,
+      send: () =>
+        program.methods
+          .launchToken(tier as never, { name: "Tier", symbol: "TIER", uri: "" })
+          .accountsPartial({
+            creator: creator.publicKey,
+            mint,
+            curve: curvePda,
+            vault: ata(curvePda, mint),
+            metadata: PublicKey.findProgramAddressSync(
+              [Buffer.from("metadata"), TOKEN_METADATA_PROGRAM_ID.toBuffer(), mint.toBuffer()],
+              TOKEN_METADATA_PROGRAM_ID
+            )[0],
+            tokenMetadataProgram: TOKEN_METADATA_PROGRAM_ID,
+            rent: SYSVAR_RENT_PUBKEY,
+            launchPolicy: launchPolicyPda(program.programId),
+            launchQuota: launchQuotaPda(creator.publicKey, program.programId),
+          })
+          .signers([creator, mintKp])
+          .rpc(confirmed),
+    };
+  };
+
+  before(async () => {
+    const existing = await program.account.global.fetchNullable(globalPda);
+    if (!existing) {
+      await program.methods
+        .initialize()
+        .accountsPartial({ authority: wallet, treasury: Keypair.generate().publicKey })
+        .rpc(confirmed);
+    }
+    const sig = await provider.connection.requestAirdrop(creator.publicKey, 5 * LAMPORTS_PER_SOL);
+    await provider.connection.confirmTransaction(sig, "confirmed");
+  });
+
+  it("refuses a creator who picks their own seeded tier", async () => {
+    for (const tier of [{ emerging: {} }, { top100: {} }, { top10: {} }]) {
+      try {
+        await launch(tier).send();
+        assert.fail(`launched at ${Object.keys(tier)[0]} without the oracle`);
+      } catch (e) {
+        assert.include(String(e), "TierRequiresOracle");
+      }
+    }
+  });
+
+  it("gives that creator the flat start", async () => {
+    const { curvePda, send } = launch({ newEntrant: {} });
+    await send();
+    const curve = await program.account.bondingCurve.fetch(curvePda, "confirmed");
+    assert.strictEqual(curve.tier, 0, "NewEntrant");
   });
 });

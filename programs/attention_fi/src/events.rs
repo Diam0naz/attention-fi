@@ -291,3 +291,12 @@ pub struct DisavowEvent {
     pub disavowed: bool,
     pub timestamp: i64,
 }
+
+/// The authority switched product features on or off for new entries.
+#[event]
+pub struct FeatureGateEvent {
+    pub authority: Pubkey,
+    /// Bitmask of disabled features *after* this call (`features::FEATURE_*`).
+    pub disabled: u32,
+    pub timestamp: i64,
+}

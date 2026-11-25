@@ -1,7 +1,9 @@
 use anchor_lang::prelude::*;
 
+use crate::constants::FEATUREGATE_SEED;
 use crate::constants::{GLOBAL_SEED, MAX_PERK_LEVEL, PERKGRANT_SEED};
 use crate::error::AttentionError;
+use crate::features::{self, FEATURE_PERKS};
 use crate::state::{Global, PerkGrant};
 
 /// Authorise a wallet to claim a perk NFT at a given level.
@@ -38,9 +40,18 @@ pub struct GrantPerk<'info> {
     pub grant: Account<'info, PerkGrant>,
 
     pub system_program: Program<'info, System>,
+
+    /// Whether this feature still accepts new entries. Unchecked because an
+    /// empty account is the legitimate "no gate installed, everything enabled"
+    /// state rather than an error.
+    ///
+    /// CHECK: seeds pin the address; `features::require_enabled` validates it.
+    #[account(seeds = [FEATUREGATE_SEED], bump)]
+    pub feature_gate: UncheckedAccount<'info>,
 }
 
 pub fn grant_perk_handler(ctx: Context<GrantPerk>, level: u8) -> Result<()> {
+    features::require_enabled(&ctx.accounts.feature_gate.to_account_info(), FEATURE_PERKS)?;
     require!(
         (1..=MAX_PERK_LEVEL).contains(&level),
         AttentionError::InvalidPerkLevel

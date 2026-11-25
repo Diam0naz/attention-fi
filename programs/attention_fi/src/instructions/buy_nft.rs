@@ -4,9 +4,11 @@ use mpl_core::instructions::{TransferV1CpiBuilder, UpdatePluginV1CpiBuilder};
 use mpl_core::types::Plugin;
 
 use crate::auction::{current_price, is_perpetual};
+use crate::constants::FEATUREGATE_SEED;
 use crate::constants::{FEECONFIG_SEED, GLOBAL_SEED, GUARDIANS_SEED, NFTAUCTION_SEED};
 use crate::error::AttentionError;
 use crate::events::{NftAuctionEvent, NFT_SOLD};
+use crate::features::{self, FEATURE_NFT};
 use crate::guardians;
 use crate::nft::{has_attributes_plugin, last_sale_attributes};
 use crate::state::{FeeConfig, Global, NftAuction};
@@ -60,6 +62,14 @@ pub struct BuyNft<'info> {
 
     pub system_program: Program<'info, System>,
 
+    /// Whether this feature still accepts new entries. Unchecked because an
+    /// empty account is the legitimate "no gate installed, everything enabled"
+    /// state rather than an error.
+    ///
+    /// CHECK: seeds pin the address; `features::require_enabled` validates it.
+    #[account(seeds = [FEATUREGATE_SEED], bump)]
+    pub feature_gate: UncheckedAccount<'info>,
+
     /// The asset's collection when it is a collection member: Core refuses to
     /// move a member without it. Optional and last, so a client that omits it
     /// keeps working for standalone assets.
@@ -70,6 +80,7 @@ pub struct BuyNft<'info> {
 }
 
 pub fn buy_nft_handler(ctx: Context<BuyNft>, max_total: u64) -> Result<()> {
+    features::require_enabled(&ctx.accounts.feature_gate.to_account_info(), FEATURE_NFT)?;
     // Refuses while a guardian has pulled the stop.
     guardians::require_live(&ctx.accounts.guardians.to_account_info())?;
 

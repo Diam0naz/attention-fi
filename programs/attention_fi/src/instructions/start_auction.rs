@@ -3,8 +3,10 @@ use anchor_spl::associated_token::AssociatedToken;
 use anchor_spl::token::spl_token::instruction::AuthorityType;
 use anchor_spl::token::{self, Mint, MintTo, SetAuthority, Token, TokenAccount};
 
+use crate::constants::FEATUREGATE_SEED;
 use crate::constants::{AUCTION_SEED, GLOBAL_SEED, LAUNCHPOLICY_SEED, LAUNCHQUOTA_SEED};
 use crate::error::AttentionError;
+use crate::features::{self, FEATURE_DUTCH};
 use crate::launch_quota;
 use crate::metadata::{create_token_metadata, MetadataCpi, TokenMetadataArgs};
 use crate::state::{DutchAuction, Global, LaunchQuota, MindshareTier};
@@ -75,6 +77,14 @@ pub struct StartAuction<'info> {
     pub token_program: Program<'info, Token>,
     pub associated_token_program: Program<'info, AssociatedToken>,
     pub rent: Sysvar<'info, Rent>,
+
+    /// Whether this feature still accepts new entries. Unchecked because an
+    /// empty account is the legitimate "no gate installed, everything enabled"
+    /// state rather than an error.
+    ///
+    /// CHECK: seeds pin the address; `features::require_enabled` validates it.
+    #[account(seeds = [FEATUREGATE_SEED], bump)]
+    pub feature_gate: UncheckedAccount<'info>,
 }
 
 pub fn start_auction_handler(
@@ -85,6 +95,7 @@ pub fn start_auction_handler(
     duration: i64,
     metadata: TokenMetadataArgs,
 ) -> Result<()> {
+    features::require_enabled(&ctx.accounts.feature_gate.to_account_info(), FEATURE_DUTCH)?;
     // One quota across every mechanism: a per-instruction limit is four times
     // the limit to anyone willing to call a different one.
     let (max_launches, window_secs) =

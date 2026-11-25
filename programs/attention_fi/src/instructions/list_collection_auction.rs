@@ -2,9 +2,11 @@ use anchor_lang::prelude::*;
 use mpl_core::instructions::UpdateCollectionV1CpiBuilder;
 
 use crate::auction::validate_listing;
+use crate::constants::FEATUREGATE_SEED;
 use crate::constants::{COLLECTIONAUCTION_SEED, GLOBAL_SEED};
 use crate::error::AttentionError;
 use crate::events::CollectionListedEvent;
+use crate::features::{self, FEATURE_NFT};
 use crate::nft::{collection_size, move_collection_members};
 use crate::state::{CollectionAuction, Global};
 
@@ -65,6 +67,14 @@ pub struct ListCollectionAuction<'info> {
     pub mpl_core_program: UncheckedAccount<'info>,
 
     pub system_program: Program<'info, System>,
+
+    /// Whether this feature still accepts new entries. Unchecked because an
+    /// empty account is the legitimate "no gate installed, everything enabled"
+    /// state rather than an error.
+    ///
+    /// CHECK: seeds pin the address; `features::require_enabled` validates it.
+    #[account(seeds = [FEATUREGATE_SEED], bump)]
+    pub feature_gate: UncheckedAccount<'info>,
 }
 
 pub fn list_collection_auction_handler<'info>(
@@ -73,6 +83,7 @@ pub fn list_collection_auction_handler<'info>(
     floor_price: u64,
     duration: i64,
 ) -> Result<()> {
+    features::require_enabled(&ctx.accounts.feature_gate.to_account_info(), FEATURE_NFT)?;
     validate_listing(start_price, floor_price, duration)?;
 
     // Reuse is only safe once the previous listing is settled. A zeroed

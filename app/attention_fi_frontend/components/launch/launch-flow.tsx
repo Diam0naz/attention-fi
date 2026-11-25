@@ -260,6 +260,10 @@ export function LaunchFlow() {
   // feed when one is configured for this handle — a decentralized oracle,
   // not a keeper arg. Falls back to the keeper tier when no feed is found.
   const feedActive = mech === "bonding" && feedEnabledForHandle(handle);
+  // Without an oracle feed the program only offers the flat start (it refuses
+  // a caller-chosen seeded tier), so that is the seed shown and launched.
+  const flatOnly = mech === "bonding" && !feedActive;
+  const shown = flatOnly ? TIERS[TIERS.length - 1]! : t;
   // Symbol defaults to the token name (or handle) if the creator leaves it blank.
   const ticker = (symbol || name || handle).replace(/[^a-zA-Z0-9]/g, "").slice(0, 6).toUpperCase();
   const canContinue = step !== 0 || (handle.trim().length > 0 && name.trim().length > 0);
@@ -680,8 +684,10 @@ export function LaunchFlow() {
               ) : (
                 <>
                   @{handle} averaged {mindshare.toFixed(2)}% mindshare over 24h → tier{" "}
-                  <span className="text-signal">{t.tier}</span>. The curve seeds at that price
-                  instead of zero.
+                  <span className="text-signal">{t.tier}</span>.{" "}
+                  {flatOnly
+                    ? "There's no oracle feed for this handle yet, so it launches at the flat start; a mindshare-seeded price needs the oracle."
+                    : "The curve seeds at that price instead of zero."}
                 </>
               )}
             </p>
@@ -698,14 +704,14 @@ export function LaunchFlow() {
             )}
             {!feedActive && mech === "bonding" && (
               <p className="mt-2 inline-flex items-center gap-1.5 rounded-sm border border-white/10 bg-white/[0.03] px-2 py-1 text-[10px] font-mono text-[#6B6B6B]">
-                ◇ Tier supplied by keeper — no oracle feed configured for @{handle || "this handle"}
+                ◇ Flat start — no oracle feed configured for @{handle || "this handle"}
               </p>
             )}
             <dl className="mt-4 flex flex-col gap-2.5 font-mono text-[12px]">
               {[
                 ["Token", `${name || handle} ($${ticker})`],
                 ["Mechanism", mechName],
-                ["Seed market cap", t.seed],
+                ["Seed market cap", shown.seed],
                 ["Total supply", "1,000,000,000"],
                 ["Graduation at", "$69,000"],
                 ["Creator fee", "0.5% (claimable once verified)"],
@@ -726,11 +732,11 @@ export function LaunchFlow() {
             <p className="mt-1 text-[11px] text-[#6B6B6B]">
               Launching <span className="text-[#F5F4F0]">{name || handle} (${ticker})</span>, a{" "}
               <span className="text-[#F5F4F0]">{mechName}</span> token for{" "}
-              <span className="text-[#F5F4F0]">@{handle}</span>, seeded at {t.seed}.{" "}
+              <span className="text-[#F5F4F0]">@{handle}</span>, seeded at {shown.seed}.{" "}
               {mech === "bonding" && (
                 feedActive
                   ? <span className="text-signal">Tier derived on-chain from the oracle.</span>
-                  : <span className="text-[#6B6B6B]">Tier from mindshare API (keeper path).</span>
+                  : <span className="text-[#6B6B6B]">Flat start (no oracle feed for this handle).</span>
               )}
             </p>
 

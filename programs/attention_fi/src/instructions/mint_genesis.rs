@@ -2,8 +2,10 @@ use anchor_lang::prelude::*;
 use mpl_core::instructions::CreateV2CpiBuilder;
 use mpl_core::types::{Attribute, Attributes, DataState, Plugin, PluginAuthorityPair};
 
+use crate::constants::FEATUREGATE_SEED;
 use crate::constants::{CURVE_SEED, GENESIS_SEED, GENPOOL_SEED, GLOBAL_SEED};
 use crate::error::AttentionError;
+use crate::features::{self, FEATURE_NFT};
 use crate::genesis::validate_added_share;
 use crate::revenue::accrued;
 use crate::state::{BondingCurve, GenesisNft, GenesisPool, Global};
@@ -58,9 +60,18 @@ pub struct MintGenesis<'info> {
     pub mpl_core_program: UncheckedAccount<'info>,
 
     pub system_program: Program<'info, System>,
+
+    /// Whether this feature still accepts new entries. Unchecked because an
+    /// empty account is the legitimate "no gate installed, everything enabled"
+    /// state rather than an error.
+    ///
+    /// CHECK: seeds pin the address; `features::require_enabled` validates it.
+    #[account(seeds = [FEATUREGATE_SEED], bump)]
+    pub feature_gate: UncheckedAccount<'info>,
 }
 
 pub fn mint_genesis_handler(ctx: Context<MintGenesis>, share_bps: u16, uri: String) -> Result<()> {
+    features::require_enabled(&ctx.accounts.feature_gate.to_account_info(), FEATURE_NFT)?;
     // Bounded against what the token's stream already owes, not just against
     // 100% on its own. Per-NFT validation alone let a creator sell a run at a
     // stated percentage and then mint themselves enough shares to reduce the

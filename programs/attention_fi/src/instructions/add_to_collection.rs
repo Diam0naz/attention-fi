@@ -1,3 +1,5 @@
+use crate::constants::FEATUREGATE_SEED;
+use crate::features::{self, FEATURE_NFT};
 use anchor_lang::prelude::*;
 use mpl_core::instructions::UpdateV2CpiBuilder;
 use mpl_core::types::UpdateAuthority;
@@ -32,9 +34,18 @@ pub struct AddToCollection<'info> {
     pub mpl_core_program: UncheckedAccount<'info>,
 
     pub system_program: Program<'info, System>,
+
+    /// Whether this feature still accepts new entries. Unchecked because an
+    /// empty account is the legitimate "no gate installed, everything enabled"
+    /// state rather than an error.
+    ///
+    /// CHECK: seeds pin the address; `features::require_enabled` validates it.
+    #[account(seeds = [FEATUREGATE_SEED], bump)]
+    pub feature_gate: UncheckedAccount<'info>,
 }
 
 pub fn add_to_collection_handler(ctx: Context<AddToCollection>) -> Result<()> {
+    features::require_enabled(&ctx.accounts.feature_gate.to_account_info(), FEATURE_NFT)?;
     let payer = ctx.accounts.payer.to_account_info();
     let asset = ctx.accounts.asset.to_account_info();
     let new_collection = ctx.accounts.new_collection.to_account_info();

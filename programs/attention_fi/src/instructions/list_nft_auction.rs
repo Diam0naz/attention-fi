@@ -3,9 +3,11 @@ use mpl_core::instructions::{AddPluginV1CpiBuilder, TransferV1CpiBuilder};
 use mpl_core::types::{Attributes, Plugin, PluginAuthority};
 
 use crate::auction::{is_perpetual, validate_listing};
+use crate::constants::FEATUREGATE_SEED;
 use crate::constants::{COLLECTIONAUCTION_SEED, GLOBAL_SEED, NFTAUCTION_SEED};
 use crate::error::AttentionError;
 use crate::events::NftListedEvent;
+use crate::features::{self, FEATURE_NFT};
 use crate::nft::has_attributes_plugin;
 use crate::state::{CollectionAuction, Global, NftAuction};
 
@@ -72,6 +74,14 @@ pub struct ListNftAuction<'info> {
     pub mpl_core_program: UncheckedAccount<'info>,
 
     pub system_program: Program<'info, System>,
+
+    /// Whether this feature still accepts new entries. Unchecked because an
+    /// empty account is the legitimate "no gate installed, everything enabled"
+    /// state rather than an error.
+    ///
+    /// CHECK: seeds pin the address; `features::require_enabled` validates it.
+    #[account(seeds = [FEATUREGATE_SEED], bump)]
+    pub feature_gate: UncheckedAccount<'info>,
 }
 
 pub fn list_nft_auction_handler(
@@ -80,6 +90,7 @@ pub fn list_nft_auction_handler(
     floor_price: u64,
     duration: i64,
 ) -> Result<()> {
+    features::require_enabled(&ctx.accounts.feature_gate.to_account_info(), FEATURE_NFT)?;
     validate_listing(start_price, floor_price, duration)?;
 
     // Reuse is only safe once the previous listing is settled. A zeroed

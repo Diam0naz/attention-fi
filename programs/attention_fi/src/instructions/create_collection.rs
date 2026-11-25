@@ -1,7 +1,9 @@
 use anchor_lang::prelude::*;
 use mpl_core::instructions::CreateCollectionV2CpiBuilder;
 
+use crate::constants::FEATUREGATE_SEED;
 use crate::error::AttentionError;
+use crate::features::{self, FEATURE_NFT};
 
 /// Create a Metaplex Core collection owned by the payer. The payer keeps the
 /// collection's update authority, so they can mint new assets into it
@@ -21,6 +23,14 @@ pub struct CreateCollection<'info> {
     pub mpl_core_program: UncheckedAccount<'info>,
 
     pub system_program: Program<'info, System>,
+
+    /// Whether this feature still accepts new entries. Unchecked because an
+    /// empty account is the legitimate "no gate installed, everything enabled"
+    /// state rather than an error.
+    ///
+    /// CHECK: seeds pin the address; `features::require_enabled` validates it.
+    #[account(seeds = [FEATUREGATE_SEED], bump)]
+    pub feature_gate: UncheckedAccount<'info>,
 }
 
 pub fn create_collection_handler(
@@ -28,6 +38,7 @@ pub fn create_collection_handler(
     name: String,
     uri: String,
 ) -> Result<()> {
+    features::require_enabled(&ctx.accounts.feature_gate.to_account_info(), FEATURE_NFT)?;
     require!(
         !name.is_empty() && name.len() <= 64,
         AttentionError::InvalidAuctionParams

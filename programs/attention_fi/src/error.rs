@@ -103,4 +103,10 @@ pub enum AttentionError {
     CollectionMembersMismatch,
     #[msg("This is already listed — settle or reclaim the current listing first")]
     AlreadyListed,
+    #[msg("This feature is switched off — existing positions can still exit")]
+    FeatureDisabled,
+    #[msg("Feature mask has bits the program doesn't define")]
+    InvalidFeatureMask,
+    #[msg("A seeded tier comes from the oracle (launch_from_feed); launch_token only offers the flat start")]
+    TierRequiresOracle,
 }

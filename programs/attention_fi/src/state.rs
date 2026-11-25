@@ -618,3 +618,15 @@ pub enum DisavowReason {
     /// Impersonation, harassment, or another policy breach.
     Abuse,
 }
+
+/// Which product features accept new entries; see `features.rs`.
+///
+/// Its own account for the reason `LaunchPolicy` is: `Global` is on-chain at a
+/// fixed length. Absent means every feature is enabled.
+#[account]
+#[derive(InitSpace)]
+pub struct FeatureGate {
+    /// Bitmask of disabled features (`features::FEATURE_*`).
+    pub disabled: u32,
+    pub bump: u8,
+}

@@ -1,6 +1,8 @@
 use anchor_lang::prelude::*;
 
+use crate::constants::FEATUREGATE_SEED;
 use crate::constants::{PERK_AUTH_SEED, PERK_SEED, TRADER_SEED};
+use crate::features::{self, FEATURE_PERKS};
 use crate::nft::{mint_perk_asset, perk_discount_bps};
 use crate::perks::level_for_claim;
 use crate::state::{PerkNft, TraderStats};
@@ -59,9 +61,18 @@ pub struct ClaimEarnedPerk<'info> {
     pub mpl_core_program: UncheckedAccount<'info>,
 
     pub system_program: Program<'info, System>,
+
+    /// Whether this feature still accepts new entries. Unchecked because an
+    /// empty account is the legitimate "no gate installed, everything enabled"
+    /// state rather than an error.
+    ///
+    /// CHECK: seeds pin the address; `features::require_enabled` validates it.
+    #[account(seeds = [FEATUREGATE_SEED], bump)]
+    pub feature_gate: UncheckedAccount<'info>,
 }
 
 pub fn claim_earned_perk_handler(ctx: Context<ClaimEarnedPerk>, uri: String) -> Result<()> {
+    features::require_enabled(&ctx.accounts.feature_gate.to_account_info(), FEATURE_PERKS)?;
     // Mints at the level the volume has already bought rather than always at 1.
     // A trader who crossed four thresholds before claiming would otherwise owe
     // four more transactions to reach a level they had already earned.

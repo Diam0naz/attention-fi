@@ -2,8 +2,10 @@ use anchor_lang::prelude::*;
 use mpl_core::instructions::UpdatePluginV1CpiBuilder;
 use mpl_core::types::Plugin;
 
+use crate::constants::FEATUREGATE_SEED;
 use crate::constants::{PERK_AUTH_SEED, PERK_SEED, TRADER_SEED};
 use crate::error::AttentionError;
+use crate::features::{self, FEATURE_PERKS};
 use crate::nft::{perk_attributes, perk_discount_bps};
 use crate::perks::next_level;
 use crate::state::{PerkNft, TraderStats};
@@ -62,9 +64,18 @@ pub struct LevelUp<'info> {
     pub mpl_core_program: UncheckedAccount<'info>,
 
     pub system_program: Program<'info, System>,
+
+    /// Whether this feature still accepts new entries. Unchecked because an
+    /// empty account is the legitimate "no gate installed, everything enabled"
+    /// state rather than an error.
+    ///
+    /// CHECK: seeds pin the address; `features::require_enabled` validates it.
+    #[account(seeds = [FEATUREGATE_SEED], bump)]
+    pub feature_gate: UncheckedAccount<'info>,
 }
 
 pub fn level_up_handler(ctx: Context<LevelUp>) -> Result<()> {
+    features::require_enabled(&ctx.accounts.feature_gate.to_account_info(), FEATURE_PERKS)?;
     // Both the ceiling and the activity requirement live in `next_level`, so
     // the two gates can't drift apart or be checked in the wrong order.
     let new_level = next_level(

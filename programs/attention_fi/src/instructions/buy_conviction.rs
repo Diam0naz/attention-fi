@@ -3,11 +3,13 @@ use anchor_lang::system_program;
 use anchor_spl::associated_token::AssociatedToken;
 use anchor_spl::token::{self, Mint, Token, TokenAccount, Transfer};
 
+use crate::constants::FEATUREGATE_SEED;
 use crate::constants::{
     CONVICTION_SEED, DISAVOW_SEED, GLOBAL_SEED, GUARDIANS_SEED, POSITION_SEED, TRADER_SEED,
 };
 use crate::curve::buy_quote;
 use crate::error::AttentionError;
+use crate::features::{self, FEATURE_CONVICTION};
 use crate::guardians;
 use crate::instructions::disavow_token::require_not_disavowed;
 use crate::perks;
@@ -91,6 +93,14 @@ pub struct BuyConviction<'info> {
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,
     pub associated_token_program: Program<'info, AssociatedToken>,
+
+    /// Whether this feature still accepts new entries. Unchecked because an
+    /// empty account is the legitimate "no gate installed, everything enabled"
+    /// state rather than an error.
+    ///
+    /// CHECK: seeds pin the address; `features::require_enabled` validates it.
+    #[account(seeds = [FEATUREGATE_SEED], bump)]
+    pub feature_gate: UncheckedAccount<'info>,
 }
 
 pub fn buy_conviction_handler(
@@ -98,6 +108,10 @@ pub fn buy_conviction_handler(
     sol_amount: u64,
     min_tokens_out: u64,
 ) -> Result<()> {
+    features::require_enabled(
+        &ctx.accounts.feature_gate.to_account_info(),
+        FEATURE_CONVICTION,
+    )?;
     // A disowned token can be sold, not bought.
     require_not_disavowed(&ctx.accounts.disavowal.to_account_info())?;
 

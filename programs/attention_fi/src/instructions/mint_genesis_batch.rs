@@ -2,9 +2,11 @@ use anchor_lang::prelude::*;
 use mpl_core::instructions::CreateV2CpiBuilder;
 use mpl_core::types::{Attribute, Attributes, DataState, Plugin, PluginAuthorityPair};
 
+use crate::constants::FEATUREGATE_SEED;
 use crate::constants::GENGROUP_SEED;
 use crate::error::AttentionError;
 use crate::events::GenesisBatchMintedEvent;
+use crate::features::{self, FEATURE_NFT};
 use crate::genesis::record_mint;
 use crate::state::GenesisGroup;
 
@@ -55,12 +57,21 @@ pub struct MintGenesisBatch<'info> {
     pub mpl_core_program: UncheckedAccount<'info>,
 
     pub system_program: Program<'info, System>,
+
+    /// Whether this feature still accepts new entries. Unchecked because an
+    /// empty account is the legitimate "no gate installed, everything enabled"
+    /// state rather than an error.
+    ///
+    /// CHECK: seeds pin the address; `features::require_enabled` validates it.
+    #[account(seeds = [FEATUREGATE_SEED], bump)]
+    pub feature_gate: UncheckedAccount<'info>,
 }
 
 pub fn mint_genesis_batch_handler<'info>(
     ctx: Context<'_, '_, '_, 'info, MintGenesisBatch<'info>>,
     uri: String,
 ) -> Result<()> {
+    features::require_enabled(&ctx.accounts.feature_gate.to_account_info(), FEATURE_NFT)?;
     require!(uri.len() <= 200, AttentionError::InvalidGenesisGroup);
 
     let assets = ctx.remaining_accounts;

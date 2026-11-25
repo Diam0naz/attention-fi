@@ -57,6 +57,35 @@
         {
           "name": "system_program",
           "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "feature_gate",
+          "docs": [
+            "Whether this feature still accepts new entries. Unchecked because an",
+            "empty account is the legitimate \"no gate installed, everything enabled\"",
+            "state rather than an error.",
+            ""
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  101,
+                  97,
+                  116,
+                  117,
+                  114,
+                  101,
+                  103,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
         }
       ],
       "args": []
@@ -387,6 +416,35 @@
         {
           "name": "associated_token_program",
           "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+        },
+        {
+          "name": "feature_gate",
+          "docs": [
+            "Whether this feature still accepts new entries. Unchecked because an",
+            "empty account is the legitimate \"no gate installed, everything enabled\"",
+            "state rather than an error.",
+            ""
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  101,
+                  97,
+                  116,
+                  117,
+                  114,
+                  101,
+                  103,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
         }
       ],
       "args": [
@@ -1068,6 +1126,35 @@
         {
           "name": "system_program",
           "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "feature_gate",
+          "docs": [
+            "Whether this feature still accepts new entries. Unchecked because an",
+            "empty account is the legitimate \"no gate installed, everything enabled\"",
+            "state rather than an error.",
+            ""
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  101,
+                  97,
+                  116,
+                  117,
+                  114,
+                  101,
+                  103,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
         }
       ],
       "args": [
@@ -1465,6 +1552,35 @@
         {
           "name": "associated_token_program",
           "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+        },
+        {
+          "name": "feature_gate",
+          "docs": [
+            "Whether this feature still accepts new entries. Unchecked because an",
+            "empty account is the legitimate \"no gate installed, everything enabled\"",
+            "state rather than an error.",
+            ""
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  101,
+                  97,
+                  116,
+                  117,
+                  114,
+                  101,
+                  103,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
         }
       ],
       "args": [
@@ -1713,6 +1829,35 @@
         {
           "name": "system_program",
           "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "feature_gate",
+          "docs": [
+            "Whether this feature still accepts new entries. Unchecked because an",
+            "empty account is the legitimate \"no gate installed, everything enabled\"",
+            "state rather than an error.",
+            ""
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  101,
+                  97,
+                  116,
+                  117,
+                  114,
+                  101,
+                  103,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
         }
       ],
       "args": [
@@ -1866,11 +2011,41 @@
           "address": "11111111111111111111111111111111"
         },
         {
+          "name": "feature_gate",
+          "docs": [
+            "Whether this feature still accepts new entries. Unchecked because an",
+            "empty account is the legitimate \"no gate installed, everything enabled\"",
+            "state rather than an error.",
+            ""
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  101,
+                  97,
+                  116,
+                  117,
+                  114,
+                  101,
+                  103,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
           "name": "collection",
           "docs": [
             "The asset's collection when it is a collection member: Core refuses to",
             "move a member without it. Optional and last, so a client that omits it",
-            "keeps working for standalone assets."
+            "keeps working for standalone assets.",
+            ""
           ],
           "writable": true,
           "optional": true
@@ -2083,6 +2258,35 @@
         {
           "name": "system_program",
           "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "feature_gate",
+          "docs": [
+            "Whether this feature still accepts new entries. Unchecked because an",
+            "empty account is the legitimate \"no gate installed, everything enabled\"",
+            "state rather than an error.",
+            ""
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  101,
+                  97,
+                  116,
+                  117,
+                  114,
+                  101,
+                  103,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
         }
       ],
       "args": [
@@ -2286,6 +2490,35 @@
         {
           "name": "system_program",
           "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "feature_gate",
+          "docs": [
+            "Whether this feature still accepts new entries. Unchecked because an",
+            "empty account is the legitimate \"no gate installed, everything enabled\"",
+            "state rather than an error.",
+            ""
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  101,
+                  97,
+                  116,
+                  117,
+                  114,
+                  101,
+                  103,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
         }
       ],
       "args": [
@@ -2714,6 +2947,35 @@
         {
           "name": "system_program",
           "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "feature_gate",
+          "docs": [
+            "Whether this feature still accepts new entries. Unchecked because an",
+            "empty account is the legitimate \"no gate installed, everything enabled\"",
+            "state rather than an error.",
+            ""
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  101,
+                  97,
+                  116,
+                  117,
+                  114,
+                  101,
+                  103,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
         }
       ],
       "args": [
@@ -3360,6 +3622,35 @@
         {
           "name": "system_program",
           "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "feature_gate",
+          "docs": [
+            "Whether this feature still accepts new entries. Unchecked because an",
+            "empty account is the legitimate \"no gate installed, everything enabled\"",
+            "state rather than an error.",
+            ""
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  101,
+                  97,
+                  116,
+                  117,
+                  114,
+                  101,
+                  103,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
         }
       ],
       "args": [
@@ -3699,6 +3990,35 @@
         {
           "name": "rent",
           "address": "SysvarRent111111111111111111111111111111111"
+        },
+        {
+          "name": "feature_gate",
+          "docs": [
+            "Whether this feature still accepts new entries. Unchecked because an",
+            "empty account is the legitimate \"no gate installed, everything enabled\"",
+            "state rather than an error.",
+            ""
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  101,
+                  97,
+                  116,
+                  117,
+                  114,
+                  101,
+                  103,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
         }
       ],
       "args": [
@@ -4241,6 +4561,35 @@
         {
           "name": "rent",
           "address": "SysvarRent111111111111111111111111111111111"
+        },
+        {
+          "name": "feature_gate",
+          "docs": [
+            "Whether this feature still accepts new entries. Unchecked because an",
+            "empty account is the legitimate \"no gate installed, everything enabled\"",
+            "state rather than an error.",
+            ""
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  101,
+                  97,
+                  116,
+                  117,
+                  114,
+                  101,
+                  103,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
         }
       ],
       "args": [
@@ -4649,6 +4998,35 @@
         {
           "name": "system_program",
           "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "feature_gate",
+          "docs": [
+            "Whether this feature still accepts new entries. Unchecked because an",
+            "empty account is the legitimate \"no gate installed, everything enabled\"",
+            "state rather than an error.",
+            ""
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  101,
+                  97,
+                  116,
+                  117,
+                  114,
+                  101,
+                  103,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
         }
       ],
       "args": []
@@ -4751,6 +5129,35 @@
         {
           "name": "system_program",
           "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "feature_gate",
+          "docs": [
+            "Whether this feature still accepts new entries. Unchecked because an",
+            "empty account is the legitimate \"no gate installed, everything enabled\"",
+            "state rather than an error.",
+            ""
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  101,
+                  97,
+                  116,
+                  117,
+                  114,
+                  101,
+                  103,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
         }
       ],
       "args": [
@@ -4892,6 +5299,35 @@
         {
           "name": "system_program",
           "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "feature_gate",
+          "docs": [
+            "Whether this feature still accepts new entries. Unchecked because an",
+            "empty account is the legitimate \"no gate installed, everything enabled\"",
+            "state rather than an error.",
+            ""
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  101,
+                  97,
+                  116,
+                  117,
+                  114,
+                  101,
+                  103,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
         }
       ],
       "args": [
@@ -5054,6 +5490,35 @@
         {
           "name": "system_program",
           "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "feature_gate",
+          "docs": [
+            "Whether this feature still accepts new entries. Unchecked because an",
+            "empty account is the legitimate \"no gate installed, everything enabled\"",
+            "state rather than an error.",
+            ""
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  101,
+                  97,
+                  116,
+                  117,
+                  114,
+                  101,
+                  103,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
         }
       ],
       "args": [
@@ -5207,6 +5672,35 @@
         {
           "name": "system_program",
           "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "feature_gate",
+          "docs": [
+            "Whether this feature still accepts new entries. Unchecked because an",
+            "empty account is the legitimate \"no gate installed, everything enabled\"",
+            "state rather than an error.",
+            ""
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  101,
+                  97,
+                  116,
+                  117,
+                  114,
+                  101,
+                  103,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
         }
       ],
       "args": [
@@ -5296,6 +5790,35 @@
         {
           "name": "system_program",
           "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "feature_gate",
+          "docs": [
+            "Whether this feature still accepts new entries. Unchecked because an",
+            "empty account is the legitimate \"no gate installed, everything enabled\"",
+            "state rather than an error.",
+            ""
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  101,
+                  97,
+                  116,
+                  117,
+                  114,
+                  101,
+                  103,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
         }
       ],
       "args": [
@@ -5353,6 +5876,35 @@
         {
           "name": "system_program",
           "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "feature_gate",
+          "docs": [
+            "Whether this feature still accepts new entries. Unchecked because an",
+            "empty account is the legitimate \"no gate installed, everything enabled\"",
+            "state rather than an error.",
+            ""
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  101,
+                  97,
+                  116,
+                  117,
+                  114,
+                  101,
+                  103,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
         }
       ],
       "args": [
@@ -5471,6 +6023,35 @@
         {
           "name": "system_program",
           "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "feature_gate",
+          "docs": [
+            "Whether this feature still accepts new entries. Unchecked because an",
+            "empty account is the legitimate \"no gate installed, everything enabled\"",
+            "state rather than an error.",
+            ""
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  101,
+                  97,
+                  116,
+                  117,
+                  114,
+                  101,
+                  103,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
         }
       ],
       "args": [
@@ -5528,6 +6109,35 @@
         {
           "name": "system_program",
           "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "feature_gate",
+          "docs": [
+            "Whether this feature still accepts new entries. Unchecked because an",
+            "empty account is the legitimate \"no gate installed, everything enabled\"",
+            "state rather than an error.",
+            ""
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  101,
+                  97,
+                  116,
+                  117,
+                  114,
+                  101,
+                  103,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
         }
       ],
       "args": []
@@ -5740,6 +6350,35 @@
         {
           "name": "system_program",
           "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "feature_gate",
+          "docs": [
+            "Whether this feature still accepts new entries. Unchecked because an",
+            "empty account is the legitimate \"no gate installed, everything enabled\"",
+            "state rather than an error.",
+            ""
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  101,
+                  97,
+                  116,
+                  117,
+                  114,
+                  101,
+                  103,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
         }
       ],
       "args": [
@@ -5980,7 +6619,8 @@
           "docs": [
             "The asset's collection when it is a collection member: Core refuses to",
             "move a member without it. Optional and last, so a client that omits it",
-            "keeps working for standalone assets."
+            "keeps working for standalone assets.",
+            ""
           ],
           "writable": true,
           "optional": true
@@ -6933,6 +7573,82 @@
       "args": []
     },
     {
+      "name": "set_feature_gate",
+      "docs": [
+        "Switch product features off (or back on) for new entries; exits stay",
+        "open. Authority-only. See `features.rs`."
+      ],
+      "discriminator": [
+        161,
+        61,
+        62,
+        85,
+        41,
+        80,
+        159,
+        233
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "global",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  108,
+                  111,
+                  98,
+                  97,
+                  108
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "feature_gate",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  101,
+                  97,
+                  116,
+                  117,
+                  114,
+                  101,
+                  103,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "disabled",
+          "type": "u32"
+        }
+      ]
+    },
+    {
       "name": "set_fee_config",
       "docs": [
         "Set the NFT market's fee schedule — its sale fee and the daily price of",
@@ -7570,6 +8286,35 @@
         {
           "name": "rent",
           "address": "SysvarRent111111111111111111111111111111111"
+        },
+        {
+          "name": "feature_gate",
+          "docs": [
+            "Whether this feature still accepts new entries. Unchecked because an",
+            "empty account is the legitimate \"no gate installed, everything enabled\"",
+            "state rather than an error.",
+            ""
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  101,
+                  97,
+                  116,
+                  117,
+                  114,
+                  101,
+                  103,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
         }
       ],
       "args": [
@@ -7684,6 +8429,35 @@
         {
           "name": "system_program",
           "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "feature_gate",
+          "docs": [
+            "Whether this feature still accepts new entries. Unchecked because an",
+            "empty account is the legitimate \"no gate installed, everything enabled\"",
+            "state rather than an error.",
+            ""
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  101,
+                  97,
+                  116,
+                  117,
+                  114,
+                  101,
+                  103,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
         }
       ],
       "args": [
@@ -8509,6 +9283,19 @@
       ]
     },
     {
+      "name": "FeatureGate",
+      "discriminator": [
+        47,
+        67,
+        134,
+        63,
+        84,
+        149,
+        143,
+        5
+      ]
+    },
+    {
       "name": "FeeConfig",
       "discriminator": [
         143,
@@ -8859,6 +9646,19 @@
         163,
         224,
         155
+      ]
+    },
+    {
+      "name": "FeatureGateEvent",
+      "discriminator": [
+        201,
+        38,
+        226,
+        39,
+        37,
+        94,
+        35,
+        58
       ]
     },
     {
@@ -9289,6 +10089,21 @@
       "code": 6048,
       "name": "AlreadyListed",
       "msg": "This is already listed — settle or reclaim the current listing first"
+    },
+    {
+      "code": 6049,
+      "name": "FeatureDisabled",
+      "msg": "This feature is switched off — existing positions can still exit"
+    },
+    {
+      "code": 6050,
+      "name": "InvalidFeatureMask",
+      "msg": "Feature mask has bits the program doesn't define"
+    },
+    {
+      "code": 6051,
+      "name": "TierRequiresOracle",
+      "msg": "A seeded tier comes from the oracle (launch_from_feed); launch_token only offers the flat start"
     }
   ],
   "types": [
@@ -9951,6 +10766,57 @@
           {
             "name": "bump",
             "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "FeatureGate",
+      "docs": [
+        "Which product features accept new entries; see `features.rs`.",
+        "",
+        "Its own account for the reason `LaunchPolicy` is: `Global` is on-chain at a",
+        "fixed length. Absent means every feature is enabled."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "disabled",
+            "docs": [
+              "Bitmask of disabled features (`features::FEATURE_*`)."
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "FeatureGateEvent",
+      "docs": [
+        "The authority switched product features on or off for new entries."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "disabled",
+            "docs": [
+              "Bitmask of disabled features *after* this call (`features::FEATURE_*`)."
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
           }
         ]
       }

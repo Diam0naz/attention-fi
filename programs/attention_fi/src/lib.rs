@@ -6,6 +6,7 @@ pub mod conviction;
 pub mod curve;
 pub mod error;
 pub mod events;
+pub mod features;
 pub mod genesis;
 pub mod guardians;
 pub mod instructions;
@@ -236,6 +237,12 @@ pub mod attention_fi {
         window_secs: i64,
     ) -> Result<()> {
         set_launch_policy::set_launch_policy_handler(ctx, max_launches, window_secs)
+    }
+
+    /// Switch product features off (or back on) for new entries; exits stay
+    /// open. Authority-only. See `features.rs`.
+    pub fn set_feature_gate(ctx: Context<SetFeatureGate>, disabled: u32) -> Result<()> {
+        set_feature_gate::set_feature_gate_handler(ctx, disabled)
     }
 
     /// Install or rotate the guardian set that holds the emergency stop.

@@ -123,16 +123,16 @@ export type LaunchResult =
  *                tier is derived on-chain from live mindshare.
  *
  *  - "keeper"  — no feed is configured (or fetchUpdateIx returned 0 successes).
- *                Falls back to launchToken with the caller-supplied tierArg.
- *                The tier still comes from the same mindshare API the oracle
- *                would read; the only difference is it is passed as an argument
- *                rather than derived on-chain.
+ *                Falls back to launchToken at the flat start (NewEntrant). The
+ *                program only lets the protocol authority choose a seeded tier
+ *                there, because the caller supplies it; a mindshare-seeded price
+ *                has to come from the oracle path.
  *
  * @param program   - Connected Anchor program instance
  * @param mint      - Fresh mint keypair for the new token
  * @param metadata  - Token name/symbol/uri
- * @param tierArg   - On-chain tier enum arg (e.g. { top10: {} }). Used only on
- *                    the keeper path; ignored when the oracle path succeeds.
+ * @param tierArg   - Kept for the call signature. The keeper path no longer
+ *                    sends it: a creator's launch_token is always the flat start.
  * @param handle    - X handle this token is for (used to look up the feed)
  */
 export async function launchFromFeed(
@@ -215,22 +215,27 @@ export async function launchFromFeed(
 
 // ─── Internal helpers ────────────────────────────────────────────────────────
 
+/** The flat start the program allows any creator on the keeper path. */
+const FLAT_START = { newEntrant: {} } as const;
+
 /**
- * The keeper-tier launch path — a plain legacy transaction, no Switchboard.
- * The tier is passed as an argument that the frontend derived from the
- * mindshare API (the same number the oracle would read).
+ * The keeper launch path — a plain legacy transaction, no Switchboard.
+ *
+ * Always the flat start. launch_token takes its tier from the caller, so the
+ * program refuses a seeded tier from anyone but the protocol authority
+ * (TierRequiresOracle); sending the client's own estimate would only fail.
  */
 async function keeperLaunch(
   program: Program<AttentionFi>,
   mint: Keypair,
   metadata: { name: string; symbol: string; uri: string },
-  tierArg: object,
+  _tierArg: object,
 ): Promise<string> {
-  console.log("[keeperLaunch] Sending launchToken with tier:", JSON.stringify(tierArg));
+  console.log("[keeperLaunch] Sending launchToken at the flat start");
   const provider = program.provider as AnchorProvider;
   const creator = (provider.wallet as AnchorWalletLike).publicKey;
   return program.methods
-    .launchToken(tierArg as never, metadata)
+    .launchToken(FLAT_START as never, metadata)
     .accounts({
       creator,
       mint: mint.publicKey,

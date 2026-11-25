@@ -3,8 +3,10 @@ use mpl_core::instructions::CreateV2CpiBuilder;
 use mpl_core::types::{Attributes, DataState, Plugin, PluginAuthorityPair};
 
 use crate::auction::validate_listing;
+use crate::constants::FEATUREGATE_SEED;
 use crate::constants::{GLOBAL_SEED, NFTAUCTION_SEED};
 use crate::events::NftListedEvent;
+use crate::features::{self, FEATURE_NFT};
 use crate::state::{Global, NftAuction};
 
 #[derive(Accounts)]
@@ -33,6 +35,14 @@ pub struct StartNftAuction<'info> {
     pub mpl_core_program: UncheckedAccount<'info>,
 
     pub system_program: Program<'info, System>,
+
+    /// Whether this feature still accepts new entries. Unchecked because an
+    /// empty account is the legitimate "no gate installed, everything enabled"
+    /// state rather than an error.
+    ///
+    /// CHECK: seeds pin the address; `features::require_enabled` validates it.
+    #[account(seeds = [FEATUREGATE_SEED], bump)]
+    pub feature_gate: UncheckedAccount<'info>,
 }
 
 pub fn start_nft_auction_handler(
@@ -43,6 +53,7 @@ pub fn start_nft_auction_handler(
     name: String,
     uri: String,
 ) -> Result<()> {
+    features::require_enabled(&ctx.accounts.feature_gate.to_account_info(), FEATURE_NFT)?;
     validate_listing(start_price, floor_price, duration)?;
 
     // An empty Attributes plugin, so `buy_nft` has somewhere to record the

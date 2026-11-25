@@ -22,9 +22,43 @@ pub fn tier_from_mindshare_bps(bps: u64) -> MindshareTier {
     }
 }
 
+/// Whether `launch_token` may seed a curve at `tier` without the oracle.
+///
+/// `launch_token` takes its tier from the caller, so letting any creator pick
+/// any tier meant an unknown account could launch at the Top 10 seed and the
+/// "mindshare-seeded price" was only as honest as the launcher. A seeded tier
+/// now has to come from `launch_from_feed`, where the oracle derives it. The
+/// caller-chosen path keeps the flat start (`NewEntrant`), and the protocol
+/// authority keeps keeper launches for operations and tests.
+pub fn tier_allowed_without_oracle(tier: MindshareTier, caller_is_authority: bool) -> bool {
+    caller_is_authority || tier == MindshareTier::NewEntrant
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn only_the_flat_start_is_open_without_the_oracle() {
+        assert!(tier_allowed_without_oracle(
+            MindshareTier::NewEntrant,
+            false
+        ));
+        for tier in [
+            MindshareTier::Emerging,
+            MindshareTier::Top100,
+            MindshareTier::Top10,
+        ] {
+            assert!(
+                !tier_allowed_without_oracle(tier, false),
+                "a creator must not choose their own seeded price"
+            );
+            assert!(
+                tier_allowed_without_oracle(tier, true),
+                "keeper launches stay with the authority"
+            );
+        }
+    }
 
     #[test]
     fn maps_each_band_to_the_right_tier() {

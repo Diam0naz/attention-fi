@@ -83,6 +83,16 @@ pub fn launch_token_handler(
     tier: MindshareTier,
     metadata: TokenMetadataArgs,
 ) -> Result<()> {
+    // The caller picks `tier` here, so only the flat start is open to them; a
+    // seeded price has to come through launch_from_feed. See oracle.rs.
+    require!(
+        crate::oracle::tier_allowed_without_oracle(
+            tier,
+            ctx.accounts.creator.key() == ctx.accounts.global.authority
+        ),
+        AttentionError::TierRequiresOracle
+    );
+
     // One quota across every mechanism: a per-instruction limit is four times
     // the limit to anyone willing to call a different one.
     let (max_launches, window_secs) =

@@ -63,6 +63,35 @@ export type AttentionFi = {
         {
           "name": "systemProgram",
           "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "featureGate",
+          "docs": [
+            "Whether this feature still accepts new entries. Unchecked because an",
+            "empty account is the legitimate \"no gate installed, everything enabled\"",
+            "state rather than an error.",
+            ""
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  101,
+                  97,
+                  116,
+                  117,
+                  114,
+                  101,
+                  103,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
         }
       ],
       "args": []
@@ -393,6 +422,35 @@ export type AttentionFi = {
         {
           "name": "associatedTokenProgram",
           "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+        },
+        {
+          "name": "featureGate",
+          "docs": [
+            "Whether this feature still accepts new entries. Unchecked because an",
+            "empty account is the legitimate \"no gate installed, everything enabled\"",
+            "state rather than an error.",
+            ""
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  101,
+                  97,
+                  116,
+                  117,
+                  114,
+                  101,
+                  103,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
         }
       ],
       "args": [
@@ -1074,6 +1132,35 @@ export type AttentionFi = {
         {
           "name": "systemProgram",
           "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "featureGate",
+          "docs": [
+            "Whether this feature still accepts new entries. Unchecked because an",
+            "empty account is the legitimate \"no gate installed, everything enabled\"",
+            "state rather than an error.",
+            ""
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  101,
+                  97,
+                  116,
+                  117,
+                  114,
+                  101,
+                  103,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
         }
       ],
       "args": [
@@ -1471,6 +1558,35 @@ export type AttentionFi = {
         {
           "name": "associatedTokenProgram",
           "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+        },
+        {
+          "name": "featureGate",
+          "docs": [
+            "Whether this feature still accepts new entries. Unchecked because an",
+            "empty account is the legitimate \"no gate installed, everything enabled\"",
+            "state rather than an error.",
+            ""
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  101,
+                  97,
+                  116,
+                  117,
+                  114,
+                  101,
+                  103,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
         }
       ],
       "args": [
@@ -1719,6 +1835,35 @@ export type AttentionFi = {
         {
           "name": "systemProgram",
           "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "featureGate",
+          "docs": [
+            "Whether this feature still accepts new entries. Unchecked because an",
+            "empty account is the legitimate \"no gate installed, everything enabled\"",
+            "state rather than an error.",
+            ""
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  101,
+                  97,
+                  116,
+                  117,
+                  114,
+                  101,
+                  103,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
         }
       ],
       "args": [
@@ -1872,11 +2017,41 @@ export type AttentionFi = {
           "address": "11111111111111111111111111111111"
         },
         {
+          "name": "featureGate",
+          "docs": [
+            "Whether this feature still accepts new entries. Unchecked because an",
+            "empty account is the legitimate \"no gate installed, everything enabled\"",
+            "state rather than an error.",
+            ""
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  101,
+                  97,
+                  116,
+                  117,
+                  114,
+                  101,
+                  103,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
           "name": "collection",
           "docs": [
             "The asset's collection when it is a collection member: Core refuses to",
             "move a member without it. Optional and last, so a client that omits it",
-            "keeps working for standalone assets."
+            "keeps working for standalone assets.",
+            ""
           ],
           "writable": true,
           "optional": true
@@ -2089,6 +2264,35 @@ export type AttentionFi = {
         {
           "name": "systemProgram",
           "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "featureGate",
+          "docs": [
+            "Whether this feature still accepts new entries. Unchecked because an",
+            "empty account is the legitimate \"no gate installed, everything enabled\"",
+            "state rather than an error.",
+            ""
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  101,
+                  97,
+                  116,
+                  117,
+                  114,
+                  101,
+                  103,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
         }
       ],
       "args": [
@@ -2292,6 +2496,35 @@ export type AttentionFi = {
         {
           "name": "systemProgram",
           "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "featureGate",
+          "docs": [
+            "Whether this feature still accepts new entries. Unchecked because an",
+            "empty account is the legitimate \"no gate installed, everything enabled\"",
+            "state rather than an error.",
+            ""
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  101,
+                  97,
+                  116,
+                  117,
+                  114,
+                  101,
+                  103,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
         }
       ],
       "args": [
@@ -2341,7 +2574,7 @@ export type AttentionFi = {
               },
               {
                 "kind": "account",
-                "path": "genesis.subject_mint",
+                "path": "genesis.subjectMint",
                 "account": "genesisNft"
               }
             ]
@@ -2720,6 +2953,35 @@ export type AttentionFi = {
         {
           "name": "systemProgram",
           "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "featureGate",
+          "docs": [
+            "Whether this feature still accepts new entries. Unchecked because an",
+            "empty account is the legitimate \"no gate installed, everything enabled\"",
+            "state rather than an error.",
+            ""
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  101,
+                  97,
+                  116,
+                  117,
+                  114,
+                  101,
+                  103,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
         }
       ],
       "args": [
@@ -3366,6 +3628,35 @@ export type AttentionFi = {
         {
           "name": "systemProgram",
           "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "featureGate",
+          "docs": [
+            "Whether this feature still accepts new entries. Unchecked because an",
+            "empty account is the legitimate \"no gate installed, everything enabled\"",
+            "state rather than an error.",
+            ""
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  101,
+                  97,
+                  116,
+                  117,
+                  114,
+                  101,
+                  103,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
         }
       ],
       "args": [
@@ -3705,6 +3996,35 @@ export type AttentionFi = {
         {
           "name": "rent",
           "address": "SysvarRent111111111111111111111111111111111"
+        },
+        {
+          "name": "featureGate",
+          "docs": [
+            "Whether this feature still accepts new entries. Unchecked because an",
+            "empty account is the legitimate \"no gate installed, everything enabled\"",
+            "state rather than an error.",
+            ""
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  101,
+                  97,
+                  116,
+                  117,
+                  114,
+                  101,
+                  103,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
         }
       ],
       "args": [
@@ -4247,6 +4567,35 @@ export type AttentionFi = {
         {
           "name": "rent",
           "address": "SysvarRent111111111111111111111111111111111"
+        },
+        {
+          "name": "featureGate",
+          "docs": [
+            "Whether this feature still accepts new entries. Unchecked because an",
+            "empty account is the legitimate \"no gate installed, everything enabled\"",
+            "state rather than an error.",
+            ""
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  101,
+                  97,
+                  116,
+                  117,
+                  114,
+                  101,
+                  103,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
         }
       ],
       "args": [
@@ -4655,6 +5004,35 @@ export type AttentionFi = {
         {
           "name": "systemProgram",
           "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "featureGate",
+          "docs": [
+            "Whether this feature still accepts new entries. Unchecked because an",
+            "empty account is the legitimate \"no gate installed, everything enabled\"",
+            "state rather than an error.",
+            ""
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  101,
+                  97,
+                  116,
+                  117,
+                  114,
+                  101,
+                  103,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
         }
       ],
       "args": []
@@ -4757,6 +5135,35 @@ export type AttentionFi = {
         {
           "name": "systemProgram",
           "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "featureGate",
+          "docs": [
+            "Whether this feature still accepts new entries. Unchecked because an",
+            "empty account is the legitimate \"no gate installed, everything enabled\"",
+            "state rather than an error.",
+            ""
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  101,
+                  97,
+                  116,
+                  117,
+                  114,
+                  101,
+                  103,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
         }
       ],
       "args": [
@@ -4898,6 +5305,35 @@ export type AttentionFi = {
         {
           "name": "systemProgram",
           "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "featureGate",
+          "docs": [
+            "Whether this feature still accepts new entries. Unchecked because an",
+            "empty account is the legitimate \"no gate installed, everything enabled\"",
+            "state rather than an error.",
+            ""
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  101,
+                  97,
+                  116,
+                  117,
+                  114,
+                  101,
+                  103,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
         }
       ],
       "args": [
@@ -5047,7 +5483,7 @@ export type AttentionFi = {
               },
               {
                 "kind": "account",
-                "path": "collection_auction.collection",
+                "path": "collectionAuction.collection",
                 "account": "collectionAuction"
               }
             ]
@@ -5060,6 +5496,35 @@ export type AttentionFi = {
         {
           "name": "systemProgram",
           "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "featureGate",
+          "docs": [
+            "Whether this feature still accepts new entries. Unchecked because an",
+            "empty account is the legitimate \"no gate installed, everything enabled\"",
+            "state rather than an error.",
+            ""
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  101,
+                  97,
+                  116,
+                  117,
+                  114,
+                  101,
+                  103,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
         }
       ],
       "args": [
@@ -5213,6 +5678,35 @@ export type AttentionFi = {
         {
           "name": "systemProgram",
           "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "featureGate",
+          "docs": [
+            "Whether this feature still accepts new entries. Unchecked because an",
+            "empty account is the legitimate \"no gate installed, everything enabled\"",
+            "state rather than an error.",
+            ""
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  101,
+                  97,
+                  116,
+                  117,
+                  114,
+                  101,
+                  103,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
         }
       ],
       "args": [
@@ -5302,6 +5796,35 @@ export type AttentionFi = {
         {
           "name": "systemProgram",
           "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "featureGate",
+          "docs": [
+            "Whether this feature still accepts new entries. Unchecked because an",
+            "empty account is the legitimate \"no gate installed, everything enabled\"",
+            "state rather than an error.",
+            ""
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  101,
+                  97,
+                  116,
+                  117,
+                  114,
+                  101,
+                  103,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
         }
       ],
       "args": [
@@ -5359,6 +5882,35 @@ export type AttentionFi = {
         {
           "name": "systemProgram",
           "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "featureGate",
+          "docs": [
+            "Whether this feature still accepts new entries. Unchecked because an",
+            "empty account is the legitimate \"no gate installed, everything enabled\"",
+            "state rather than an error.",
+            ""
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  101,
+                  97,
+                  116,
+                  117,
+                  114,
+                  101,
+                  103,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
         }
       ],
       "args": [
@@ -5477,6 +6029,35 @@ export type AttentionFi = {
         {
           "name": "systemProgram",
           "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "featureGate",
+          "docs": [
+            "Whether this feature still accepts new entries. Unchecked because an",
+            "empty account is the legitimate \"no gate installed, everything enabled\"",
+            "state rather than an error.",
+            ""
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  101,
+                  97,
+                  116,
+                  117,
+                  114,
+                  101,
+                  103,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
         }
       ],
       "args": [
@@ -5534,6 +6115,35 @@ export type AttentionFi = {
         {
           "name": "systemProgram",
           "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "featureGate",
+          "docs": [
+            "Whether this feature still accepts new entries. Unchecked because an",
+            "empty account is the legitimate \"no gate installed, everything enabled\"",
+            "state rather than an error.",
+            ""
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  101,
+                  97,
+                  116,
+                  117,
+                  114,
+                  101,
+                  103,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
         }
       ],
       "args": []
@@ -5746,6 +6356,35 @@ export type AttentionFi = {
         {
           "name": "systemProgram",
           "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "featureGate",
+          "docs": [
+            "Whether this feature still accepts new entries. Unchecked because an",
+            "empty account is the legitimate \"no gate installed, everything enabled\"",
+            "state rather than an error.",
+            ""
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  101,
+                  97,
+                  116,
+                  117,
+                  114,
+                  101,
+                  103,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
         }
       ],
       "args": [
@@ -5986,7 +6625,8 @@ export type AttentionFi = {
           "docs": [
             "The asset's collection when it is a collection member: Core refuses to",
             "move a member without it. Optional and last, so a client that omits it",
-            "keeps working for standalone assets."
+            "keeps working for standalone assets.",
+            ""
           ],
           "writable": true,
           "optional": true
@@ -6939,6 +7579,82 @@ export type AttentionFi = {
       "args": []
     },
     {
+      "name": "setFeatureGate",
+      "docs": [
+        "Switch product features off (or back on) for new entries; exits stay",
+        "open. Authority-only. See `features.rs`."
+      ],
+      "discriminator": [
+        161,
+        61,
+        62,
+        85,
+        41,
+        80,
+        159,
+        233
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "global",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  108,
+                  111,
+                  98,
+                  97,
+                  108
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "featureGate",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  101,
+                  97,
+                  116,
+                  117,
+                  114,
+                  101,
+                  103,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "disabled",
+          "type": "u32"
+        }
+      ]
+    },
+    {
       "name": "setFeeConfig",
       "docs": [
         "Set the NFT market's fee schedule — its sale fee and the daily price of",
@@ -7576,6 +8292,35 @@ export type AttentionFi = {
         {
           "name": "rent",
           "address": "SysvarRent111111111111111111111111111111111"
+        },
+        {
+          "name": "featureGate",
+          "docs": [
+            "Whether this feature still accepts new entries. Unchecked because an",
+            "empty account is the legitimate \"no gate installed, everything enabled\"",
+            "state rather than an error.",
+            ""
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  101,
+                  97,
+                  116,
+                  117,
+                  114,
+                  101,
+                  103,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
         }
       ],
       "args": [
@@ -7690,6 +8435,35 @@ export type AttentionFi = {
         {
           "name": "systemProgram",
           "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "featureGate",
+          "docs": [
+            "Whether this feature still accepts new entries. Unchecked because an",
+            "empty account is the legitimate \"no gate installed, everything enabled\"",
+            "state rather than an error.",
+            ""
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  101,
+                  97,
+                  116,
+                  117,
+                  114,
+                  101,
+                  103,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
         }
       ],
       "args": [
@@ -8515,6 +9289,19 @@ export type AttentionFi = {
       ]
     },
     {
+      "name": "featureGate",
+      "discriminator": [
+        47,
+        67,
+        134,
+        63,
+        84,
+        149,
+        143,
+        5
+      ]
+    },
+    {
       "name": "feeConfig",
       "discriminator": [
         143,
@@ -8865,6 +9652,19 @@ export type AttentionFi = {
         163,
         224,
         155
+      ]
+    },
+    {
+      "name": "featureGateEvent",
+      "discriminator": [
+        201,
+        38,
+        226,
+        39,
+        37,
+        94,
+        35,
+        58
       ]
     },
     {
@@ -9295,6 +10095,21 @@ export type AttentionFi = {
       "code": 6048,
       "name": "alreadyListed",
       "msg": "This is already listed — settle or reclaim the current listing first"
+    },
+    {
+      "code": 6049,
+      "name": "featureDisabled",
+      "msg": "This feature is switched off — existing positions can still exit"
+    },
+    {
+      "code": 6050,
+      "name": "invalidFeatureMask",
+      "msg": "Feature mask has bits the program doesn't define"
+    },
+    {
+      "code": 6051,
+      "name": "tierRequiresOracle",
+      "msg": "A seeded tier comes from the oracle (launch_from_feed); launch_token only offers the flat start"
     }
   ],
   "types": [
@@ -9957,6 +10772,57 @@ export type AttentionFi = {
           {
             "name": "bump",
             "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "featureGate",
+      "docs": [
+        "Which product features accept new entries; see `features.rs`.",
+        "",
+        "Its own account for the reason `LaunchPolicy` is: `Global` is on-chain at a",
+        "fixed length. Absent means every feature is enabled."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "disabled",
+            "docs": [
+              "Bitmask of disabled features (`features::FEATURE_*`)."
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "featureGateEvent",
+      "docs": [
+        "The authority switched product features on or off for new entries."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "disabled",
+            "docs": [
+              "Bitmask of disabled features *after* this call (`features::FEATURE_*`)."
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
           }
         ]
       }

@@ -156,6 +156,9 @@ pub const MAX_LAUNCH_SLOTS: usize = 8;
 /// Singleton PDA holding the tunable launch policy.
 pub const LAUNCHPOLICY_SEED: &[u8] = b"launchpolicy";
 
+/// Singleton PDA recording which product features accept new entries.
+pub const FEATUREGATE_SEED: &[u8] = b"featuregate";
+
 /// Per-wallet PDA holding recent launch timestamps.
 pub const LAUNCHQUOTA_SEED: &[u8] = b"launchquota";
 

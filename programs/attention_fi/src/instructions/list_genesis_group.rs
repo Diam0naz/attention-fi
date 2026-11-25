@@ -1,9 +1,11 @@
 use anchor_lang::prelude::*;
 use mpl_core::instructions::UpdateCollectionV1CpiBuilder;
 
+use crate::constants::FEATUREGATE_SEED;
 use crate::constants::{CURVE_SEED, GENGROUP_SEED, GENPOOL_SEED};
 use crate::error::AttentionError;
 use crate::events::GenesisGroupListedEvent;
+use crate::features::{self, FEATURE_NFT};
 use crate::genesis::validate_group;
 use crate::nft::collection_size;
 use crate::state::{BondingCurve, GenesisGroup, GenesisPool};
@@ -75,6 +77,14 @@ pub struct ListGenesisGroup<'info> {
     pub mpl_core_program: UncheckedAccount<'info>,
 
     pub system_program: Program<'info, System>,
+
+    /// Whether this feature still accepts new entries. Unchecked because an
+    /// empty account is the legitimate "no gate installed, everything enabled"
+    /// state rather than an error.
+    ///
+    /// CHECK: seeds pin the address; `features::require_enabled` validates it.
+    #[account(seeds = [FEATUREGATE_SEED], bump)]
+    pub feature_gate: UncheckedAccount<'info>,
 }
 
 pub fn list_genesis_group_handler(
@@ -84,6 +94,7 @@ pub fn list_genesis_group_handler(
     price: u64,
     per_wallet_cap: u16,
 ) -> Result<()> {
+    features::require_enabled(&ctx.accounts.feature_gate.to_account_info(), FEATURE_NFT)?;
     validate_group(
         total_units,
         share_bps,

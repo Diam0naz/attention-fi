@@ -2,12 +2,14 @@ use anchor_lang::prelude::*;
 use anchor_lang::system_program;
 
 use crate::auction::is_perpetual;
+use crate::constants::FEATUREGATE_SEED;
 use crate::constants::{
     COLLECTIONAUCTION_SEED, FEECONFIG_SEED, GLOBAL_SEED, MAX_PROMO_DAYS, NFTAUCTION_SEED,
     PROMO_SEED,
 };
 use crate::error::AttentionError;
 use crate::events::ListingPromotedEvent;
+use crate::features::{self, FEATURE_NFT};
 use crate::state::{CollectionAuction, FeeConfig, Global, NftAuction, Promotion};
 
 /// Seconds in a day.
@@ -76,6 +78,14 @@ pub struct PromoteListing<'info> {
     pub promotion: Account<'info, Promotion>,
 
     pub system_program: Program<'info, System>,
+
+    /// Whether this feature still accepts new entries. Unchecked because an
+    /// empty account is the legitimate "no gate installed, everything enabled"
+    /// state rather than an error.
+    ///
+    /// CHECK: seeds pin the address; `features::require_enabled` validates it.
+    #[account(seeds = [FEATUREGATE_SEED], bump)]
+    pub feature_gate: UncheckedAccount<'info>,
 }
 
 pub fn promote_listing_handler(
@@ -83,6 +93,7 @@ pub fn promote_listing_handler(
     days: u16,
     max_lamports: u64,
 ) -> Result<()> {
+    features::require_enabled(&ctx.accounts.feature_gate.to_account_info(), FEATURE_NFT)?;
     require!(days > 0, AttentionError::InvalidAuctionParams);
     require!(days <= MAX_PROMO_DAYS, AttentionError::InvalidAuctionParams);
 

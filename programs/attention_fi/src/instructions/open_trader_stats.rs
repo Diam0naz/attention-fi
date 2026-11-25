@@ -1,6 +1,8 @@
 use anchor_lang::prelude::*;
 
+use crate::constants::FEATUREGATE_SEED;
 use crate::constants::TRADER_SEED;
+use crate::features::{self, FEATURE_PERKS};
 use crate::state::TraderStats;
 
 /// Open the account that records a wallet's cumulative trading activity.
@@ -32,9 +34,18 @@ pub struct OpenTraderStats<'info> {
     pub stats: Account<'info, TraderStats>,
 
     pub system_program: Program<'info, System>,
+
+    /// Whether this feature still accepts new entries. Unchecked because an
+    /// empty account is the legitimate "no gate installed, everything enabled"
+    /// state rather than an error.
+    ///
+    /// CHECK: seeds pin the address; `features::require_enabled` validates it.
+    #[account(seeds = [FEATUREGATE_SEED], bump)]
+    pub feature_gate: UncheckedAccount<'info>,
 }
 
 pub fn open_trader_stats_handler(ctx: Context<OpenTraderStats>) -> Result<()> {
+    features::require_enabled(&ctx.accounts.feature_gate.to_account_info(), FEATURE_PERKS)?;
     let stats = &mut ctx.accounts.stats;
     stats.owner = ctx.accounts.owner.key();
     stats.volume_lamports = 0;
